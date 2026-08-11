@@ -37,28 +37,28 @@ jobs:
             echo "service_name=aetrna-music-staging" >> $GITHUB_OUTPUT
           fi
 
-      - name: Deploy Binary & Service Files via SSH
-        uses: appleboy/scp-action@v0.1.7
+      - name: Setup SSH Key Agent
         if: ${{ env.VPS_HOST != '' }}
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: "bot,deploy/*"
-          target: "${{ steps.env.outputs.target_dir }}"
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
 
-      - name: Setup & Restart Systemd Service
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Deploy Binary & Restart Service Automatically
         if: ${{ env.VPS_HOST != '' }}
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            mkdir -p ${{ steps.env.outputs.target_dir }}
-            if [ -f "${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service" ]; then
-              cp "${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service" /etc/systemd/system/
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          
+          # Upload bot binary and deploy configs
+          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "mkdir -p ${{ steps.env.outputs.target_dir }}"
+          scp -r bot deploy ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${{ steps.env.outputs.target_dir }}/
+
+          # Register service, reload daemon, and RESTART service automatically on every push
+          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "
+            if [ -f '${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service' ]; then
+              cp '${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service' /etc/systemd/system/
               systemctl daemon-reload
-              systemctl enable ${{ steps.env.outputs.service_name }} > /dev/null 2>&1 || true
+              systemctl enable ${{ steps.env.outputs.service_name }} >/dev/null 2>&1 || true
             fi
             systemctl restart ${{ steps.env.outputs.service_name }}
+          "
