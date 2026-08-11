@@ -215,7 +215,9 @@ func (c *Client) LoadTrack(ctx context.Context, identifier string) (*LoadResult,
 // Play starts playback of an encoded track in a guild (with optional voice credentials).
 func (c *Client) Play(guildID, encodedTrack string, voice map[string]interface{}) error {
 	body := map[string]interface{}{
-		"encodedTrack": encodedTrack,
+		"track": map[string]interface{}{
+			"encoded": encodedTrack,
+		},
 	}
 	if len(voice) > 0 {
 		body["voice"] = voice
@@ -226,7 +228,9 @@ func (c *Client) Play(guildID, encodedTrack string, voice map[string]interface{}
 // Stop stops playback for a guild.
 func (c *Client) Stop(guildID string) error {
 	body := map[string]interface{}{
-		"encodedTrack": nil,
+		"track": map[string]interface{}{
+			"encoded": nil,
+		},
 	}
 	return c.patchPlayer(guildID, body)
 }
