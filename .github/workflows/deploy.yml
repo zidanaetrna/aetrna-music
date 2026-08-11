@@ -48,25 +48,28 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+          TARGET="${{ steps.env.outputs.target_dir }}"
+          SERVICE="${{ steps.env.outputs.service_name }}"
           
           # Create target directory on VPS
-          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "mkdir -p ${{ steps.env.outputs.target_dir }}"
+          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "mkdir -p ${TARGET}"
 
-          # Upload binary as bot.new to prevent Linux 'Text file busy' lock on running executable
-          scp bot ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${{ steps.env.outputs.target_dir }}/bot.new
-          scp -r deploy ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${{ steps.env.outputs.target_dir }}/
+          # Upload binary as bot.new
+          scp bot ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${TARGET}/bot.new
+          scp -r deploy ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${TARGET}/
 
-          # Replace binary, setup systemd, and restart service atomically
-          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "
+          # Replace binary atomically and restart service
+          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "bash -s" << 'EOF'
             systemctl stop ${{ steps.env.outputs.service_name }} || true
             mv -f ${{ steps.env.outputs.target_dir }}/bot.new ${{ steps.env.outputs.target_dir }}/bot
             chmod +x ${{ steps.env.outputs.target_dir }}/bot
 
-            if [ -f '${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service' ]; then
-              cp '${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service' /etc/systemd/system/
+            if [ -f "${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service" ]; then
+              cp "${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service" /etc/systemd/system/
               systemctl daemon-reload
               systemctl enable ${{ steps.env.outputs.service_name }} >/dev/null 2>&1 || true
             fi
 
             systemctl restart ${{ steps.env.outputs.service_name }}
-          "
+          EOF
