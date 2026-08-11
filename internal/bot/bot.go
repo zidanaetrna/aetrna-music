@@ -43,6 +43,7 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 	dg.AddHandler(b.handleInteraction)
 	dg.AddHandler(b.handleMessageCreate)
 	dg.AddHandler(b.handleVoiceStateUpdate)
+	dg.AddHandler(b.handleVoiceServerUpdate)
 
 	dg.StateEnabled = true
 	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates | discordgo.IntentMessageContent
@@ -145,6 +146,26 @@ func (b *Bot) registerSlashCommands() {
 }
 
 
+func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceServerUpdate) {
+	if b.voice == nil || v.Endpoint == "" || v.Token == "" {
+		return
+	}
+
+	var sessionID string
+	if g, err := s.State.Guild(v.GuildID); err == nil {
+		for _, vs := range g.VoiceStates {
+			if vs.UserID == s.State.User.ID {
+				sessionID = vs.SessionID
+				break
+			}
+		}
+	}
+
+	q := b.store.Get(v.GuildID)
+	log.Printf("🔑 [Bot] Forwarding VoiceServerUpdate to voice-server for guild %s", v.GuildID)
+	_ = b.voice.SendVoiceState(v.GuildID, q.VoiceChannelID, v.Token, v.Endpoint, sessionID, s.State.User.ID)
+}
+
 func (b *Bot) startInternalWebhookServer() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/internal/track-end", func(w http.ResponseWriter, r *http.Request) {
@@ -156,6 +177,25 @@ func (b *Bot) startInternalWebhookServer() {
 			log.Printf("🎵 [InternalWebhook] Track end event for guild %s (%s)", body.GuildID, body.Reason)
 			q := b.store.Get(body.GuildID)
 			go q.PlayNext()
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mux.HandleFunc("/internal/gateway-send", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			GuildID string `json:"guildId"`
+			Payload struct {
+				Op int `json:"op"`
+				D  struct {
+					GuildID   string `json:"guild_id"`
+					ChannelID string `json:"channel_id"`
+					SelfMute  bool   `json:"self_mute"`
+					SelfDeaf  bool   `json:"self_deaf"`
+				} `json:"d"`
+			} `json:"payload"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.GuildID != "" {
+			_ = b.session.ChannelVoiceJoinManual(body.GuildID, body.Payload.D.ChannelID, body.Payload.D.SelfMute, body.Payload.D.SelfDeaf)
 		}
 		w.WriteHeader(http.StatusOK)
 	})
