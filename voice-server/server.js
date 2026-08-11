@@ -1,5 +1,4 @@
 const express = require('express');
-const { Client, GatewayIntentBits } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -11,27 +10,27 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3005;
 const BOT_WEBHOOK = process.env.BOT_WEBHOOK || 'http://127.0.0.1:8080/internal/track-end';
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 
-// Initialize Discord Client for Voice Adapter Creator
-const discordClient = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates]
-});
-
-if (DISCORD_TOKEN) {
-    discordClient.login(DISCORD_TOKEN).then(() => {
-        console.log(`✅ [VoiceServer] Discord Client logged in as ${discordClient.user.tag}`);
-    }).catch(err => {
-        console.error(`❌ [VoiceServer] Discord login error:`, err.message);
-    });
-} else {
-    console.warn(`⚠️ [VoiceServer] DISCORD_TOKEN not set in environment!`);
-}
-
-// Store connections and players per guild
+// Custom Voice Adapters map
+const adapters = new Map();
 const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
+
+function createCustomAdapter(guildId) {
+    return (methods) => {
+        adapters.set(guildId, methods);
+        return {
+            sendPayload(data) {
+                // Gateway payload sent by voice connection if needed
+                return true;
+            },
+            destroy() {
+                adapters.delete(guildId);
+            }
+        };
+    };
+}
 
 function cleanupStreams(guildId) {
     if (activeStreams.has(guildId)) {
@@ -42,23 +41,33 @@ function cleanupStreams(guildId) {
     }
 }
 
+// Receive Gateway Voice Updates from Go Bot
+app.post('/voice-state', (req, res) => {
+    const { guildId, token, endpoint, sessionId, userId } = req.body;
+    const adapter = adapters.get(guildId);
+
+    if (adapter) {
+        if (token && endpoint) {
+            adapter.onVoiceServerUpdate({ token, endpoint, guild_id: guildId });
+        }
+        if (sessionId && userId) {
+            adapter.onVoiceStateUpdate({ session_id: sessionId, guild_id: guildId, user_id: userId });
+        }
+        return res.json({ status: 'ok', updated: true });
+    }
+    res.json({ status: 'ok', updated: false, message: 'Adapter not registered yet' });
+});
+
 app.post('/play', async (req, res) => {
-    const { guildId, channelId, url, volume = 1.0 } = req.body;
+    const { guildId, channelId, url, volume = 1.0, token, endpoint, sessionId, userId } = req.body;
     if (!guildId || !channelId || !url) {
         return res.status(400).json({ error: 'Missing guildId, channelId, or url' });
     }
 
     try {
-        // Cleanup old streams for this guild
         cleanupStreams(guildId);
 
-        // Get guild from Discord Client
-        const guild = await discordClient.guilds.fetch(guildId).catch(() => null);
-        if (!guild) {
-            return res.status(400).json({ error: `Guild ${guildId} not found in Discord Client` });
-        }
-
-        // Join or get voice connection
+        // Join voice channel with custom adapter
         let connection = connections.get(guildId);
         if (!connection || connection.joinConfig.channelId !== channelId) {
             if (connection) {
@@ -68,18 +77,17 @@ app.post('/play', async (req, res) => {
             connection = joinVoiceChannel({
                 channelId: channelId,
                 guildId: guildId,
-                adapterCreator: guild.voiceAdapterCreator,
+                adapterCreator: createCustomAdapter(guildId),
                 selfDeaf: true,
             });
 
             connections.set(guildId, connection);
 
-            // Handle disconnection
             connection.on(VoiceConnectionStatus.Disconnected, async () => {
                 try {
                     await Promise.race([
-                        entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
-                        entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+                        entersState(connection, VoiceConnectionStatus.Signalling, 3_000),
+                        entersState(connection, VoiceConnectionStatus.Connecting, 3_000),
                     ]);
                 } catch (error) {
                     try { connection.destroy(); } catch (e) {}
@@ -88,10 +96,14 @@ app.post('/play', async (req, res) => {
             });
         }
 
-        // Wait until voice connection is ready
-        await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+        // Feed voice state if provided in request
+        const adapter = adapters.get(guildId);
+        if (adapter && token && endpoint && sessionId && userId) {
+            adapter.onVoiceServerUpdate({ token, endpoint, guild_id: guildId });
+            adapter.onVoiceStateUpdate({ session_id: sessionId, guild_id: guildId, user_id: userId });
+        }
 
-        // Get or create player
+        // Get or create audio player
         let player = players.get(guildId);
         if (!player) {
             player = createAudioPlayer();
@@ -181,6 +193,7 @@ app.post('/stop', (req, res) => {
         try { connection.destroy(); } catch (e) {}
         connections.delete(guildId);
     }
+    adapters.delete(guildId);
 
     res.json({ status: 'ok' });
 });
@@ -200,7 +213,7 @@ app.post('/resume', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', connections: connections.size, loggedIn: !!discordClient.user });
+    res.json({ status: 'ok', connections: connections.size, adapters: adapters.size });
 });
 
 function notifyBotTrackEnd(guildId, reason) {

@@ -35,6 +35,18 @@ func (c *Client) Play(guildID, channelID, url string, volume float64) error {
 	return c.post("/play", payload)
 }
 
+func (c *Client) SendVoiceState(guildID, channelID, token, endpoint, sessionID, userID string) error {
+	payload := map[string]interface{}{
+		"guildId":   guildID,
+		"channelId": channelID,
+		"token":     token,
+		"endpoint":  endpoint,
+		"sessionId": sessionID,
+		"userId":    userID,
+	}
+	return c.post("/voice-state", payload)
+}
+
 func (c *Client) Stop(guildID string) error {
 	payload := map[string]interface{}{
 		"guildId": guildID,

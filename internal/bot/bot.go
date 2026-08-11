@@ -40,6 +40,7 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 	dg.AddHandler(b.handleInteraction)
 	dg.AddHandler(b.handleMessageCreate)
 	dg.AddHandler(b.handleVoiceStateUpdate)
+	dg.AddHandler(b.handleVoiceServerUpdate)
 
 	dg.StateEnabled = true
 	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates | discordgo.IntentMessageContent
@@ -136,4 +137,23 @@ func (b *Bot) registerSlashCommands() {
 			log.Printf("⚠️ Warning: Failed to register slash command '%s': %v", cmd.Name, err)
 		}
 	}
+}
+
+func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceServerUpdate) {
+	if b.voice == nil || v.Endpoint == "" || v.Token == "" {
+		return
+	}
+
+	var sessionID string
+	if g, err := s.State.Guild(v.GuildID); err == nil {
+		for _, vs := range g.VoiceStates {
+			if vs.UserID == s.State.User.ID {
+				sessionID = vs.SessionID
+				break
+			}
+		}
+	}
+
+	q := b.store.Get(v.GuildID)
+	_ = b.voice.SendVoiceState(v.GuildID, q.VoiceChannelID, v.Token, v.Endpoint, sessionID, s.State.User.ID)
 }
