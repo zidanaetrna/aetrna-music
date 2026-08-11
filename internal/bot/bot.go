@@ -61,6 +61,7 @@ func (b *Bot) Start() error {
 		return b.voice.Play(guildID, song.ChannelID, song.URL, 1.0)
 	}
 	stopCb := func(guildID string) error {
+		_ = b.session.ChannelVoiceJoinManual(guildID, "", false, false)
 		return b.voice.Stop(guildID)
 	}
 
