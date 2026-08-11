@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -32,7 +33,7 @@ type YtdlpSearchResult struct {
 	Uploader   string  `json:"uploader"`
 }
 
-func SearchYouTube(query string, limit int, ytdlpClients string) ([]music.Song, error) {
+func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients string) ([]music.Song, error) {
 	log.Printf("🔍 [SearchYouTube] Searching query: %s (limit: %d)", query, limit)
 
 	targetQuery := query
@@ -45,8 +46,16 @@ func SearchYouTube(query string, limit int, ytdlpClients string) ([]music.Song, 
 		"--dump-single-json",
 		"--no-warnings",
 		"--no-playlist",
-		targetQuery,
+		"--geo-bypass",
+		"--no-check-certificates",
 	}
+
+	if _, err := os.Stat(cookiesPath); err == nil {
+		log.Printf("🔑 [SearchYouTube] Using cookies file: %s", cookiesPath)
+		args = append([]string{"--cookies", cookiesPath}, args...)
+	}
+
+	args = append(args, targetQuery)
 
 	cmd := exec.Command("yt-dlp", args...)
 	out, err := cmd.Output()
@@ -57,13 +66,13 @@ func SearchYouTube(query string, limit int, ytdlpClients string) ([]music.Song, 
 			log.Printf("❌ [SearchYouTube] primary yt-dlp error: %v", err)
 		}
 		// Fallback to standard yt-dlp search
-		return searchYouTubeFallback(query, limit)
+		return searchYouTubeFallback(query, limit, cookiesPath, ytdlpClients)
 	}
 
 	var res YtdlpSearchResult
 	if err := json.Unmarshal(out, &res); err != nil {
 		log.Printf("❌ [SearchYouTube] json unmarshal error: %v | Raw Output: %s", err, string(out))
-		return searchYouTubeFallback(query, limit)
+		return searchYouTubeFallback(query, limit, cookiesPath, ytdlpClients)
 	}
 
 	var songs []music.Song
@@ -107,14 +116,14 @@ func SearchYouTube(query string, limit int, ytdlpClients string) ([]music.Song, 
 
 	if len(songs) == 0 {
 		log.Printf("⚠️ [SearchYouTube] Primary search returned 0 songs, trying fallback...")
-		return searchYouTubeFallback(query, limit)
+		return searchYouTubeFallback(query, limit, cookiesPath, ytdlpClients)
 	}
 
 	log.Printf("✅ [SearchYouTube] Primary search succeeded. Found %d songs for query '%s'", len(songs), query)
 	return songs, nil
 }
 
-func searchYouTubeFallback(query string, limit int) ([]music.Song, error) {
+func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpClients string) ([]music.Song, error) {
 	log.Printf("🔄 [SearchYouTubeFallback] Running fallback search for query: %s", query)
 	targetQuery := query
 	if !strings.HasPrefix(query, "http://") && !strings.HasPrefix(query, "https://") {
@@ -122,11 +131,19 @@ func searchYouTubeFallback(query string, limit int) ([]music.Song, error) {
 	}
 
 	args := []string{
+		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"--default-search", "ytsearch",
 		"--dump-json",
 		"--no-playlist",
-		targetQuery,
+		"--geo-bypass",
+		"--no-check-certificates",
 	}
+
+	if _, err := os.Stat(cookiesPath); err == nil {
+		args = append([]string{"--cookies", cookiesPath}, args...)
+	}
+
+	args = append(args, targetQuery)
 
 	cmd := exec.Command("yt-dlp", args...)
 	out, err := cmd.Output()
@@ -209,12 +226,12 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	queue := h.store.Get(i.GuildID)
 
-	// Search songs
-	songs, err := SearchYouTube(query, 1, h.cfg.YtdlpClients)
+	// Search songs with cookies support
+	songs, err := SearchYouTube(query, 1, h.cfg.CookiesPath, h.cfg.YtdlpClients)
 	if err != nil || len(songs) == 0 {
 		log.Printf("⚠️ [HandlePlay] Search returned 0 songs for query '%s'. Err: %v", query, err)
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: "❌ Ga nemu lagu yang lu cari!",
+			Content: "❌ Ga nemu lagu yang lu cari! Pastikan `cookies.txt` terpasang jika YouTube memblokir IP.",
 		})
 		return
 	}
@@ -257,7 +274,7 @@ func (h *Handler) HandleSearch(s *discordgo.Session, i *discordgo.InteractionCre
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 
-	songs, err := SearchYouTube(query, 5, h.cfg.YtdlpClients)
+	songs, err := SearchYouTube(query, 5, h.cfg.CookiesPath, h.cfg.YtdlpClients)
 	if err != nil || len(songs) == 0 {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: "❌ Ga nemu hasil pencarian!",
