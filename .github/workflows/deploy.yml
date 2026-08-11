@@ -52,18 +52,37 @@ jobs:
           TARGET="${{ steps.env.outputs.target_dir }}"
           SERVICE="${{ steps.env.outputs.service_name }}"
           
-          # Create target directory on VPS
-          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "mkdir -p ${TARGET}"
+          # Ensure target directories exist on VPS
+          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "mkdir -p ${TARGET} /opt/aetrna-music/lavalink/logs"
 
-          # Upload binary as bot.new + lavalink config
+          # Upload binary, configs, and systemd files
           scp bot ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${TARGET}/bot.new
           scp -r deploy ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${TARGET}/
           scp lavalink/application.yml ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:/opt/aetrna-music/lavalink/application.yml
+          scp lavalink/lavalink.service ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:/etc/systemd/system/lavalink.service
 
-          # Ensure nodejs JS runtime is installed, update yt-dlp, and restart service
+          # Execute VPS deployment setup
           ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "
             which node >/dev/null 2>&1 || (apt-get update -y && apt-get install -y nodejs)
             yt-dlp -U || true
+
+            # Install and start Lavalink if missing
+            if [ ! -f /opt/aetrna-music/lavalink/Lavalink.jar ]; then
+              echo '📥 Downloading Lavalink.jar...'
+              wget -q -O /opt/aetrna-music/lavalink/Lavalink.jar \
+                https://github.com/lavalink-devs/Lavalink/releases/latest/download/Lavalink.jar
+              echo '✅ Lavalink.jar downloaded'
+            fi
+
+            if [ ! -f /opt/aetrna-music/lavalink/.env ]; then
+              echo 'LAVALINK_PASSWORD=youshallnotpass' > /opt/aetrna-music/lavalink/.env
+            fi
+
+            systemctl daemon-reload
+            systemctl enable lavalink >/dev/null 2>&1 || true
+            systemctl is-active --quiet lavalink || systemctl start lavalink
+
+            # Restart Bot Service
             systemctl stop ${SERVICE} || true
             mv -f ${TARGET}/bot.new ${TARGET}/bot
             chmod +x ${TARGET}/bot
@@ -75,51 +94,4 @@ jobs:
             fi
 
             systemctl restart ${SERVICE}
-          "
-
-      - name: Setup Lavalink (first-time only)
-        if: ${{ env.VPS_HOST != '' }}
-        run: |
-          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "
-            # Create lavalink dir if not exists
-            mkdir -p /opt/aetrna-music/lavalink/logs
-
-            # Download Lavalink.jar if not exists
-            if [ ! -f /opt/aetrna-music/lavalink/Lavalink.jar ]; then
-              echo '📥 Downloading Lavalink.jar...'
-              wget -q -O /opt/aetrna-music/lavalink/Lavalink.jar \
-                https://github.com/lavalink-devs/Lavalink/releases/latest/download/Lavalink.jar
-              echo '✅ Lavalink.jar downloaded'
-            fi
-
-            # Create .env if not exists
-            if [ ! -f /opt/aetrna-music/lavalink/.env ]; then
-              echo 'LAVALINK_PASSWORD=youshallnotpass' > /opt/aetrna-music/lavalink/.env
-            fi
-
-            # Install systemd service if not exists
-            if [ ! -f /etc/systemd/system/lavalink.service ]; then
-              cat > /etc/systemd/system/lavalink.service << 'SVCEOF'
-[Unit]
-Description=Lavalink Music Server
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/aetrna-music/lavalink
-ExecStart=/usr/bin/java -Xmx256m -jar Lavalink.jar
-EnvironmentFile=/opt/aetrna-music/lavalink/.env
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-SVCEOF
-              systemctl daemon-reload
-              systemctl enable lavalink
-            fi
-
-            # Start lavalink if not running
-            systemctl is-active --quiet lavalink || systemctl start lavalink
           "
