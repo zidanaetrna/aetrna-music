@@ -176,13 +176,11 @@ func (c *Client) UpdateVoice(guildID, sessionID, token, endpoint string) error {
 	cleanEndpoint := endpoint
 	cleanEndpoint = strings.TrimPrefix(cleanEndpoint, "wss://")
 	cleanEndpoint = strings.TrimPrefix(cleanEndpoint, "ws://")
-	cleanEndpoint = strings.TrimSuffix(cleanEndpoint, ":443")
-	cleanEndpoint = strings.TrimSuffix(cleanEndpoint, ":80")
 
 	log.Printf("🎙️ [Lavalink] Updating Voice for guild %s (sessionID: %s, endpoint: %s)", guildID, sessionID, cleanEndpoint)
 
 	body := map[string]interface{}{
-		"voice": map[string]string{
+		"voice": map[string]interface{}{
 			"token":     token,
 			"endpoint":  cleanEndpoint,
 			"sessionId": sessionID,
@@ -263,8 +261,9 @@ func (c *Client) patchPlayer(guildID string, body interface{}) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("lavalink api error %d: %s", resp.StatusCode, string(body))
+		respBody, _ := io.ReadAll(resp.Body)
+		log.Printf("❌ [Lavalink REST Error %d] Request Body: %s | Response: %s", resp.StatusCode, string(data), string(respBody))
+		return fmt.Errorf("lavalink api error %d: %s", resp.StatusCode, string(respBody))
 	}
 	return nil
 }
