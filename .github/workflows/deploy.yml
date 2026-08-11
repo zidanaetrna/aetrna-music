@@ -60,16 +60,16 @@ jobs:
           scp -r deploy ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${TARGET}/
 
           # Replace binary atomically and restart service
-          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "bash -s" << 'EOF'
-            systemctl stop ${{ steps.env.outputs.service_name }} || true
-            mv -f ${{ steps.env.outputs.target_dir }}/bot.new ${{ steps.env.outputs.target_dir }}/bot
-            chmod +x ${{ steps.env.outputs.target_dir }}/bot
+          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "
+            systemctl stop ${SERVICE} || true
+            mv -f ${TARGET}/bot.new ${TARGET}/bot
+            chmod +x ${TARGET}/bot
 
-            if [ -f "${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service" ]; then
-              cp "${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service" /etc/systemd/system/
+            if [ -f \"${TARGET}/deploy/${SERVICE}.service\" ]; then
+              cp \"${TARGET}/deploy/${SERVICE}.service\" /etc/systemd/system/
               systemctl daemon-reload
-              systemctl enable ${{ steps.env.outputs.service_name }} >/dev/null 2>&1 || true
+              systemctl enable ${SERVICE} >/dev/null 2>&1 || true
             fi
 
-            systemctl restart ${{ steps.env.outputs.service_name }}
-          EOF
+            systemctl restart ${SERVICE}
+          "

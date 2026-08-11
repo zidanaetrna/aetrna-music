@@ -53,6 +53,8 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 	if _, err := os.Stat(cookiesPath); err == nil {
 		log.Printf("🔑 [SearchYouTube] Using cookies file: %s", cookiesPath)
 		args = append([]string{"--cookies", cookiesPath}, args...)
+	} else {
+		log.Printf("⚠️ [SearchYouTube] Cookies file NOT found at path: %s (err: %v)", cookiesPath, err)
 	}
 
 	args = append(args, targetQuery)
@@ -140,7 +142,10 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 	}
 
 	if _, err := os.Stat(cookiesPath); err == nil {
+		log.Printf("🔑 [SearchYouTubeFallback] Using cookies file: %s", cookiesPath)
 		args = append([]string{"--cookies", cookiesPath}, args...)
+	} else {
+		log.Printf("⚠️ [SearchYouTubeFallback] Cookies file NOT found at path: %s (err: %v)", cookiesPath, err)
 	}
 
 	args = append(args, targetQuery)
