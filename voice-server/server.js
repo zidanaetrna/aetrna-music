@@ -137,8 +137,7 @@ app.post('/play', async (req, res) => {
         const ytdlpArgs = [
             ...(useCookies ? ['--cookies', cookieFile] : []),
             '--source-address', '2a02:c202:2234:4630::1',
-            '--extractor-args', 'youtube:player_client=android,web',
-            '-f', 'ba[ext=m4a]/ba[ext=webm]/bestaudio',
+            '-f', 'bestaudio/best',
             '--no-playlist',
             '--geo-bypass',
             '-o', '-',
