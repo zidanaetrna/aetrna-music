@@ -64,7 +64,9 @@ jobs:
           ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "
             which node >/dev/null 2>&1 || (apt-get update -y && apt-get install -y nodejs npm)
             which ffmpeg >/dev/null 2>&1 || (apt-get update -y && apt-get install -y ffmpeg)
-            yt-dlp -U || true
+            echo '📥 Updating yt-dlp to latest binary release...'
+            wget -q -O /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp || true
+            chmod +x /usr/local/bin/yt-dlp || true
 
             # Install npm dependencies for voice-server
             cd /opt/aetrna-music/voice-server
