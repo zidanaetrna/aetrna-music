@@ -1,4 +1,5 @@
 const express = require('express');
+const { Client, GatewayIntentBits } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -10,6 +11,22 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3005;
 const BOT_WEBHOOK = process.env.BOT_WEBHOOK || 'http://127.0.0.1:8080/internal/track-end';
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+
+// Initialize Discord Client for Voice Adapter Creator
+const discordClient = new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates]
+});
+
+if (DISCORD_TOKEN) {
+    discordClient.login(DISCORD_TOKEN).then(() => {
+        console.log(`✅ [VoiceServer] Discord Client logged in as ${discordClient.user.tag}`);
+    }).catch(err => {
+        console.error(`❌ [VoiceServer] Discord login error:`, err.message);
+    });
+} else {
+    console.warn(`⚠️ [VoiceServer] DISCORD_TOKEN not set in environment!`);
+}
 
 // Store connections and players per guild
 const connections = new Map();
@@ -35,6 +52,45 @@ app.post('/play', async (req, res) => {
         // Cleanup old streams for this guild
         cleanupStreams(guildId);
 
+        // Get guild from Discord Client
+        const guild = await discordClient.guilds.fetch(guildId).catch(() => null);
+        if (!guild) {
+            return res.status(400).json({ error: `Guild ${guildId} not found in Discord Client` });
+        }
+
+        // Join or get voice connection
+        let connection = connections.get(guildId);
+        if (!connection || connection.joinConfig.channelId !== channelId) {
+            if (connection) {
+                try { connection.destroy(); } catch (e) {}
+            }
+
+            connection = joinVoiceChannel({
+                channelId: channelId,
+                guildId: guildId,
+                adapterCreator: guild.voiceAdapterCreator,
+                selfDeaf: true,
+            });
+
+            connections.set(guildId, connection);
+
+            // Handle disconnection
+            connection.on(VoiceConnectionStatus.Disconnected, async () => {
+                try {
+                    await Promise.race([
+                        entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+                        entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+                    ]);
+                } catch (error) {
+                    try { connection.destroy(); } catch (e) {}
+                    connections.delete(guildId);
+                }
+            });
+        }
+
+        // Wait until voice connection is ready
+        await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+
         // Get or create player
         let player = players.get(guildId);
         if (!player) {
@@ -51,19 +107,6 @@ app.post('/play', async (req, res) => {
                 cleanupStreams(guildId);
                 notifyBotTrackEnd(guildId, 'error');
             });
-        }
-
-        // Get adapter from discord.js client instance
-        let connection = connections.get(guildId);
-        if (!connection || connection.joinConfig.channelId !== channelId) {
-            if (connection) {
-                try { connection.destroy(); } catch (e) {}
-            }
-
-            // We need voice adapter creator from Discord Gateway
-            // Go bot sends voice state via manual join, or Node.js joins via client
-            // Node.js joins directly using Discord Client instance
-            return res.status(400).json({ error: 'Use /connect first or pass gateway payload' });
         }
 
         // Spawn yt-dlp stream
@@ -148,7 +191,7 @@ app.post('/resume', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', connections: connections.size });
+    res.json({ status: 'ok', connections: connections.size, loggedIn: !!discordClient.user });
 });
 
 function notifyBotTrackEnd(guildId, reason) {
