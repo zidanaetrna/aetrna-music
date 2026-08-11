@@ -1,0 +1,205 @@
+package bot
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"aetrna-music/internal/commands"
+
+	"github.com/bwmarrin/discordgo"
+)
+
+func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	switch i.Type {
+	case discordgo.InteractionApplicationCommand:
+		data := i.ApplicationCommandData()
+		switch data.Name {
+		case "play":
+			if len(data.Options) > 0 {
+				b.handler.HandlePlay(s, i, data.Options[0].StringValue())
+			}
+		case "search":
+			if len(data.Options) > 0 {
+				b.handler.HandleSearch(s, i, data.Options[0].StringValue())
+			}
+		case "pause":
+			q := b.store.Get(i.GuildID)
+			q.Pause()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "⏸️ Paused!"},
+			})
+		case "resume":
+			q := b.store.Get(i.GuildID)
+			q.Resume()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "▶️ Resumed!"},
+			})
+		case "skip":
+			q := b.store.Get(i.GuildID)
+			q.Skip()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "⏭️ Skipped!"},
+			})
+		case "stop":
+			q := b.store.Get(i.GuildID)
+			q.Stop()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "⏹️ Stopped & cleared queue!"},
+			})
+		case "queue":
+			q := b.store.Get(i.GuildID)
+			embed := commands.CreateQueueEmbed(q, 1, 10)
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
+			})
+		case "nowplaying":
+			q := b.store.Get(i.GuildID)
+			if q.NowPlaying == nil {
+				_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{Content: "❌ Tidak ada lagu yang diputar!", Flags: discordgo.MessageFlagsEphemeral},
+				})
+				return
+			}
+			embed := commands.CreateNowPlayingEmbed(q.NowPlaying, q)
+			comps := commands.CreateControlButtons(q.IsPaused)
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: comps},
+			})
+		case "favorite":
+			b.handler.HandleFavoriteAdd(s, i)
+		case "favorites":
+			b.handler.HandleFavoritesList(s, i)
+		case "filter":
+			if len(data.Options) > 0 {
+				b.handler.HandleFilter(s, i, data.Options[0].StringValue())
+			}
+		case "help":
+			b.handler.HandleHelp(s, i)
+		case "stats":
+			b.handler.HandleStats(s, i)
+		case "ping":
+			b.handler.HandlePing(s, i)
+		case "ytauth":
+			b.handler.HandleYtAuth(s, i)
+		}
+
+	case discordgo.InteractionMessageComponent:
+		data := i.MessageComponentData()
+		q := b.store.Get(i.GuildID)
+
+		switch data.CustomID {
+		case "btn_pause":
+			if q.IsPaused {
+				q.Resume()
+				_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{Content: "▶️ Resumed!", Flags: discordgo.MessageFlagsEphemeral},
+				})
+			} else {
+				q.Pause()
+				_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{Content: "⏸️ Paused!", Flags: discordgo.MessageFlagsEphemeral},
+				})
+			}
+		case "btn_skip":
+			q.Skip()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "⏭️ Skipped!", Flags: discordgo.MessageFlagsEphemeral},
+			})
+		case "btn_stop":
+			q.Stop()
+			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{Content: "⏹️ Stopped!", Flags: discordgo.MessageFlagsEphemeral},
+			})
+		case "btn_favorite":
+			b.handler.HandleFavoriteAdd(s, i)
+		case "select_search_track":
+			if len(data.Values) > 0 {
+				trackURL := data.Values[0]
+				b.handler.HandlePlay(s, i, trackURL)
+			}
+		}
+	}
+}
+
+func (b *Bot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if m.Author.Bot || !strings.HasPrefix(m.Content, b.cfg.Prefix) {
+		return
+	}
+
+	args := strings.Fields(m.Content[len(b.cfg.Prefix):])
+	if len(args) == 0 {
+		return
+	}
+
+	cmd := strings.ToLower(args[0])
+	q := b.store.Get(m.GuildID)
+
+	switch cmd {
+	case "ping":
+		_, _ = s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("🏓 Pong! (%dms)", s.HeartbeatLatency().Milliseconds()))
+	case "stop":
+		q.Stop()
+		_, _ = s.ChannelMessageSend(m.ChannelID, "⏹️ Stopped!")
+	case "skip":
+		q.Skip()
+		_, _ = s.ChannelMessageSend(m.ChannelID, "⏭️ Skipped!")
+	case "pause":
+		q.Pause()
+		_, _ = s.ChannelMessageSend(m.ChannelID, "⏸️ Paused!")
+	case "resume":
+		q.Resume()
+		_, _ = s.ChannelMessageSend(m.ChannelID, "▶️ Resumed!")
+	}
+}
+
+func (b *Bot) handleVoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
+	q := b.store.Get(v.GuildID)
+	if q.VoiceConn == nil {
+		return
+	}
+
+	// Check if bot is alone in voice channel
+	guild, err := s.State.Guild(v.GuildID)
+	if err != nil {
+		return
+	}
+
+	botVCID := q.VoiceConn.ChannelID
+	memberCount := 0
+
+	for _, vs := range guild.VoiceStates {
+		if vs.ChannelID == botVCID {
+			memberCount++
+		}
+	}
+
+	if memberCount <= 1 {
+		go func() {
+			time.Sleep(60 * time.Second)
+			// Recheck after 1 minute
+			if g, err := s.State.Guild(v.GuildID); err == nil {
+				currentCount := 0
+				for _, vs := range g.VoiceStates {
+					if vs.ChannelID == botVCID {
+						currentCount++
+					}
+				}
+				if currentCount <= 1 && q.IsPlaying {
+					q.Stop()
+				}
+			}
+		}()
+	}
+}

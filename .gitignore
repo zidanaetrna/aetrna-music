@@ -3,7 +3,6 @@ index.js
 
 # Go Binaries & Artifacts
 bin/
-bot
 bot.exe
 *.exe
 *.dll
