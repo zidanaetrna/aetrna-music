@@ -136,7 +136,7 @@ app.post('/play', async (req, res) => {
 
         const ytdlpArgs = [
             ...(useCookies ? ['--cookies', cookieFile] : []),
-            '-f', 'bestaudio[protocol!=m3u8][protocol!=m3u8_native]/bestaudio',
+            '-f', 'bestaudio/best',
             '--hls-use-mpegts',
             '--no-playlist',
             '--geo-bypass',
