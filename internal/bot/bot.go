@@ -13,8 +13,6 @@ import (
 	"aetrna-music/internal/spotify"
 	"aetrna-music/internal/voice"
 
-	"sync"
-
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -27,10 +25,6 @@ type Bot struct {
 	spotify *spotify.Client
 	voice   *voice.Client
 
-	sync.RWMutex
-	voiceTokens     map[string]string
-	voiceEndpoints  map[string]string
-	voiceSessionIDs map[string]string
 }
 
 func New(cfg *config.Config, database *db.DB) (*Bot, error) {
@@ -44,15 +38,11 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 		cfg:             cfg,
 		db:              database,
 		voice:           voice.NewClient("http://127.0.0.1:3005"),
-		voiceTokens:     make(map[string]string),
-		voiceEndpoints:  make(map[string]string),
-		voiceSessionIDs: make(map[string]string),
 	}
 
 	dg.AddHandler(b.handleInteraction)
 	dg.AddHandler(b.handleMessageCreate)
 	dg.AddHandler(b.handleVoiceStateUpdate)
-	dg.AddHandler(b.handleVoiceServerUpdate)
 
 	dg.StateEnabled = true
 	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates | discordgo.IntentMessageContent
@@ -68,11 +58,9 @@ func (b *Bot) Start() error {
 	log.Printf("✅ Bot online as %s#%s", b.session.State.User.Username, b.session.State.User.Discriminator)
 
 	playCb := func(guildID string, song music.Song) error {
-		_ = b.session.ChannelVoiceJoinManual(guildID, song.ChannelID, false, false)
 		return b.voice.Play(guildID, song.ChannelID, song.URL, 1.0)
 	}
 	stopCb := func(guildID string) error {
-		_ = b.session.ChannelVoiceJoinManual(guildID, "", false, false)
 		return b.voice.Stop(guildID)
 	}
 
@@ -156,39 +144,6 @@ func (b *Bot) registerSlashCommands() {
 	}
 }
 
-
-
-func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceServerUpdate) {
-	if b.voice == nil || v.Endpoint == "" || v.Token == "" {
-		return
-	}
-
-	b.Lock()
-	b.voiceTokens[v.GuildID] = v.Token
-	b.voiceEndpoints[v.GuildID] = v.Endpoint
-	token := v.Token
-	endpoint := v.Endpoint
-
-	sessionID := b.voiceSessionIDs[v.GuildID]
-	if sessionID == "" {
-		if g, err := s.State.Guild(v.GuildID); err == nil {
-			for _, vs := range g.VoiceStates {
-				if vs.UserID == s.State.User.ID {
-					sessionID = vs.SessionID
-					b.voiceSessionIDs[v.GuildID] = sessionID
-					break
-				}
-			}
-		}
-	}
-	b.Unlock()
-
-	if token != "" && endpoint != "" && sessionID != "" {
-		q := b.store.Get(v.GuildID)
-		log.Printf("🔑 Sending fresh voice state to voice-server for guild %s (SessionID: %s)", v.GuildID, sessionID)
-		_ = b.voice.SendVoiceState(v.GuildID, q.VoiceChannelID, token, endpoint, sessionID, s.State.User.ID)
-	}
-}
 
 func (b *Bot) startInternalWebhookServer() {
 	mux := http.NewServeMux()
