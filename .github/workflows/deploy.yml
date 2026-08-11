@@ -81,6 +81,8 @@ jobs:
             systemctl daemon-reload
             systemctl enable lavalink >/dev/null 2>&1 || true
             systemctl restart lavalink
+            sleep 3
+            journalctl -u lavalink --no-pager -n 40 || true
 
             # Restart Bot Service
             systemctl stop ${SERVICE} || true
