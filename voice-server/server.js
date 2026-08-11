@@ -135,6 +135,7 @@ app.post('/play', async (req, res) => {
         }
 
         const ytdlpArgs = [
+            '--js-runtimes', 'node',
             ...(useCookies ? ['--cookies', cookieFile] : []),
             '--source-address', '2a02:c202:2234:4630::1',
             '-f', 'bestaudio/best',
