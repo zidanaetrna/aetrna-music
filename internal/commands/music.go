@@ -3,50 +3,62 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os/exec"
+	"strings"
 
 	"aetrna-music/internal/music"
+
 	"github.com/bwmarrin/discordgo"
 )
 
 type YtdlpSearchResult struct {
 	Entries []struct {
-		ID        string `json:"id"`
-		Title     string `json:"title"`
-		URL       string `json:"url"`
-		WebpageURL string `json:"webpage_url"`
-		Duration  int    `json:"duration"`
-		Thumbnail string `json:"thumbnail"`
-		Uploader  string `json:"uploader"`
+		ID         string  `json:"id"`
+		Title      string  `json:"title"`
+		URL        string  `json:"url"`
+		WebpageURL string  `json:"webpage_url"`
+		Duration   float64 `json:"duration"`
+		Thumbnail  string  `json:"thumbnail"`
+		Uploader   string  `json:"uploader"`
 	} `json:"entries"`
-	// Fallback single entry fields
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	WebpageURL string `json:"webpage_url"`
-	Duration  int    `json:"duration"`
-	Thumbnail string `json:"thumbnail"`
-	Uploader  string `json:"uploader"`
+
+	ID         string  `json:"id"`
+	Title      string  `json:"title"`
+	URL        string  `json:"url"`
+	WebpageURL string  `json:"webpage_url"`
+	Duration   float64 `json:"duration"`
+	Thumbnail  string  `json:"thumbnail"`
+	Uploader   string  `json:"uploader"`
 }
 
 func SearchYouTube(query string, limit int, ytdlpClients string) ([]music.Song, error) {
+	log.Printf("🔍 [SearchYouTube] Searching query: %s (limit: %d)", query, limit)
+
+	targetQuery := query
+	if !strings.HasPrefix(query, "http://") && !strings.HasPrefix(query, "https://") {
+		targetQuery = fmt.Sprintf("ytsearch%d:%s", limit, query)
+	}
+
 	args := []string{
 		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
-		"--default-search", "ytsearch",
 		"--dump-single-json",
 		"--no-warnings",
 		"--no-playlist",
-		fmt.Sprintf("ytsearch%d:%s", limit, query),
+		targetQuery,
 	}
 
 	cmd := exec.Command("yt-dlp", args...)
 	out, err := cmd.Output()
 	if err != nil {
+		log.Printf("❌ [SearchYouTube] yt-dlp command error: %v", err)
 		return nil, fmt.Errorf("search failed: %w", err)
 	}
 
 	var res YtdlpSearchResult
 	if err := json.Unmarshal(out, &res); err != nil {
-		return nil, err
+		log.Printf("❌ [SearchYouTube] json unmarshal error: %v", err)
+		return nil, fmt.Errorf("failed to parse search result: %w", err)
 	}
 
 	var songs []music.Song
@@ -64,7 +76,7 @@ func SearchYouTube(query string, limit int, ytdlpClients string) ([]music.Song, 
 			songs = append(songs, music.Song{
 				Title:     entry.Title,
 				URL:       songURL,
-				Duration:  entry.Duration,
+				Duration:  int(entry.Duration),
 				Thumbnail: entry.Thumbnail,
 				Author:    entry.Uploader,
 				VideoID:   entry.ID,
@@ -73,18 +85,22 @@ func SearchYouTube(query string, limit int, ytdlpClients string) ([]music.Song, 
 	} else if res.Title != "" {
 		songURL := res.WebpageURL
 		if songURL == "" {
+			songURL = res.URL
+		}
+		if songURL == "" && res.ID != "" {
 			songURL = "https://www.youtube.com/watch?v=" + res.ID
 		}
 		songs = append(songs, music.Song{
 			Title:     res.Title,
 			URL:       songURL,
-			Duration:  res.Duration,
+			Duration:  int(res.Duration),
 			Thumbnail: res.Thumbnail,
 			Author:    res.Uploader,
 			VideoID:   res.ID,
 		})
 	}
 
+	log.Printf("✅ [SearchYouTube] Search succeeded. Found %d songs for query '%s'", len(songs), query)
 	return songs, nil
 }
 
@@ -106,6 +122,7 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 	// Fast Search songs
 	songs, err := SearchYouTube(query, 1, h.cfg.YtdlpClients)
 	if err != nil || len(songs) == 0 {
+		log.Printf("⚠️ [HandlePlay] Search returned 0 songs for query '%s'. Err: %v", query, err)
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: "❌ Ga nemu lagu yang lu cari!",
 		})
@@ -122,6 +139,7 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 	if queue.VoiceConn == nil || !queue.VoiceConn.Ready {
 		vc, err := s.ChannelVoiceJoin(i.GuildID, voiceState.ChannelID, false, true)
 		if err != nil {
+			log.Printf("❌ [HandlePlay] ChannelVoiceJoin error: %v", err)
 			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 				Content: fmt.Sprintf("❌ Error join voice channel: %v\nℹ️ Pastikan bot memiliki permission 'Connect' & 'Speak' di Voice Channel ini!", err),
 			})
