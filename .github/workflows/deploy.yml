@@ -37,17 +37,17 @@ jobs:
             echo "service_name=aetrna-music-staging" >> $GITHUB_OUTPUT
           fi
 
-      - name: Deploy Binary via SSH
+      - name: Deploy Binary & Service Files via SSH
         uses: appleboy/scp-action@v0.1.7
         if: ${{ env.VPS_HOST != '' }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "bot"
+          source: "bot,deploy/*"
           target: "${{ steps.env.outputs.target_dir }}"
 
-      - name: Restart Systemd Service
+      - name: Setup & Restart Systemd Service
         uses: appleboy/ssh-action@v1.0.3
         if: ${{ env.VPS_HOST != '' }}
         with:
@@ -55,4 +55,10 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            systemctl restart ${{ steps.env.outputs.service_name }} || true
+            mkdir -p ${{ steps.env.outputs.target_dir }}
+            if [ -f "${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service" ]; then
+              cp "${{ steps.env.outputs.target_dir }}/deploy/${{ steps.env.outputs.service_name }}.service" /etc/systemd/system/
+              systemctl daemon-reload
+              systemctl enable ${{ steps.env.outputs.service_name }}
+            fi
+            systemctl restart ${{ steps.env.outputs.service_name }}
