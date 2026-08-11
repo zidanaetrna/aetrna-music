@@ -41,8 +41,9 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 		targetQuery = fmt.Sprintf("ytsearch%d:%s", limit, query)
 	}
 
+	searchClients := "web,web_embedded,mweb"
 	args := []string{
-		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
+		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", searchClients),
 		"--dump-single-json",
 		"--no-warnings",
 		"--no-playlist",
@@ -51,10 +52,7 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 	}
 
 	if _, err := os.Stat(cookiesPath); err == nil {
-		log.Printf("🔑 [SearchYouTube] Using cookies file: %s", cookiesPath)
 		args = append([]string{"--cookies", cookiesPath}, args...)
-	} else {
-		log.Printf("⚠️ [SearchYouTube] Cookies file NOT found at path: %s (err: %v)", cookiesPath, err)
 	}
 
 	args = append(args, targetQuery)
@@ -133,7 +131,6 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 	}
 
 	args := []string{
-		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"--default-search", "ytsearch",
 		"--dump-json",
 		"--no-playlist",
@@ -142,10 +139,7 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 	}
 
 	if _, err := os.Stat(cookiesPath); err == nil {
-		log.Printf("🔑 [SearchYouTubeFallback] Using cookies file: %s", cookiesPath)
 		args = append([]string{"--cookies", cookiesPath}, args...)
-	} else {
-		log.Printf("⚠️ [SearchYouTubeFallback] Cookies file NOT found at path: %s (err: %v)", cookiesPath, err)
 	}
 
 	args = append(args, targetQuery)
@@ -236,7 +230,7 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 	if err != nil || len(songs) == 0 {
 		log.Printf("⚠️ [HandlePlay] Search returned 0 songs for query '%s'. Err: %v", query, err)
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: "❌ Ga nemu lagu yang lu cari! Pastikan `cookies.txt` terpasang jika YouTube memblokir IP.",
+			Content: "❌ Ga nemu lagu yang lu cari!",
 		})
 		return
 	}
