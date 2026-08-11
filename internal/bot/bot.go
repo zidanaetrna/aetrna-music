@@ -53,6 +53,7 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 	dg.AddHandler(b.handleMessageCreate)
 	dg.AddHandler(b.handleVoiceStateUpdate)
 
+	dg.StateEnabled = true
 	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates | discordgo.IntentMessageContent
 
 	return b, nil

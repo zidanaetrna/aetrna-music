@@ -154,6 +154,15 @@ func (q *GuildQueue) SetFilter(filter string) {
 func (q *GuildQueue) PlayNext(s *discordgo.Session, cookiesPath, ytdlpClients string) {
 	q.mu.Lock()
 
+	// If voice connection is absent or not ready, clean up state and stop
+	if q.VoiceConn == nil || !q.VoiceConn.Ready {
+		q.IsPlaying = false
+		q.NowPlaying = nil
+		q.mu.Unlock()
+		fmt.Printf("Voice connection not ready in guild %s, stopping player loop.\n", q.GuildID)
+		return
+	}
+
 	if q.NowPlaying != nil {
 		q.History = append(q.History, *q.NowPlaying)
 		if len(q.History) > 50 {
@@ -184,6 +193,7 @@ func (q *GuildQueue) PlayNext(s *discordgo.Session, cookiesPath, ytdlpClients st
 	song := *q.NowPlaying
 	q.IsPlaying = true
 	q.IsPaused = false
+	vc := q.VoiceConn
 	q.mu.Unlock()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -192,18 +202,16 @@ func (q *GuildQueue) PlayNext(s *discordgo.Session, cookiesPath, ytdlpClients st
 	opusChan, stopChan, err := q.Streamer.StreamAudio(ctx, song.URL, song.VideoID, q.Filter, cookiesPath, ytdlpClients, q.Volume)
 	if err != nil {
 		fmt.Printf("Error starting stream for %s: %v\n", song.Title, err)
-		q.PlayNext(s, cookiesPath, ytdlpClients)
+		q.mu.Lock()
+		q.IsPlaying = false
+		q.NowPlaying = nil
+		q.mu.Unlock()
 		return
 	}
 
 	q.mu.Lock()
 	q.StopChan = stopChan
-	vc := q.VoiceConn
 	q.mu.Unlock()
-
-	if vc == nil {
-		return
-	}
 
 	_ = vc.Speaking(true)
 	defer vc.Speaking(false)
@@ -215,18 +223,32 @@ func (q *GuildQueue) PlayNext(s *discordgo.Session, cookiesPath, ytdlpClients st
 		select {
 		case opusFrame, ok := <-opusChan:
 			if !ok {
-				q.PlayNext(s, cookiesPath, ytdlpClients)
+				time.Sleep(500 * time.Millisecond)
+				go q.PlayNext(s, cookiesPath, ytdlpClients)
 				return
 			}
+
+			// Handle pause
+			q.mu.RLock()
+			isPaused := q.IsPaused
+			q.mu.RUnlock()
+
+			if isPaused {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+
 			select {
 			case <-ticker.C:
 				vc.OpusSend <- opusFrame
 			case <-stopChan:
-				q.PlayNext(s, cookiesPath, ytdlpClients)
+				time.Sleep(500 * time.Millisecond)
+				go q.PlayNext(s, cookiesPath, ytdlpClients)
 				return
 			}
 		case <-stopChan:
-			q.PlayNext(s, cookiesPath, ytdlpClients)
+			time.Sleep(500 * time.Millisecond)
+			go q.PlayNext(s, cookiesPath, ytdlpClients)
 			return
 		}
 	}

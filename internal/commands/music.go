@@ -10,6 +10,16 @@ import (
 )
 
 type YtdlpSearchResult struct {
+	Entries []struct {
+		ID        string `json:"id"`
+		Title     string `json:"title"`
+		URL       string `json:"url"`
+		WebpageURL string `json:"webpage_url"`
+		Duration  int    `json:"duration"`
+		Thumbnail string `json:"thumbnail"`
+		Uploader  string `json:"uploader"`
+	} `json:"entries"`
+	// Fallback single entry fields
 	ID        string `json:"id"`
 	Title     string `json:"title"`
 	WebpageURL string `json:"webpage_url"`
@@ -22,7 +32,9 @@ func SearchYouTube(query string, limit int, ytdlpClients string) ([]music.Song, 
 	args := []string{
 		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"--default-search", "ytsearch",
-		"--dump-json",
+		"--dump-single-json",
+		"--no-warnings",
+		"--no-playlist",
 		fmt.Sprintf("ytsearch%d:%s", limit, query),
 	}
 
@@ -32,42 +44,48 @@ func SearchYouTube(query string, limit int, ytdlpClients string) ([]music.Song, 
 		return nil, fmt.Errorf("search failed: %w", err)
 	}
 
-	lines := splitJSONLines(out)
+	var res YtdlpSearchResult
+	if err := json.Unmarshal(out, &res); err != nil {
+		return nil, err
+	}
+
 	var songs []music.Song
 
-	for _, line := range lines {
-		if len(line) == 0 {
-			continue
-		}
-		var item YtdlpSearchResult
-		if err := json.Unmarshal(line, &item); err == nil && item.Title != "" {
+	if len(res.Entries) > 0 {
+		for _, entry := range res.Entries {
+			songURL := entry.WebpageURL
+			if songURL == "" {
+				songURL = entry.URL
+			}
+			if songURL == "" && entry.ID != "" {
+				songURL = "https://www.youtube.com/watch?v=" + entry.ID
+			}
+
 			songs = append(songs, music.Song{
-				Title:     item.Title,
-				URL:       item.WebpageURL,
-				Duration:  item.Duration,
-				Thumbnail: item.Thumbnail,
-				Author:    item.Uploader,
-				VideoID:   item.ID,
+				Title:     entry.Title,
+				URL:       songURL,
+				Duration:  entry.Duration,
+				Thumbnail: entry.Thumbnail,
+				Author:    entry.Uploader,
+				VideoID:   entry.ID,
 			})
 		}
+	} else if res.Title != "" {
+		songURL := res.WebpageURL
+		if songURL == "" {
+			songURL = "https://www.youtube.com/watch?v=" + res.ID
+		}
+		songs = append(songs, music.Song{
+			Title:     res.Title,
+			URL:       songURL,
+			Duration:  res.Duration,
+			Thumbnail: res.Thumbnail,
+			Author:    res.Uploader,
+			VideoID:   res.ID,
+		})
 	}
 
 	return songs, nil
-}
-
-func splitJSONLines(data []byte) [][]byte {
-	var lines [][]byte
-	start := 0
-	for i, b := range data {
-		if b == '\n' {
-			lines = append(lines, data[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(data) {
-		lines = append(lines, data[start:])
-	}
-	return lines
 }
 
 func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate, query string) {
@@ -85,7 +103,7 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	queue := h.store.Get(i.GuildID)
 
-	// Search songs
+	// Fast Search songs
 	songs, err := SearchYouTube(query, 1, h.cfg.YtdlpClients)
 	if err != nil || len(songs) == 0 {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
@@ -100,12 +118,12 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	queue.AddSong(song)
 
-	// Connect to voice channel if not connected
-	if queue.VoiceConn == nil {
+	// Connect to voice channel if not connected or disconnected
+	if queue.VoiceConn == nil || !queue.VoiceConn.Ready {
 		vc, err := s.ChannelVoiceJoin(i.GuildID, voiceState.ChannelID, false, true)
 		if err != nil {
 			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-				Content: fmt.Sprintf("❌ Error join voice channel: %v", err),
+				Content: fmt.Sprintf("❌ Error join voice channel: %v\nℹ️ Pastikan bot memiliki permission 'Connect' & 'Speak' di Voice Channel ini!", err),
 			})
 			return
 		}
