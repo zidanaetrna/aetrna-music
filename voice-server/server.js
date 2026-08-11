@@ -184,11 +184,26 @@ app.post('/play', async (req, res) => {
         const ffmpeg = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
         activeStreams.set(guildId, { ffmpeg });
 
+        ffmpeg.stderr.on('data', (d) => {
+            const msg = d.toString().trim();
+            if (msg && !msg.includes('frame=') && !msg.includes('size=')) {
+                console.log(`[ffmpeg] ${msg}`);
+            }
+        });
+
         const resource = createAudioResource(ffmpeg.stdout, {
             inputType: StreamType.Raw,
             inlineVolume: true
         });
         resource.volume.setVolume(volume);
+
+        try {
+            console.log(`⏳ [VoiceServer] Waiting for voice connection Ready state...`);
+            await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+            console.log(`✅ [VoiceServer] Voice connection is Ready!`);
+        } catch (stateErr) {
+            console.error(`⚠️ [VoiceServer] Voice connection state wait timeout/error: ${stateErr.message}`);
+        }
 
         player.play(resource);
         connection.subscribe(player);
