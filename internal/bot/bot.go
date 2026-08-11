@@ -1,8 +1,10 @@
 package bot
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 
 	"aetrna-music/config"
 	"aetrna-music/db"
@@ -69,6 +71,9 @@ func (b *Bot) Start() error {
 
 	// Register slash commands
 	b.registerSlashCommands()
+
+	// Start internal webhook listener for track-end events from voice-server
+	go b.startInternalWebhookServer()
 
 	return nil
 }
@@ -156,4 +161,26 @@ func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceSe
 
 	q := b.store.Get(v.GuildID)
 	_ = b.voice.SendVoiceState(v.GuildID, q.VoiceChannelID, v.Token, v.Endpoint, sessionID, s.State.User.ID)
+}
+
+func (b *Bot) startInternalWebhookServer() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/internal/track-end", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			GuildID string `json:"guildId"`
+			Reason  string `json:"reason"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.GuildID != "" {
+			log.Printf("🎵 [InternalWebhook] Track end event for guild %s (%s)", body.GuildID, body.Reason)
+			q := b.store.Get(body.GuildID)
+			go q.PlayNext()
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := &http.Server{
+		Addr:    "127.0.0.1:8080",
+		Handler: mux,
+	}
+	_ = server.ListenAndServe()
 }
