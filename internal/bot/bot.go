@@ -2,8 +2,11 @@ package bot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"aetrna-music/config"
 	"aetrna-music/db"
@@ -16,13 +19,15 @@ import (
 )
 
 type Bot struct {
-	session  *discordgo.Session
-	cfg      *config.Config
-	db       *db.DB
-	store    *music.QueueStore
-	handler  *commands.Handler
-	spotify  *spotify.Client
-	lavalink *lavalink.Client
+	session         *discordgo.Session
+	cfg             *config.Config
+	db              *db.DB
+	store           *music.QueueStore
+	handler         *commands.Handler
+	spotify         *spotify.Client
+	lavalink        *lavalink.Client
+	voiceSessionIDs map[string]string
+	sessionMu       sync.RWMutex
 }
 
 func New(cfg *config.Config, database *db.DB) (*Bot, error) {
@@ -34,9 +39,10 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 	// We need the bot user ID for Lavalink, so open a temp REST call after session opens.
 	// Lavalink client is created in Start() after we know the bot user ID.
 	b := &Bot{
-		session: dg,
-		cfg:     cfg,
-		db:      database,
+		session:         dg,
+		cfg:             cfg,
+		db:              database,
+		voiceSessionIDs: make(map[string]string),
 	}
 
 	dg.AddHandler(b.handleInteraction)
@@ -137,14 +143,26 @@ func (b *Bot) lavalinkPlay(guildID string, song music.Song) error {
 	var encodedTrack string
 	switch result.LoadType {
 	case "track":
-		encodedTrack = result.Data.Encoded
+		var td lavalink.TrackData
+		if err := json.Unmarshal(result.Data, &td); err != nil {
+			return fmt.Errorf("unmarshal track data error: %w", err)
+		}
+		encodedTrack = td.Encoded
 	case "search", "playlist":
-		if len(result.Data.Tracks) == 0 {
+		var tracks []lavalink.TrackData
+		if err := json.Unmarshal(result.Data, &tracks); err != nil {
+			return fmt.Errorf("unmarshal search tracks error: %w", err)
+		}
+		if len(tracks) == 0 {
 			return fmt.Errorf("no tracks found for %s", song.URL)
 		}
-		encodedTrack = result.Data.Tracks[0].Encoded
-	case "error", "empty":
-		return fmt.Errorf("lavalink loadtrack failed: type=%s msg=%s", result.LoadType, result.Data.Message)
+		encodedTrack = tracks[0].Encoded
+	case "error":
+		var ed lavalink.ExceptionData
+		_ = json.Unmarshal(result.Data, &ed)
+		return fmt.Errorf("lavalink loadtrack error: %s", ed.Message)
+	case "empty":
+		return fmt.Errorf("no tracks found for %s", song.URL)
 	default:
 		return fmt.Errorf("unknown loadType: %s", result.LoadType)
 	}
@@ -156,17 +174,36 @@ func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceSe
 	if b.lavalink == nil {
 		return
 	}
-	g, err := s.State.Guild(v.GuildID)
-	if err != nil {
-		return
+
+	b.sessionMu.RLock()
+	sessionID := b.voiceSessionIDs[v.GuildID]
+	b.sessionMu.RUnlock()
+
+	if sessionID == "" {
+		if g, err := s.State.Guild(v.GuildID); err == nil {
+			for _, vs := range g.VoiceStates {
+				if vs.UserID == s.State.User.ID {
+					sessionID = vs.SessionID
+					break
+				}
+			}
+		}
 	}
 
-	var sessionID string
-	for _, vs := range g.VoiceStates {
-		if vs.UserID == s.State.User.ID {
-			sessionID = vs.SessionID
-			break
-		}
+	if sessionID == "" {
+		log.Printf("⚠️ [Lavalink] VoiceServerUpdate: sessionID not found yet for guild %s, retrying...", v.GuildID)
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			b.sessionMu.RLock()
+			sessionID = b.voiceSessionIDs[v.GuildID]
+			b.sessionMu.RUnlock()
+			if sessionID != "" {
+				if err := b.lavalink.UpdateVoice(v.GuildID, sessionID, v.Token, v.Endpoint); err != nil {
+					log.Printf("❌ [Lavalink] Retry UpdateVoice error: %v", err)
+				}
+			}
+		}()
+		return
 	}
 
 	if err := b.lavalink.UpdateVoice(v.GuildID, sessionID, v.Token, v.Endpoint); err != nil {

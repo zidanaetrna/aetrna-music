@@ -165,6 +165,12 @@ func (b *Bot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCrea
 }
 
 func (b *Bot) handleVoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
+	if v.UserID == s.State.User.ID && v.SessionID != "" {
+		b.sessionMu.Lock()
+		b.voiceSessionIDs[v.GuildID] = v.SessionID
+		b.sessionMu.Unlock()
+	}
+
 	if b.store == nil {
 		return
 	}

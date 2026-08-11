@@ -64,25 +64,27 @@ type PlayerState struct {
 }
 
 type LoadResult struct {
-	LoadType string `json:"loadType"`
-	Data     struct {
-		Encoded string   `json:"encoded"`  // for track
-		Info    TrackInfoData `json:"info"` // for track
-		Tracks  []struct {
-			Encoded string        `json:"encoded"`
-			Info    TrackInfoData `json:"info"`
-		} `json:"tracks"`     // for playlist/search
-		Message string `json:"message"` // for error
-	} `json:"data"`
+	LoadType string          `json:"loadType"`
+	Data     json.RawMessage `json:"data"`
+}
+
+type TrackData struct {
+	Encoded string        `json:"encoded"`
+	Info    TrackInfoData `json:"info"`
+}
+
+type ExceptionData struct {
+	Message  string `json:"message"`
+	Severity string `json:"severity"`
 }
 
 type TrackInfoData struct {
-	Title     string `json:"title"`
-	Author    string `json:"author"`
-	Length    int64  `json:"length"`
+	Title      string `json:"title"`
+	Author     string `json:"author"`
+	Length     int64  `json:"length"`
 	Identifier string `json:"identifier"`
-	IsStream  bool   `json:"isStream"`
-	URI       string `json:"uri"`
+	IsStream   bool   `json:"isStream"`
+	URI        string `json:"uri"`
 	ArtworkURL string `json:"artworkUrl"`
 }
 
