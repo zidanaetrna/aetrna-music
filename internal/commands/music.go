@@ -262,7 +262,6 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 	components := CreateControlButtons(queue.IsPaused)
 
 	_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Content:    fmt.Sprintf("✅ Ditambahin **%s** ke queue!", song.Title),
 		Embeds:     []*discordgo.MessageEmbed{embed},
 		Components: components,
 	})
