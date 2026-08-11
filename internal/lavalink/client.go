@@ -256,7 +256,7 @@ func (c *Client) DestroyPlayer(guildID string) error {
 
 func (c *Client) patchPlayer(guildID string, body interface{}) error {
 	data, _ := json.Marshal(body)
-	u := fmt.Sprintf("http://%s/v4/sessions/%s/players/%s?noReplace=false", c.host, c.sessionID(), guildID)
+	u := fmt.Sprintf("http://%s/v4/sessions/%s/players/%s", c.host, c.sessionID(), guildID)
 	req, _ := http.NewRequest(http.MethodPatch, u, bytes.NewReader(data))
 	req.Header.Set("Authorization", c.password)
 	req.Header.Set("Content-Type", "application/json")
