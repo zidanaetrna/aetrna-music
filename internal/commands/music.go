@@ -51,14 +51,19 @@ func SearchYouTube(query string, limit int, ytdlpClients string) ([]music.Song, 
 	cmd := exec.Command("yt-dlp", args...)
 	out, err := cmd.Output()
 	if err != nil {
-		log.Printf("❌ [SearchYouTube] yt-dlp command error: %v", err)
-		return nil, fmt.Errorf("search failed: %w", err)
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			log.Printf("❌ [SearchYouTube] primary yt-dlp error: %v | Stderr: %s", err, string(exitErr.Stderr))
+		} else {
+			log.Printf("❌ [SearchYouTube] primary yt-dlp error: %v", err)
+		}
+		// Fallback to standard yt-dlp search
+		return searchYouTubeFallback(query, limit)
 	}
 
 	var res YtdlpSearchResult
 	if err := json.Unmarshal(out, &res); err != nil {
-		log.Printf("❌ [SearchYouTube] json unmarshal error: %v", err)
-		return nil, fmt.Errorf("failed to parse search result: %w", err)
+		log.Printf("❌ [SearchYouTube] json unmarshal error: %v | Raw Output: %s", err, string(out))
+		return searchYouTubeFallback(query, limit)
 	}
 
 	var songs []music.Song
@@ -100,8 +105,93 @@ func SearchYouTube(query string, limit int, ytdlpClients string) ([]music.Song, 
 		})
 	}
 
-	log.Printf("✅ [SearchYouTube] Search succeeded. Found %d songs for query '%s'", len(songs), query)
+	if len(songs) == 0 {
+		log.Printf("⚠️ [SearchYouTube] Primary search returned 0 songs, trying fallback...")
+		return searchYouTubeFallback(query, limit)
+	}
+
+	log.Printf("✅ [SearchYouTube] Primary search succeeded. Found %d songs for query '%s'", len(songs), query)
 	return songs, nil
+}
+
+func searchYouTubeFallback(query string, limit int) ([]music.Song, error) {
+	log.Printf("🔄 [SearchYouTubeFallback] Running fallback search for query: %s", query)
+	targetQuery := query
+	if !strings.HasPrefix(query, "http://") && !strings.HasPrefix(query, "https://") {
+		targetQuery = fmt.Sprintf("ytsearch%d:%s", limit, query)
+	}
+
+	args := []string{
+		"--default-search", "ytsearch",
+		"--dump-json",
+		"--no-playlist",
+		targetQuery,
+	}
+
+	cmd := exec.Command("yt-dlp", args...)
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			log.Printf("❌ [SearchYouTubeFallback] error: %v | Stderr: %s", err, string(exitErr.Stderr))
+		} else {
+			log.Printf("❌ [SearchYouTubeFallback] error: %v", err)
+		}
+		return nil, err
+	}
+
+	lines := splitJSONLines(out)
+	var songs []music.Song
+
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+		var item struct {
+			ID         string  `json:"id"`
+			Title      string  `json:"title"`
+			WebpageURL string  `json:"webpage_url"`
+			URL        string  `json:"url"`
+			Duration   float64 `json:"duration"`
+			Thumbnail  string  `json:"thumbnail"`
+			Uploader   string  `json:"uploader"`
+		}
+		if err := json.Unmarshal(line, &item); err == nil && item.Title != "" {
+			songURL := item.WebpageURL
+			if songURL == "" {
+				songURL = item.URL
+			}
+			if songURL == "" && item.ID != "" {
+				songURL = "https://www.youtube.com/watch?v=" + item.ID
+			}
+
+			songs = append(songs, music.Song{
+				Title:     item.Title,
+				URL:       songURL,
+				Duration:  int(item.Duration),
+				Thumbnail: item.Thumbnail,
+				Author:    item.Uploader,
+				VideoID:   item.ID,
+			})
+		}
+	}
+
+	log.Printf("✅ [SearchYouTubeFallback] Fallback search finished. Found %d songs.", len(songs))
+	return songs, nil
+}
+
+func splitJSONLines(data []byte) [][]byte {
+	var lines [][]byte
+	start := 0
+	for i, b := range data {
+		if b == '\n' {
+			lines = append(lines, data[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(data) {
+		lines = append(lines, data[start:])
+	}
+	return lines
 }
 
 func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreate, query string) {
@@ -119,7 +209,7 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	queue := h.store.Get(i.GuildID)
 
-	// Fast Search songs
+	// Search songs
 	songs, err := SearchYouTube(query, 1, h.cfg.YtdlpClients)
 	if err != nil || len(songs) == 0 {
 		log.Printf("⚠️ [HandlePlay] Search returned 0 songs for query '%s'. Err: %v", query, err)
