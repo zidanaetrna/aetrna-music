@@ -152,7 +152,7 @@ func (h *Handler) HandleSearch(s *discordgo.Session, i *discordgo.InteractionCre
 			Label:       label,
 			Value:       song.URL,
 			Description: fmt.Sprintf("%s • %s", song.Author, music.FormatDuration(song.Duration)),
-			Emoji:       discordgo.ComponentEmoji{Name: "🎵"},
+			Emoji:       &discordgo.ComponentEmoji{Name: "🎵"},
 		})
 	}
 

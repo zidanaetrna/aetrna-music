@@ -68,6 +68,18 @@ func (q *GuildQueue) InsertNext(song Song) {
 	q.Songs = append([]Song{song}, q.Songs...)
 }
 
+func (q *GuildQueue) Pause() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.IsPaused = true
+}
+
+func (q *GuildQueue) Resume() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.IsPaused = false
+}
+
 func (q *GuildQueue) Skip() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -194,7 +206,7 @@ func (q *GuildQueue) PlayNext(s *discordgo.Session, cookiesPath, ytdlpClients st
 	}
 
 	_ = vc.Speaking(true)
-	defer _ = vc.Speaking(false)
+	defer vc.Speaking(false)
 
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
