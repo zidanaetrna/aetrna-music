@@ -135,10 +135,9 @@ app.post('/play', async (req, res) => {
         }
 
         const ytdlpArgs = [
-            '--extractor-args', 'youtube:player_client=ios',
-            '--source-address', '2a02:c202:2234:4630::1',
-            '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
-            '-f', 'bestaudio/best',
+            ...(useCookies ? ['--cookies', cookieFile] : []),
+            '-f', 'bestaudio[protocol!=m3u8][protocol!=m3u8_native]/bestaudio',
+            '--hls-use-mpegts',
             '--no-playlist',
             '--geo-bypass',
             '--no-check-certificates',
