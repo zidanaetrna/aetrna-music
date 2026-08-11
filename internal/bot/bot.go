@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
-	"time"
 
 	"aetrna-music/config"
 	"aetrna-music/db"
@@ -27,6 +27,8 @@ type Bot struct {
 	spotify         *spotify.Client
 	lavalink        *lavalink.Client
 	voiceSessionIDs map[string]string
+	voiceTokens     map[string]string
+	voiceEndpoints  map[string]string
 	sessionMu       sync.RWMutex
 }
 
@@ -43,6 +45,8 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 		cfg:             cfg,
 		db:              database,
 		voiceSessionIDs: make(map[string]string),
+		voiceTokens:     make(map[string]string),
+		voiceEndpoints:  make(map[string]string),
 	}
 
 	dg.AddHandler(b.handleInteraction)
@@ -164,7 +168,34 @@ func (b *Bot) lavalinkPlay(guildID string, song music.Song) error {
 		return fmt.Errorf("unknown loadType: %s", result.LoadType)
 	}
 
-	return b.lavalink.Play(guildID, encodedTrack)
+	voiceData := b.getVoiceData(guildID)
+	return b.lavalink.Play(guildID, encodedTrack, voiceData)
+}
+
+func (b *Bot) getVoiceData(guildID string) map[string]interface{} {
+	b.sessionMu.RLock()
+	defer b.sessionMu.RUnlock()
+
+	sessionID := b.voiceSessionIDs[guildID]
+	token := b.voiceTokens[guildID]
+	endpoint := b.voiceEndpoints[guildID]
+
+	if sessionID == "" || token == "" || endpoint == "" {
+		return nil
+	}
+
+	cleanEndpoint := endpoint
+	cleanEndpoint = strings.TrimPrefix(cleanEndpoint, "wss://")
+	cleanEndpoint = strings.TrimPrefix(cleanEndpoint, "ws://")
+	if idx := strings.Index(cleanEndpoint, ":"); idx != -1 {
+		cleanEndpoint = cleanEndpoint[:idx]
+	}
+
+	return map[string]interface{}{
+		"token":     token,
+		"endpoint":  cleanEndpoint,
+		"sessionId": sessionID,
+	}
 }
 
 func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceServerUpdate) {
@@ -172,42 +203,30 @@ func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceSe
 		return
 	}
 
-	b.sessionMu.RLock()
+	b.sessionMu.Lock()
+	b.voiceTokens[v.GuildID] = v.Token
+	b.voiceEndpoints[v.GuildID] = v.Endpoint
 	sessionID := b.voiceSessionIDs[v.GuildID]
-	b.sessionMu.RUnlock()
+	b.sessionMu.Unlock()
 
 	if sessionID == "" {
 		if g, err := s.State.Guild(v.GuildID); err == nil {
 			for _, vs := range g.VoiceStates {
 				if vs.UserID == s.State.User.ID {
 					sessionID = vs.SessionID
+					b.sessionMu.Lock()
+					b.voiceSessionIDs[v.GuildID] = sessionID
+					b.sessionMu.Unlock()
 					break
 				}
 			}
 		}
 	}
 
-	if sessionID == "" {
-		log.Printf("⚠️ [Lavalink] VoiceServerUpdate: sessionID not found yet for guild %s, retrying...", v.GuildID)
-		go func() {
-			for attempt := 1; attempt <= 5; attempt++ {
-				time.Sleep(200 * time.Millisecond)
-				b.sessionMu.RLock()
-				sessionID = b.voiceSessionIDs[v.GuildID]
-				b.sessionMu.RUnlock()
-				if sessionID != "" {
-					if err := b.lavalink.UpdateVoice(v.GuildID, sessionID, v.Token, v.Endpoint); err != nil {
-						log.Printf("❌ [Lavalink] Retry UpdateVoice error: %v", err)
-					}
-					return
-				}
-			}
-		}()
-		return
-	}
-
-	if err := b.lavalink.UpdateVoice(v.GuildID, sessionID, v.Token, v.Endpoint); err != nil {
-		log.Printf("❌ [Lavalink] UpdateVoice error: %v", err)
+	if sessionID != "" {
+		if err := b.lavalink.UpdateVoice(v.GuildID, sessionID, v.Token, v.Endpoint); err != nil {
+			log.Printf("❌ [Lavalink] UpdateVoice error: %v", err)
+		}
 	}
 }
 
