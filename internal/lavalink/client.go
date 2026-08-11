@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -172,10 +173,18 @@ func (c *Client) OnEvent(h EventHandler) {
 
 // UpdateVoice forwards voice gateway events to Lavalink.
 func (c *Client) UpdateVoice(guildID, sessionID, token, endpoint string) error {
+	cleanEndpoint := endpoint
+	cleanEndpoint = strings.TrimPrefix(cleanEndpoint, "wss://")
+	cleanEndpoint = strings.TrimPrefix(cleanEndpoint, "ws://")
+	cleanEndpoint = strings.TrimSuffix(cleanEndpoint, ":443")
+	cleanEndpoint = strings.TrimSuffix(cleanEndpoint, ":80")
+
+	log.Printf("🎙️ [Lavalink] Updating Voice for guild %s (sessionID: %s, endpoint: %s)", guildID, sessionID, cleanEndpoint)
+
 	body := map[string]interface{}{
 		"voice": map[string]string{
-			"token":    token,
-			"endpoint": endpoint,
+			"token":     token,
+			"endpoint":  cleanEndpoint,
 			"sessionId": sessionID,
 		},
 	}

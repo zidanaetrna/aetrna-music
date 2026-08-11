@@ -126,12 +126,9 @@ func (b *Bot) lavalinkPlay(guildID string, song music.Song) error {
 	identifier := song.URL
 	result, err := b.lavalink.LoadTrack(ctx, identifier)
 
-	// 2. If primary fails or is empty, try fallback identifiers (VideoID or search query)
+	// 2. If primary fails or is empty, try fallback search query with song title
 	if err != nil || result == nil || result.LoadType == "error" || result.LoadType == "empty" {
-		fallbackQuery := song.VideoID
-		if fallbackQuery == "" {
-			fallbackQuery = song.Title
-		}
+		fallbackQuery := song.Title
 		log.Printf("🔄 [Lavalink] Primary URL load failed (%s), trying fallback query: ytsearch:%s", song.URL, fallbackQuery)
 		result, err = b.lavalink.LoadTrack(ctx, "ytsearch:"+fallbackQuery)
 	}
