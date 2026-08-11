@@ -242,13 +242,18 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	queue.AddSong(song)
 
-	// Connect to voice channel if not connected or disconnected
-	if queue.VoiceConn == nil || !queue.VoiceConn.Ready {
+	// Connect to voice channel if not connected
+	if queue.VoiceConn == nil || queue.VoiceConn.ChannelID != voiceState.ChannelID {
+		if queue.VoiceConn != nil {
+			_ = queue.VoiceConn.Disconnect()
+			queue.VoiceConn = nil
+		}
+
 		vc, err := s.ChannelVoiceJoin(i.GuildID, voiceState.ChannelID, false, true)
 		if err != nil {
 			log.Printf("❌ [HandlePlay] ChannelVoiceJoin error: %v", err)
 			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-				Content: fmt.Sprintf("❌ Error join voice channel: %v\nℹ️ Pastikan bot memiliki permission 'Connect' & 'Speak' di Voice Channel ini!", err),
+				Content: fmt.Sprintf("❌ Error join voice channel: %v\nℹ️ Jika muncul error 'E2EE/DAVE protocol required', coba ubah **Region Override** Voice Channel di Discord ke US Central / Hong Kong / Sydney!", err),
 			})
 			return
 		}
