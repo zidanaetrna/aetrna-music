@@ -6,7 +6,23 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+func (h *Handler) IsAdmin(userID string) bool {
+	return userID == h.cfg.OwnerID
+}
+
 func (h *Handler) HandleYtAuth(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	userID := i.Member.User.ID
+	if !h.IsAdmin(userID) {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ Command ini hanya dapat diakses oleh Bot Owner / Admin (`722341335721574410`)!",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Title:       "🔧 YouTube Authentication & Cookies Setup Guide",
 		Description: "Jika YouTube memblokir video 18+ (Age-Restricted) atau IP VPS kamu, pasang `cookies.txt` di server:",

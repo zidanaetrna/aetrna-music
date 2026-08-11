@@ -12,6 +12,7 @@ type Config struct {
 	SpotifyClientID     string
 	SpotifyClientSecret string
 	AdminKey            string
+	OwnerID             string
 	Prefix              string
 	MaxQueueSize        int
 	MaxPlaylistSize     int
@@ -31,6 +32,7 @@ func Load() *Config {
 		SpotifyClientID:     getEnv("SPOTIFY_CLIENT_ID", ""),
 		SpotifyClientSecret: getEnv("SPOTIFY_CLIENT_SECRET", ""),
 		AdminKey:            getEnv("ADMIN_KEY", "your-super-secret-admin-key-12345"),
+		OwnerID:             getEnv("OWNER_ID", "722341335721574410"),
 		Prefix:              getEnv("PREFIX", "!"),
 		MaxQueueSize:        getEnvAsInt("MAX_QUEUE_SIZE", 100),
 		MaxPlaylistSize:     getEnvAsInt("MAX_PLAYLIST_SIZE", 50),

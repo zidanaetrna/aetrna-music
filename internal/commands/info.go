@@ -47,6 +47,17 @@ func (h *Handler) HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreat
 }
 
 func (h *Handler) HandleStats(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if !h.IsAdmin(i.Member.User.ID) {
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "❌ Command ini hanya dapat diakses oleh Bot Owner / Admin (`722341335721574410`)!",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		return
+	}
+
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
