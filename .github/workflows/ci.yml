@@ -27,5 +27,5 @@ jobs:
       - name: Run Go Vet
         run: go vet ./...
 
-      - name: Build Go Binary
+      - name: Build Go Binary (CGO_ENABLED=0)
         run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o bin/bot ./cmd/bot
