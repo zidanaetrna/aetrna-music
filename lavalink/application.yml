@@ -1,0 +1,67 @@
+server:
+  port: 2333
+  address: 127.0.0.1
+
+lavalink:
+  plugins:
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.13.3"
+      snapshot: false
+  server:
+    password: "${LAVALINK_PASSWORD}"
+    sources:
+      youtube: false  # Use youtube-plugin instead
+      bandcamp: false
+      soundcloud: false
+      twitch: false
+      vimeo: false
+      http: true
+      local: false
+    filters:
+      volume: true
+      equalizer: true
+      karaoke: false
+      timescale: true
+      tremolo: false
+      vibrato: false
+      distortion: false
+      rotation: true
+      channelMix: false
+      lowPass: false
+    bufferDurationMs: 400
+    frameBufferDurationMs: 5000
+    opusEncodingQuality: 10
+    resamplingQuality: LOW
+    trackStuckThresholdMs: 10000
+    useSeekGhosting: true
+    youtubePlaylistLoadLimit: 6
+    playerUpdateInterval: 5
+    youtubeSearchEnabled: true
+    soundcloudSearchEnabled: false
+    gc-warnings: true
+
+plugins:
+  youtube:
+    enabled: true
+    clients:
+      - ANDROID_TESTSUITE
+      - TVHTML5EMBEDDED
+      - WEB
+    oauth:
+      enabled: false
+
+metrics:
+  prometheus:
+    enabled: false
+
+sentry:
+  dsn: ""
+  environment: ""
+
+logging:
+  file:
+    path: ./logs/lavalink.log
+  level:
+    root: INFO
+    lavalink: INFO
+  request:
+    enabled: false

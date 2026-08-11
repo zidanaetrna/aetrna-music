@@ -120,15 +120,11 @@ func (h *Handler) HandleCollectionLoad(s *discordgo.Session, i *discordgo.Intera
 		})
 	}
 
-	if queue.VoiceConn == nil {
-		vc, err := s.ChannelVoiceJoin(i.GuildID, voiceState.ChannelID, false, true)
-		if err == nil {
-			queue.VoiceConn = vc
+	queue.VoiceChannelID = voiceState.ChannelID
+	if err := s.ChannelVoiceJoinManual(i.GuildID, voiceState.ChannelID, false, false); err == nil {
+		if !queue.IsPlaying {
+			go queue.PlayNext()
 		}
-	}
-
-	if !queue.IsPlaying {
-		go queue.PlayNext(s, h.cfg.CookiesPath, h.cfg.YtdlpClients)
 	}
 
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{

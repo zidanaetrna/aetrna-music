@@ -241,27 +241,21 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 	song.ChannelID = voiceState.ChannelID
 
 	queue.AddSong(song)
+	queue.VoiceChannelID = voiceState.ChannelID
 
-	// Connect to voice channel if not connected
-	if queue.VoiceConn == nil || queue.VoiceConn.ChannelID != voiceState.ChannelID {
-		if queue.VoiceConn != nil {
-			_ = queue.VoiceConn.Disconnect()
-			queue.VoiceConn = nil
-		}
-
-		vc, err := s.ChannelVoiceJoin(i.GuildID, voiceState.ChannelID, false, false)
-		if err != nil {
-			log.Printf("❌ [HandlePlay] ChannelVoiceJoin error: %v", err)
-			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-				Content: fmt.Sprintf("❌ Error join voice channel: %v", err),
-			})
-			return
-		}
-		queue.VoiceConn = vc
+	// Send OP4 Gateway voice state update — tells Discord we want to join.
+	// Lavalink will receive the VOICE_SERVER_UPDATE and handle the actual
+	// voice WebSocket connection (including DAVE E2EE).
+	if err := s.ChannelVoiceJoinManual(i.GuildID, voiceState.ChannelID, false, false); err != nil {
+		log.Printf("❌ [HandlePlay] ChannelVoiceJoinManual error: %v", err)
+		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: fmt.Sprintf("❌ Error join voice channel: %v", err),
+		})
+		return
 	}
 
 	if !queue.IsPlaying {
-		go queue.PlayNext(s, h.cfg.CookiesPath, h.cfg.YtdlpClients)
+		go queue.PlayNext()
 	}
 
 	embed := CreateNowPlayingEmbed(&song, queue)
@@ -273,6 +267,7 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 		Components: components,
 	})
 }
+
 
 func (h *Handler) HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate, query string) {
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{

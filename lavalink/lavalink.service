@@ -1,0 +1,15 @@
+[Unit]
+Description=Lavalink Music Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/aetrna-music/lavalink
+ExecStart=/usr/bin/java -Xmx256m -jar Lavalink.jar
+EnvironmentFile=/opt/aetrna-music/lavalink/.env
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

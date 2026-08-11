@@ -1,15 +1,10 @@
 package music
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"sync"
 	"time"
-
-	"aetrna-music/internal/audio"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 type LoopMode string
@@ -19,6 +14,13 @@ const (
 	LoopSong  LoopMode = "song"
 	LoopQueue LoopMode = "queue"
 )
+
+// PlayCallback is called by PlayNext to start actual audio playback via Lavalink.
+// Returns an error if playback could not be started.
+type PlayCallback func(guildID string, song Song) error
+
+// StopCallback is called when the queue wants to stop/disconnect Lavalink.
+type StopCallback func(guildID string) error
 
 type GuildQueue struct {
 	GuildID        string
@@ -36,23 +38,27 @@ type GuildQueue struct {
 	Filter    string
 	Autoplay  bool
 
-	VoiceConn *discordgo.VoiceConnection
-	Streamer  *audio.Streamer
-	StopChan  chan struct{}
+	// Lavalink callbacks injected from bot layer
+	PlayCb PlayCallback
+	StopCb StopCallback
+
+	// TrackEndCh is signalled by the bot when Lavalink fires a TrackEnd event.
+	TrackEndCh chan struct{}
 
 	mu sync.RWMutex
 }
 
-func NewGuildQueue(guildID string, streamer *audio.Streamer) *GuildQueue {
+func NewGuildQueue(guildID string, playCb PlayCallback, stopCb StopCallback) *GuildQueue {
 	return &GuildQueue{
-		GuildID:  guildID,
-		Volume:   1.0,
-		Loop:     LoopOff,
-		Filter:   "none",
-		Streamer: streamer,
-		Songs:    make([]Song, 0),
-		History:  make([]Song, 0),
-		StopChan: make(chan struct{}),
+		GuildID:    guildID,
+		Volume:     100,
+		Loop:       LoopOff,
+		Filter:     "none",
+		Songs:      make([]Song, 0),
+		History:    make([]Song, 0),
+		TrackEndCh: make(chan struct{}, 1),
+		PlayCb:     playCb,
+		StopCb:     stopCb,
 	}
 }
 
@@ -80,35 +86,32 @@ func (q *GuildQueue) Resume() {
 	q.IsPaused = false
 }
 
+// Skip signals TrackEndCh so PlayNext moves to the next song.
 func (q *GuildQueue) Skip() {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if q.StopChan != nil {
-		select {
-		case q.StopChan <- struct{}{}:
-		default:
-		}
+	select {
+	case q.TrackEndCh <- struct{}{}:
+	default:
 	}
 }
 
 func (q *GuildQueue) Stop() {
 	q.mu.Lock()
-	defer q.mu.Unlock()
 	q.Songs = make([]Song, 0)
 	q.NowPlaying = nil
 	q.IsPlaying = false
 	q.IsPaused = false
+	gid := q.GuildID
+	stopCb := q.StopCb
+	q.mu.Unlock()
 
-	if q.StopChan != nil {
-		select {
-		case q.StopChan <- struct{}{}:
-		default:
-		}
+	if stopCb != nil {
+		_ = stopCb(gid)
 	}
 
-	if q.VoiceConn != nil {
-		_ = q.VoiceConn.Disconnect()
-		q.VoiceConn = nil
+	// Signal any waiting PlayNext goroutine to exit
+	select {
+	case q.TrackEndCh <- struct{}{}:
+	default:
 	}
 }
 
@@ -129,7 +132,7 @@ func (q *GuildQueue) Shuffle() {
 func (q *GuildQueue) SetVolume(vol int) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	q.Volume = float64(vol) / 100.0
+	q.Volume = float64(vol)
 }
 
 func (q *GuildQueue) SetLoop(mode string) error {
@@ -151,17 +154,10 @@ func (q *GuildQueue) SetFilter(filter string) {
 	q.Filter = filter
 }
 
-func (q *GuildQueue) PlayNext(s *discordgo.Session, cookiesPath, ytdlpClients string) {
+// PlayNext plays the next song in the queue using the Lavalink callback.
+// It blocks until a TrackEnd signal is received, then calls itself recursively.
+func (q *GuildQueue) PlayNext() {
 	q.mu.Lock()
-
-	// If voice connection is absent or not ready, clean up state and stop
-	if q.VoiceConn == nil || !q.VoiceConn.Ready {
-		q.IsPlaying = false
-		q.NowPlaying = nil
-		q.mu.Unlock()
-		fmt.Printf("Voice connection not ready in guild %s, stopping player loop.\n", q.GuildID)
-		return
-	}
 
 	if q.NowPlaying != nil {
 		q.History = append(q.History, *q.NowPlaying)
@@ -182,74 +178,42 @@ func (q *GuildQueue) PlayNext(s *discordgo.Session, cookiesPath, ytdlpClients st
 		}
 	}
 
+	var song Song
 	if q.Loop == LoopSong && q.NowPlaying != nil {
-		// Keep current song
+		song = *q.NowPlaying
 	} else {
-		next := q.Songs[0]
+		song = q.Songs[0]
 		q.Songs = q.Songs[1:]
-		q.NowPlaying = &next
+		q.NowPlaying = &song
 	}
 
-	song := *q.NowPlaying
 	q.IsPlaying = true
 	q.IsPaused = false
-	vc := q.VoiceConn
+	gid := q.GuildID
+	playCb := q.PlayCb
 	q.mu.Unlock()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	opusChan, stopChan, err := q.Streamer.StreamAudio(ctx, song.URL, song.VideoID, q.Filter, cookiesPath, ytdlpClients, q.Volume)
-	if err != nil {
-		fmt.Printf("Error starting stream for %s: %v\n", song.Title, err)
-		q.mu.Lock()
-		q.IsPlaying = false
-		q.NowPlaying = nil
-		q.mu.Unlock()
-		return
-	}
-
-	q.mu.Lock()
-	q.StopChan = stopChan
-	q.mu.Unlock()
-
-	_ = vc.Speaking(true)
-	defer vc.Speaking(false)
-
-	ticker := time.NewTicker(20 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case opusFrame, ok := <-opusChan:
-			if !ok {
-				time.Sleep(500 * time.Millisecond)
-				go q.PlayNext(s, cookiesPath, ytdlpClients)
-				return
-			}
-
-			// Handle pause
-			q.mu.RLock()
-			isPaused := q.IsPaused
-			q.mu.RUnlock()
-
-			if isPaused {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-
-			select {
-			case <-ticker.C:
-				vc.OpusSend <- opusFrame
-			case <-stopChan:
-				time.Sleep(500 * time.Millisecond)
-				go q.PlayNext(s, cookiesPath, ytdlpClients)
-				return
-			}
-		case <-stopChan:
-			time.Sleep(500 * time.Millisecond)
-			go q.PlayNext(s, cookiesPath, ytdlpClients)
+	if playCb != nil {
+		if err := playCb(gid, song); err != nil {
+			fmt.Printf("❌ [PlayNext] Lavalink play error for %s: %v\n", song.Title, err)
+			q.mu.Lock()
+			q.NowPlaying = nil
+			q.mu.Unlock()
+			go q.PlayNext()
 			return
 		}
 	}
+
+	// Wait for TrackEnd event (signalled by bot from Lavalink WS event)
+	<-q.TrackEndCh
+
+	q.mu.RLock()
+	isPlaying := q.IsPlaying
+	q.mu.RUnlock()
+
+	if !isPlaying {
+		return // Stop() was called
+	}
+
+	go q.PlayNext()
 }

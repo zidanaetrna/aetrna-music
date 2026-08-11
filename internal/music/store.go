@@ -2,20 +2,20 @@ package music
 
 import (
 	"sync"
-
-	"aetrna-music/internal/audio"
 )
 
 type QueueStore struct {
-	queues   map[string]*GuildQueue
-	streamer *audio.Streamer
-	mu       sync.RWMutex
+	queues map[string]*GuildQueue
+	playCb PlayCallback
+	stopCb StopCallback
+	mu     sync.RWMutex
 }
 
-func NewQueueStore(streamer *audio.Streamer) *QueueStore {
+func NewQueueStore(playCb PlayCallback, stopCb StopCallback) *QueueStore {
 	return &QueueStore{
-		queues:   make(map[string]*GuildQueue),
-		streamer: streamer,
+		queues: make(map[string]*GuildQueue),
+		playCb: playCb,
+		stopCb: stopCb,
 	}
 }
 
@@ -25,7 +25,7 @@ func (s *QueueStore) Get(guildID string) *GuildQueue {
 
 	queue, exists := s.queues[guildID]
 	if !exists {
-		queue = NewGuildQueue(guildID, s.streamer)
+		queue = NewGuildQueue(guildID, s.playCb, s.stopCb)
 		s.queues[guildID] = queue
 	}
 	return queue

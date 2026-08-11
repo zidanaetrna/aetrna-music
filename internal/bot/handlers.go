@@ -165,8 +165,11 @@ func (b *Bot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCrea
 }
 
 func (b *Bot) handleVoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
+	if b.store == nil {
+		return
+	}
 	q := b.store.Get(v.GuildID)
-	if q.VoiceConn == nil {
+	if q.VoiceChannelID == "" {
 		return
 	}
 
@@ -176,7 +179,7 @@ func (b *Bot) handleVoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceSta
 		return
 	}
 
-	botVCID := q.VoiceConn.ChannelID
+	botVCID := q.VoiceChannelID
 	memberCount := 0
 
 	for _, vs := range guild.VoiceStates {
