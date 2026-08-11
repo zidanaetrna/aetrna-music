@@ -15,7 +15,7 @@ type Client struct {
 
 func NewClient(baseURL string) *Client {
 	if baseURL == "" {
-		baseURL = "http://127.0.0.1:3000"
+		baseURL = "http://127.0.0.1:3005"
 	}
 	return &Client{
 		baseURL: baseURL,

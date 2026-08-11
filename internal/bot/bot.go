@@ -34,7 +34,7 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 		session: dg,
 		cfg:     cfg,
 		db:      database,
-		voice:   voice.NewClient("http://127.0.0.1:3000"),
+		voice:   voice.NewClient("http://127.0.0.1:3005"),
 	}
 
 	dg.AddHandler(b.handleInteraction)
