@@ -1,5 +1,5 @@
 const express = require('express');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType } = require('@discordjs/voice');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -158,11 +158,16 @@ app.post('/play', async (req, res) => {
         const ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
         const ffmpeg = spawn('ffmpeg', ffmpegArgs, { stdio: ['pipe', 'pipe', 'pipe'] });
 
+        ytdlp.stderr.on('data', (d) => {
+            const msg = d.toString().trim();
+            if (msg) console.log(`[yt-dlp] ${msg}`);
+        });
+
         ytdlp.stdout.pipe(ffmpeg.stdin);
         activeStreams.set(guildId, { ytdlp, ffmpeg });
 
         const resource = createAudioResource(ffmpeg.stdout, {
-            inputType: 'raw',
+            inputType: StreamType.Raw,
             inlineVolume: true
         });
         resource.volume.setVolume(volume);
