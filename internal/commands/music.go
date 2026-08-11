@@ -243,17 +243,6 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 	queue.AddSong(song)
 	queue.VoiceChannelID = voiceState.ChannelID
 
-	// Send OP4 Gateway voice state update — tells Discord we want to join.
-	// Lavalink will receive the VOICE_SERVER_UPDATE and handle the actual
-	// voice WebSocket connection (including DAVE E2EE).
-	if err := s.ChannelVoiceJoinManual(i.GuildID, voiceState.ChannelID, false, false); err != nil {
-		log.Printf("❌ [HandlePlay] ChannelVoiceJoinManual error: %v", err)
-		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: fmt.Sprintf("❌ Error join voice channel: %v", err),
-		})
-		return
-	}
-
 	if !queue.IsPlaying {
 		go queue.PlayNext()
 	}

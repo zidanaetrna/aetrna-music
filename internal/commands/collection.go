@@ -121,10 +121,8 @@ func (h *Handler) HandleCollectionLoad(s *discordgo.Session, i *discordgo.Intera
 	}
 
 	queue.VoiceChannelID = voiceState.ChannelID
-	if err := s.ChannelVoiceJoinManual(i.GuildID, voiceState.ChannelID, false, false); err == nil {
-		if !queue.IsPlaying {
-			go queue.PlayNext()
-		}
+	if !queue.IsPlaying {
+		go queue.PlayNext()
 	}
 
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{

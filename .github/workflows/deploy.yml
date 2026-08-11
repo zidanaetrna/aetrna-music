@@ -43,7 +43,7 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
 
-      - name: Deploy Binary & Restart Service Automatically
+      - name: Deploy Binary & Voice Server Service
         if: ${{ env.VPS_HOST != '' }}
         run: |
           mkdir -p ~/.ssh
@@ -53,36 +53,32 @@ jobs:
           SERVICE="${{ steps.env.outputs.service_name }}"
           
           # Ensure target directories exist on VPS
-          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "mkdir -p ${TARGET} /opt/aetrna-music/lavalink/logs"
+          ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "mkdir -p ${TARGET} /opt/aetrna-music/voice-server"
 
-          # Upload binary, configs, and systemd files
+          # Upload binary, configs, deploy scripts, and voice-server
           scp bot ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${TARGET}/bot.new
           scp -r deploy ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${TARGET}/
-          scp lavalink/application.yml ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:/opt/aetrna-music/lavalink/application.yml
-          scp lavalink/lavalink.service ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:/etc/systemd/system/lavalink.service
+          scp -r voice-server/* ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:/opt/aetrna-music/voice-server/
 
           # Execute VPS deployment setup
           ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "
-            which node >/dev/null 2>&1 || (apt-get update -y && apt-get install -y nodejs)
+            which node >/dev/null 2>&1 || (apt-get update -y && apt-get install -y nodejs npm)
+            which ffmpeg >/dev/null 2>&1 || (apt-get update -y && apt-get install -y ffmpeg)
             yt-dlp -U || true
 
-            # Install and start Lavalink if missing
-            if [ ! -f /opt/aetrna-music/lavalink/Lavalink.jar ]; then
-              echo '📥 Downloading Lavalink.jar...'
-              wget -q -O /opt/aetrna-music/lavalink/Lavalink.jar \
-                https://github.com/lavalink-devs/Lavalink/releases/latest/download/Lavalink.jar
-              echo '✅ Lavalink.jar downloaded'
-            fi
+            # Install npm dependencies for voice-server
+            cd /opt/aetrna-music/voice-server
+            npm install --production --no-audit --no-fund
 
-            if [ ! -f /opt/aetrna-music/lavalink/.env ]; then
-              echo 'LAVALINK_PASSWORD=youshallnotpass' > /opt/aetrna-music/lavalink/.env
-            fi
-
+            # Setup systemd for voice-server
+            cp /opt/aetrna-music/voice-server/voice-server.service /etc/systemd/system/
             systemctl daemon-reload
-            systemctl enable lavalink >/dev/null 2>&1 || true
-            systemctl restart lavalink
-            sleep 3
-            journalctl -u lavalink --no-pager -n 40 || true
+            systemctl enable voice-server >/dev/null 2>&1 || true
+            systemctl restart voice-server
+
+            # Disable legacy lavalink if active
+            systemctl stop lavalink 2>/dev/null || true
+            systemctl disable lavalink 2>/dev/null || true
 
             # Restart Bot Service
             systemctl stop ${SERVICE} || true

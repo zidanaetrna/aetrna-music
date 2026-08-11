@@ -1,5 +1,4 @@
-# Old Node.js Monolithic File
-index.js
+/index.js
 
 # Go Binaries & Artifacts
 bin/
