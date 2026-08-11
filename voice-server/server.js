@@ -109,9 +109,18 @@ app.post('/play', async (req, res) => {
             });
         }
 
-        // Spawn yt-dlp stream
-        const cookieFile = path.resolve(__dirname, '../cookies.txt');
+        // Cookie file check across standard paths
+        let cookieFile = path.resolve(__dirname, '../cookies.txt');
+        if (!fs.existsSync(cookieFile)) {
+            cookieFile = '/opt/aetrna-music/prod/cookies.txt';
+        }
+        if (!fs.existsSync(cookieFile)) {
+            cookieFile = path.resolve(__dirname, './cookies.txt');
+        }
         const useCookies = fs.existsSync(cookieFile);
+        if (useCookies) {
+            console.log(`🔑 [VoiceServer] Found cookies file at: ${cookieFile}`);
+        }
 
         const ytdlpArgs = [
             ...(useCookies ? ['--cookies', cookieFile] : []),
