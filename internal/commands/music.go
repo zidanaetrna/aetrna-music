@@ -41,12 +41,12 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 		targetQuery = fmt.Sprintf("ytsearch%d:%s", limit, query)
 	}
 
-	searchClients := "tv_embedded,web,mweb"
+	// Use --flat-playlist to fetch search metadata instantly without triggering n-sig format deciphering
 	args := []string{
-		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", searchClients),
+		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
+		"--flat-playlist",
 		"--dump-single-json",
 		"--no-warnings",
-		"--no-playlist",
 		"--geo-bypass",
 		"--no-check-certificates",
 	}
@@ -54,8 +54,6 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 	if _, err := os.Stat(cookiesPath); err == nil {
 		log.Printf("🔑 [SearchYouTube] Found cookies file at: %s", cookiesPath)
 		args = append([]string{"--cookies", cookiesPath}, args...)
-	} else {
-		log.Printf("⚠️ [SearchYouTube] Cookies file NOT found at: %s (err: %v)", cookiesPath, err)
 	}
 
 	args = append(args, targetQuery)
@@ -134,8 +132,8 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 
 	args := []string{
 		"--default-search", "ytsearch",
+		"--flat-playlist",
 		"--dump-json",
-		"--no-playlist",
 		"--geo-bypass",
 		"--no-check-certificates",
 	}
@@ -143,8 +141,6 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 	if _, err := os.Stat(cookiesPath); err == nil {
 		log.Printf("🔑 [SearchYouTubeFallback] Found cookies file at: %s", cookiesPath)
 		args = append([]string{"--cookies", cookiesPath}, args...)
-	} else {
-		log.Printf("⚠️ [SearchYouTubeFallback] Cookies file NOT found at: %s (err: %v)", cookiesPath, err)
 	}
 
 	args = append(args, targetQuery)

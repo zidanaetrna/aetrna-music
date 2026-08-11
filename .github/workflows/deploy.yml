@@ -59,9 +59,10 @@ jobs:
           scp bot ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${TARGET}/bot.new
           scp -r deploy ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}:${TARGET}/
 
-          # Ensure nodejs JS runtime is installed for yt-dlp EJS challenges & restart service
+          # Ensure nodejs JS runtime is installed, update yt-dlp, and restart service
           ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "
             which node >/dev/null 2>&1 || (apt-get update -y && apt-get install -y nodejs)
+            yt-dlp -U || true
             systemctl stop ${SERVICE} || true
             mv -f ${TARGET}/bot.new ${TARGET}/bot
             chmod +x ${TARGET}/bot
