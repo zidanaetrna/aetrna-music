@@ -34,9 +34,9 @@ function createCustomAdapter(guildId) {
 
 function cleanupStreams(guildId) {
     if (activeStreams.has(guildId)) {
-        const { ytdlp, ffmpeg } = activeStreams.get(guildId);
-        try { ytdlp.kill('SIGKILL'); } catch (e) {}
-        try { ffmpeg.kill('SIGKILL'); } catch (e) {}
+        const stream = activeStreams.get(guildId);
+        try { if (stream.ytdlp) stream.ytdlp.kill('SIGKILL'); } catch (e) {}
+        try { if (stream.ffmpeg) stream.ffmpeg.kill('SIGKILL'); } catch (e) {}
         activeStreams.delete(guildId);
     }
 }
@@ -134,20 +134,45 @@ app.post('/play', async (req, res) => {
             console.log(`🔑 [VoiceServer] Found cookies file at: ${cookieFile}`);
         }
 
-        const ytdlpArgs = [
+        const spawnEnv = {
+            ...process.env,
+            HOME: '/root',
+            PATH: (process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') + ':/root/.deno/bin:/root/.local/bin',
+        };
+
+        // Step 1: Resolve the actual stream URL using yt-dlp -g (fast, <2s)
+        const resolveArgs = [
             ...(useCookies ? ['--cookies', cookieFile] : []),
             '-f', 'bestaudio/best',
-            '--hls-use-mpegts',
             '--no-playlist',
             '--geo-bypass',
             '--no-check-certificates',
             '--no-warnings',
-            '-o', '-',
+            '-g',
             url
         ];
 
+        const { execFileSync } = require('child_process');
+        let streamUrl;
+        try {
+            streamUrl = execFileSync('yt-dlp', resolveArgs, { env: spawnEnv, timeout: 30000 }).toString().trim().split('\n')[0];
+        } catch (e) {
+            console.error(`❌ [VoiceServer] yt-dlp URL resolve error: ${e.message}`);
+            return res.status(500).json({ error: `yt-dlp resolve failed: ${e.message}` });
+        }
+
+        if (!streamUrl) {
+            return res.status(500).json({ error: 'yt-dlp returned empty stream URL' });
+        }
+
+        console.log(`🔗 [VoiceServer] Resolved stream URL for guild ${guildId}`);
+
+        // Step 2: Stream directly via ffmpeg (starts playing within <1 second)
         const ffmpegArgs = [
-            '-i', 'pipe:0',
+            '-reconnect', '1',
+            '-reconnect_streamed', '1',
+            '-reconnect_delay_max', '5',
+            '-i', streamUrl,
             '-analyzeduration', '0',
             '-loglevel', '0',
             '-f', 's16le',
@@ -156,22 +181,8 @@ app.post('/play', async (req, res) => {
             'pipe:1'
         ];
 
-        const spawnEnv = {
-            ...process.env,
-            HOME: '/root',
-            PATH: (process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') + ':/root/.deno/bin:/root/.local/bin',
-        };
-
-        const ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'], env: spawnEnv });
-        const ffmpeg = spawn('ffmpeg', ffmpegArgs, { stdio: ['pipe', 'pipe', 'pipe'] });
-
-        ytdlp.stderr.on('data', (d) => {
-            const msg = d.toString().trim();
-            if (msg) console.log(`[yt-dlp] ${msg}`);
-        });
-
-        ytdlp.stdout.pipe(ffmpeg.stdin);
-        activeStreams.set(guildId, { ytdlp, ffmpeg });
+        const ffmpeg = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+        activeStreams.set(guildId, { ffmpeg });
 
         const resource = createAudioResource(ffmpeg.stdout, {
             inputType: StreamType.Raw,
