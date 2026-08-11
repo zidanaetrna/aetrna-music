@@ -176,6 +176,9 @@ func (c *Client) UpdateVoice(guildID, sessionID, token, endpoint string) error {
 	cleanEndpoint := endpoint
 	cleanEndpoint = strings.TrimPrefix(cleanEndpoint, "wss://")
 	cleanEndpoint = strings.TrimPrefix(cleanEndpoint, "ws://")
+	if idx := strings.Index(cleanEndpoint, ":"); idx != -1 {
+		cleanEndpoint = cleanEndpoint[:idx]
+	}
 
 	log.Printf("🎙️ [Lavalink] Updating Voice for guild %s (sessionID: %s, endpoint: %s)", guildID, sessionID, cleanEndpoint)
 
