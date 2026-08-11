@@ -27,3 +27,5 @@ require (
 	modernc.org/strutil v1.2.0 // indirect
 	modernc.org/token v1.1.0 // indirect
 )
+
+replace github.com/bwmarrin/discordgo v0.28.1 => ./discordgo-patch
