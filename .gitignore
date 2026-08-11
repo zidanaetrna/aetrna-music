@@ -1,0 +1,28 @@
+# Old Node.js Monolithic File
+index.js
+
+# Go Binaries & Artifacts
+bin/
+bot
+bot.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Environment & Config
+.env
+cookies.txt
+.play-dl/
+
+# Data & Caches
+data/
+cache/
+*.db
+*.db-journal
+
+# IDE & OS Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
