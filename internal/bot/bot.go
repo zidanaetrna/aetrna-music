@@ -69,7 +69,9 @@ func (b *Bot) Start() error {
 	lc.OnEvent(func(op *lavalink.Op) {
 		switch op.Op {
 		case "ready":
-			lc.StoreSessionID(op.GuildID) // op.GuildID holds sessionId in ready event — handled in client
+			if op.SessionID != "" {
+				lc.StoreSessionID(op.SessionID)
+			}
 		case "event":
 			switch op.Type {
 			case "TrackEndEvent", "TrackExceptionEvent", "TrackStuckEvent":
@@ -114,9 +116,20 @@ func (b *Bot) Stop() {
 func (b *Bot) lavalinkPlay(guildID string, song music.Song) error {
 	ctx := context.Background()
 
-	// Use YouTube URL directly — Lavalink resolves it
+	// 1. Try primary song URL
 	identifier := song.URL
 	result, err := b.lavalink.LoadTrack(ctx, identifier)
+
+	// 2. If primary fails or is empty, try fallback identifiers (VideoID or search query)
+	if err != nil || result == nil || result.LoadType == "error" || result.LoadType == "empty" {
+		fallbackQuery := song.VideoID
+		if fallbackQuery == "" {
+			fallbackQuery = song.Title
+		}
+		log.Printf("🔄 [Lavalink] Primary URL load failed (%s), trying fallback query: ytsearch:%s", song.URL, fallbackQuery)
+		result, err = b.lavalink.LoadTrack(ctx, "ytsearch:"+fallbackQuery)
+	}
+
 	if err != nil {
 		return fmt.Errorf("loadtrack error: %w", err)
 	}

@@ -33,13 +33,14 @@ type EventHandler func(op *Op)
 
 // Op is a raw Lavalink WebSocket message.
 type Op struct {
-	Op      string          `json:"op"`
-	GuildID string          `json:"guildId"`
-	Type    string          `json:"type"`
-	Track   *TrackInfo      `json:"track"`
-	State   *PlayerState    `json:"state"`
-	Reason  string          `json:"reason"`
-	Raw     json.RawMessage `json:"-"`
+	Op        string          `json:"op"`
+	GuildID   string          `json:"guildId"`
+	SessionID string          `json:"sessionId"`
+	Type      string          `json:"type"`
+	Track     *TrackInfo      `json:"track"`
+	State     *PlayerState    `json:"state"`
+	Reason    string          `json:"reason"`
+	Raw       json.RawMessage `json:"-"`
 }
 
 type TrackInfo struct {
@@ -146,7 +147,8 @@ func (c *Client) wsReadLoop() {
 			c.mu.Lock()
 			c.ready = true
 			c.mu.Unlock()
-			log.Printf("✅ [Lavalink] Connected and ready")
+			c.StoreSessionID(op.SessionID)
+			log.Printf("✅ [Lavalink] Connected and ready (SessionID: %s)", op.SessionID)
 			continue
 		}
 
