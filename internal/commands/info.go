@@ -51,7 +51,7 @@ func (h *Handler) HandleStats(s *discordgo.Session, i *discordgo.InteractionCrea
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Command ini hanya dapat diakses oleh Bot Owner / Admin (`722341335721574410`)!",
+				Content: "❌ Command ini hanya dapat diakses oleh Bot Owner!",
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
