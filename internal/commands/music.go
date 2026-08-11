@@ -249,11 +249,11 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 			queue.VoiceConn = nil
 		}
 
-		vc, err := s.ChannelVoiceJoin(i.GuildID, voiceState.ChannelID, false, true)
+		vc, err := s.ChannelVoiceJoin(i.GuildID, voiceState.ChannelID, false, false)
 		if err != nil {
 			log.Printf("❌ [HandlePlay] ChannelVoiceJoin error: %v", err)
 			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-				Content: fmt.Sprintf("❌ Error join voice channel: %v\nℹ️ Jika muncul error 'E2EE/DAVE protocol required', coba ubah **Region Override** Voice Channel di Discord ke US Central / Hong Kong / Sydney!", err),
+				Content: fmt.Sprintf("❌ Error join voice channel: %v", err),
 			})
 			return
 		}
