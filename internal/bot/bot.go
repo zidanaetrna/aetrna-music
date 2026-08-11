@@ -171,7 +171,7 @@ func (b *Bot) lavalinkPlay(guildID string, song music.Song) error {
 }
 
 func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceServerUpdate) {
-	if b.lavalink == nil {
+	if b.lavalink == nil || v.Endpoint == "" || v.Token == "" {
 		return
 	}
 
@@ -193,13 +193,16 @@ func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceSe
 	if sessionID == "" {
 		log.Printf("⚠️ [Lavalink] VoiceServerUpdate: sessionID not found yet for guild %s, retrying...", v.GuildID)
 		go func() {
-			time.Sleep(300 * time.Millisecond)
-			b.sessionMu.RLock()
-			sessionID = b.voiceSessionIDs[v.GuildID]
-			b.sessionMu.RUnlock()
-			if sessionID != "" {
-				if err := b.lavalink.UpdateVoice(v.GuildID, sessionID, v.Token, v.Endpoint); err != nil {
-					log.Printf("❌ [Lavalink] Retry UpdateVoice error: %v", err)
+			for attempt := 1; attempt <= 5; attempt++ {
+				time.Sleep(200 * time.Millisecond)
+				b.sessionMu.RLock()
+				sessionID = b.voiceSessionIDs[v.GuildID]
+				b.sessionMu.RUnlock()
+				if sessionID != "" {
+					if err := b.lavalink.UpdateVoice(v.GuildID, sessionID, v.Token, v.Endpoint); err != nil {
+						log.Printf("❌ [Lavalink] Retry UpdateVoice error: %v", err)
+					}
+					return
 				}
 			}
 		}()

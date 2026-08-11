@@ -80,7 +80,7 @@ jobs:
 
             systemctl daemon-reload
             systemctl enable lavalink >/dev/null 2>&1 || true
-            systemctl is-active --quiet lavalink || systemctl start lavalink
+            systemctl restart lavalink
 
             # Restart Bot Service
             systemctl stop ${SERVICE} || true
