@@ -156,7 +156,13 @@ app.post('/play', async (req, res) => {
             'pipe:1'
         ];
 
-        const ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+        const spawnEnv = {
+            ...process.env,
+            HOME: '/root',
+            PATH: (process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') + ':/root/.deno/bin:/root/.local/bin',
+        };
+
+        const ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'], env: spawnEnv });
         const ffmpeg = spawn('ffmpeg', ffmpegArgs, { stdio: ['pipe', 'pipe', 'pipe'] });
 
         ytdlp.stderr.on('data', (d) => {
