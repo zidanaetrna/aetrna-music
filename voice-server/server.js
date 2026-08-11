@@ -4,7 +4,7 @@ const {
     joinVoiceChannel, createAudioPlayer, createAudioResource,
     AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType
 } = require('@discordjs/voice');
-const { spawn, execFileSync } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -21,7 +21,6 @@ if (!TOKEN) {
     process.exit(1);
 }
 
-// Full discord.js client for DAVE-compatible voice — minimal intents, voice only
 const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
     presence: { status: 'invisible' },
@@ -61,6 +60,18 @@ function notifyBotTrackEnd(guildId, reason) {
     req.end();
 }
 
+// Async (non-blocking) yt-dlp URL resolver
+function resolveStreamUrl(args, env) {
+    return new Promise((resolve, reject) => {
+        execFile('yt-dlp', args, { env, timeout: 30000, maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
+            if (err) return reject(new Error(stderr.trim() || err.message));
+            const url = stdout.trim().split('\n')[0];
+            if (!url) return reject(new Error('yt-dlp returned empty URL'));
+            resolve(url);
+        });
+    });
+}
+
 app.post('/play', async (req, res) => {
     const { guildId, channelId, url, volume = 1.0 } = req.body;
     if (!guildId || !channelId || !url) {
@@ -74,14 +85,13 @@ app.post('/play', async (req, res) => {
     try {
         cleanupStreams(guildId);
 
-        // Lookup channel via full discord.js client (has guild cache from Guilds intent)
         const guild = await client.guilds.fetch(guildId);
         const channel = await guild.channels.fetch(channelId);
         if (!channel || !channel.isVoiceBased()) {
             return res.status(400).json({ error: 'Channel not found or not a voice channel' });
         }
 
-        // Join or reuse existing connection — full client handles DAVE natively
+        // Join voice channel
         let connection = connections.get(guildId);
         if (!connection || connection.joinConfig.channelId !== channelId || connection.state.status === VoiceConnectionStatus.Destroyed) {
             if (connection) {
@@ -110,6 +120,16 @@ app.post('/play', async (req, res) => {
             });
         }
 
+        // Step 1: Wait for Ready FIRST (event loop stays free — no blocking calls before this)
+        try {
+            console.log(`⏳ [VoiceServer] Waiting for voice connection Ready...`);
+            await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+            console.log(`✅ [VoiceServer] Voice connection Ready!`);
+        } catch (stateErr) {
+            console.error(`❌ [VoiceServer] Voice connection failed: ${stateErr.message}`);
+            return res.status(500).json({ error: `Voice connection failed: ${stateErr.message}` });
+        }
+
         // Get or create audio player
         let player = players.get(guildId);
         if (!player) {
@@ -128,7 +148,7 @@ app.post('/play', async (req, res) => {
             });
         }
 
-        // Cookie file check across standard paths
+        // Cookie file check
         let cookieFile = '/opt/aetrna-music/prod/cookies.txt';
         if (!fs.existsSync(cookieFile)) cookieFile = path.resolve(__dirname, '../cookies.txt');
         if (!fs.existsSync(cookieFile)) cookieFile = path.resolve(__dirname, './cookies.txt');
@@ -141,52 +161,29 @@ app.post('/play', async (req, res) => {
             PATH: (process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') + ':/root/.deno/bin:/root/.local/bin',
         };
 
-        // Step 1: Resolve actual stream URL using yt-dlp -g (fast, ~2s)
         const resolveArgs = [
             ...(useCookies ? ['--cookies', cookieFile] : []),
             '-f', 'bestaudio/best',
-            '--no-playlist',
-            '--geo-bypass',
-            '--no-check-certificates',
-            '--no-warnings',
-            '-g',
-            url
+            '--no-playlist', '--geo-bypass', '--no-check-certificates', '--no-warnings',
+            '-g', url
         ];
 
+        // Step 2: Resolve stream URL async (non-blocking)
         let streamUrl;
         try {
-            streamUrl = execFileSync('yt-dlp', resolveArgs, { env: spawnEnv, timeout: 30000 })
-                .toString().trim().split('\n')[0];
+            streamUrl = await resolveStreamUrl(resolveArgs, spawnEnv);
+            console.log(`🔗 [VoiceServer] Resolved stream URL for guild ${guildId}`);
         } catch (e) {
             console.error(`❌ [VoiceServer] yt-dlp resolve error: ${e.message}`);
             return res.status(500).json({ error: `yt-dlp resolve failed: ${e.message}` });
         }
 
-        if (!streamUrl) return res.status(500).json({ error: 'yt-dlp returned empty stream URL' });
-        console.log(`🔗 [VoiceServer] Resolved stream URL for guild ${guildId}`);
-
-        // Step 2: Wait for voice connection Ready (discord.js client handles DAVE natively)
-        try {
-            console.log(`⏳ [VoiceServer] Waiting for voice connection Ready...`);
-            await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
-            console.log(`✅ [VoiceServer] Voice connection Ready!`);
-        } catch (stateErr) {
-            console.error(`❌ [VoiceServer] Voice connection failed: ${stateErr.message}`);
-            return res.status(500).json({ error: `Voice connection failed: ${stateErr.message}` });
-        }
-
-        // Step 3: Stream directly via ffmpeg (starts within <1 second)
+        // Step 3: Stream directly via ffmpeg
         const ffmpegArgs = [
-            '-reconnect', '1',
-            '-reconnect_streamed', '1',
-            '-reconnect_delay_max', '5',
+            '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
             '-i', streamUrl,
-            '-analyzeduration', '0',
-            '-loglevel', 'error',
-            '-f', 's16le',
-            '-ar', '48000',
-            '-ac', '2',
-            'pipe:1'
+            '-analyzeduration', '0', '-loglevel', 'error',
+            '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
         ];
 
         const ffmpeg = spawn('ffmpeg', ffmpegArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -242,7 +239,6 @@ app.post('/resume', (req, res) => {
     res.json({ status: 'ok' });
 });
 
-// Legacy endpoint — no longer needed but kept for compatibility
 app.post('/voice-state', (req, res) => {
     res.json({ status: 'ok', message: 'voice-state not needed with full client mode' });
 });
