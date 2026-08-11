@@ -41,7 +41,7 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 		targetQuery = fmt.Sprintf("ytsearch%d:%s", limit, query)
 	}
 
-	searchClients := "web,web_embedded,mweb"
+	searchClients := "tv_embedded,web,mweb"
 	args := []string{
 		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", searchClients),
 		"--dump-single-json",
@@ -52,7 +52,10 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 	}
 
 	if _, err := os.Stat(cookiesPath); err == nil {
+		log.Printf("🔑 [SearchYouTube] Found cookies file at: %s", cookiesPath)
 		args = append([]string{"--cookies", cookiesPath}, args...)
+	} else {
+		log.Printf("⚠️ [SearchYouTube] Cookies file NOT found at: %s (err: %v)", cookiesPath, err)
 	}
 
 	args = append(args, targetQuery)
@@ -65,7 +68,6 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 		} else {
 			log.Printf("❌ [SearchYouTube] primary yt-dlp error: %v", err)
 		}
-		// Fallback to standard yt-dlp search
 		return searchYouTubeFallback(query, limit, cookiesPath, ytdlpClients)
 	}
 
@@ -139,7 +141,10 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 	}
 
 	if _, err := os.Stat(cookiesPath); err == nil {
+		log.Printf("🔑 [SearchYouTubeFallback] Found cookies file at: %s", cookiesPath)
 		args = append([]string{"--cookies", cookiesPath}, args...)
+	} else {
+		log.Printf("⚠️ [SearchYouTubeFallback] Cookies file NOT found at: %s (err: %v)", cookiesPath, err)
 	}
 
 	args = append(args, targetQuery)
