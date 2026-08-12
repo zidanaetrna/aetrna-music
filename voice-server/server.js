@@ -381,6 +381,13 @@ app.get('/test-voice', async (req, res) => {
 
         connection.on('stateChange', (oldState, newState) => {
             console.log(`🔄 [/test-voice State] ${oldState.status} ➔ ${newState.status}`);
+            if (oldState.status === 'connecting' && newState.status === 'signalling') {
+                console.log(`⚠️ [/test-voice Reset!] oldState:`, JSON.stringify(oldState), `newState:`, JSON.stringify(newState));
+            }
+        });
+
+        connection.on('error', (err) => {
+            console.error(`❌ [/test-voice Error]`, err);
         });
 
         connection.on('debug', (msg) => {
