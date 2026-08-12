@@ -322,3 +322,38 @@ func getVoiceState(s *discordgo.Session, guildID, userID string) (*discordgo.Voi
 	}
 	return nil, fmt.Errorf("user not in voice channel")
 }
+
+func GetStreamURL(query string, cookiesPath string) (string, error) {
+	args := []string{
+		"-f", "bestaudio/best",
+		"--no-playlist",
+		"--geo-bypass",
+		"--no-check-certificates",
+		"--no-warnings",
+		"-g",
+		query,
+	}
+
+	if _, err := os.Stat(cookiesPath); err == nil {
+		args = append([]string{"--cookies", cookiesPath}, args...)
+	}
+
+	cmd := exec.Command("yt-dlp", args...)
+	pathEnv := os.Getenv("PATH")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("PATH=%s:/root/.deno/bin:/root/.local/bin", pathEnv), "HOME=/root")
+
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			log.Printf("❌ [GetStreamURL] yt-dlp error: %v | Stderr: %s", err, string(exitErr.Stderr))
+		}
+		return "", err
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) == 0 || lines[0] == "" {
+		return "", fmt.Errorf("yt-dlp returned empty URL")
+	}
+
+	return lines[0], nil
+}

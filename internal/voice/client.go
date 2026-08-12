@@ -29,10 +29,20 @@ func (c *Client) Play(guildID, channelID, url string, volume float64) error {
 	payload := map[string]interface{}{
 		"guildId":   guildID,
 		"channelId": channelID,
-		"url":       url,
+		"streamUrl": url,
 		"volume":    volume,
 	}
-	return c.post("/play", payload)
+	return c.post("/join-and-play", payload)
+}
+
+func (c *Client) PlayStream(guildID, channelID, streamURL string, volume float64) error {
+	payload := map[string]interface{}{
+		"guildId":   guildID,
+		"channelId": channelID,
+		"streamUrl": streamURL,
+		"volume":    volume,
+	}
+	return c.post("/join-and-play", payload)
 }
 
 func (c *Client) SendVoiceState(guildID, channelID, token, endpoint, sessionID, userID string) error {

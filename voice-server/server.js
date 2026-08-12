@@ -22,15 +22,13 @@ https.request = function(url, options, callback) {
 };
 
 const express = require('express');
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const {
     joinVoiceChannel, createAudioPlayer, createAudioResource,
     AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType,
     generateDependencyReport
 } = require('@discordjs/voice');
-const { spawn, execFile } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+const { spawn } = require('child_process');
 const http = require('http');
 const sodium = require('libsodium-wrappers');
 require('dotenv').config();
@@ -47,29 +45,143 @@ console.log(generateDependencyReport());
     }
 })();
 
-// State stores
+const commands = [
+    new SlashCommandBuilder()
+        .setName('play')
+        .setDescription('Play a song from YouTube or Spotify')
+        .addStringOption(option => option.setName('query').setDescription('Song name, YouTube URL, or Spotify link').setRequired(true)),
+    new SlashCommandBuilder().setName('search').setDescription('Search for a song on YouTube')
+        .addStringOption(option => option.setName('query').setDescription('Song name').setRequired(true)),
+    new SlashCommandBuilder().setName('skip').setDescription('Skip the current song'),
+    new SlashCommandBuilder().setName('stop').setDescription('Stop playback and clear queue'),
+    new SlashCommandBuilder().setName('pause').setDescription('Pause playback'),
+    new SlashCommandBuilder().setName('resume').setDescription('Resume playback'),
+    new SlashCommandBuilder().setName('queue').setDescription('Show upcoming queue'),
+    new SlashCommandBuilder().setName('nowplaying').setDescription('Show interactive Now Playing card'),
+    new SlashCommandBuilder().setName('favorite').setDescription('Add current song to favorites'),
+    new SlashCommandBuilder().setName('favorites').setDescription('List your favorite songs'),
+    new SlashCommandBuilder().setName('filter').setDescription('Apply an audio filter')
+        .addStringOption(option => option.setName('name').setDescription('Filter name').setRequired(true)),
+    new SlashCommandBuilder().setName('help').setDescription('Show help and command guide'),
+    new SlashCommandBuilder().setName('stats').setDescription('Show bot system statistics'),
+    new SlashCommandBuilder().setName('ping').setDescription('Check bot latency')
+].map(cmd => cmd.toJSON());
+
 const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
 
-// Dedicated discord.js Client for Gateway Voice management ONLY
 const discordClient = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildVoiceStates
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
     ]
 });
 
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
+const GO_BACKEND_URL = process.env.GO_BACKEND_URL || 'http://127.0.0.1:8080/internal/interaction';
+
 if (BOT_TOKEN) {
-    discordClient.login(BOT_TOKEN).then(() => {
-        console.log(`✅ [VoiceServer] discord.js Client logged in as ${discordClient.user.tag} (Dedicated Voice Gateway)`);
+    discordClient.login(BOT_TOKEN).then(async () => {
+        console.log(`✅ [VoiceServer] discord.js Client logged in as ${discordClient.user.tag} (Single Gateway Client)`);
+        try {
+            const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
+            console.log('⏳ Registering slash commands...');
+            await rest.put(Routes.applicationCommands(discordClient.user.id), { body: commands });
+            for (const [gId] of discordClient.guilds.cache) {
+                try {
+                    await rest.put(Routes.applicationGuildCommands(discordClient.user.id, gId), { body: commands });
+                    console.log(`⚡ Instant guild commands registered for guild ${gId}`);
+                } catch (e) {}
+            }
+            console.log('✅ Slash commands registered successfully!');
+        } catch (e) {
+            console.error('⚠️ Failed to register slash commands:', e.message);
+        }
     }).catch(err => {
         console.error('❌ [VoiceServer] discord.js Client login failed:', err.message);
     });
 } else {
     console.error('⚠️ [VoiceServer] DISCORD_TOKEN is missing in environment!');
 }
+
+function proxyInteractionToGoBackend(interactionPayload) {
+    return new Promise((resolve, reject) => {
+        const body = JSON.stringify(interactionPayload);
+        const req = http.request(GO_BACKEND_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body)
+            },
+            timeout: 10000
+        }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    resolve(JSON.parse(data));
+                } catch (e) {
+                    resolve({ error: 'Failed to parse Go response' });
+                }
+            });
+        });
+        req.on('error', (err) => resolve({ error: err.message }));
+        req.write(body);
+        req.end();
+    });
+}
+
+// Proxy Interaction Events (Slash commands & Button Clicks) to Golang Backend
+discordClient.on('interactionCreate', async (interaction) => {
+    try {
+        const payload = {
+            id: interaction.id,
+            token: interaction.token,
+            type: interaction.type,
+            guild_id: interaction.guildId,
+            channel_id: interaction.channelId,
+            user_id: interaction.user.id,
+            member_voice_channel_id: interaction.member?.voice?.channelId || null,
+            data: interaction.data || null,
+            custom_id: interaction.customId || null,
+        };
+
+        if (interaction.isChatInputCommand()) {
+            payload.command_name = interaction.commandName;
+            payload.options = interaction.options.data || [];
+        }
+
+        console.log(`📩 [VoiceServer] Proxying interaction '${payload.command_name || payload.custom_id}' to Golang Backend...`);
+
+        if (interaction.isChatInputCommand()) {
+            await interaction.deferReply().catch(() => {});
+        } else if (interaction.isButton()) {
+            await interaction.deferUpdate().catch(() => {});
+        }
+
+        const goResponse = await proxyInteractionToGoBackend(payload);
+
+        if (goResponse) {
+            if (goResponse.content || goResponse.embeds || goResponse.components) {
+                const responseData = {};
+                if (goResponse.content) responseData.content = goResponse.content;
+                if (goResponse.embeds) responseData.embeds = goResponse.embeds;
+                if (goResponse.components) responseData.components = goResponse.components;
+
+                if (interaction.deferred || interaction.replied) {
+                    await interaction.editReply(responseData).catch(() => {});
+                } else {
+                    await interaction.reply(responseData).catch(() => {});
+                }
+            }
+        }
+    } catch (err) {
+        console.error('❌ Interaction handling error:', err.message);
+    }
+});
 
 function cleanupStreams(guildId) {
     if (activeStreams.has(guildId)) {
@@ -81,7 +193,7 @@ function cleanupStreams(guildId) {
 
 function notifyBotTrackEnd(guildId, reason) {
     const data = JSON.stringify({ guildId, reason });
-    const req = http.request(BOT_WEBHOOK, {
+    const req = http.request('http://127.0.0.1:8080/internal/track-end', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
     });
@@ -90,28 +202,15 @@ function notifyBotTrackEnd(guildId, reason) {
     req.end();
 }
 
-function resolveStreamUrl(args, env) {
-    return new Promise((resolve, reject) => {
-        execFile('yt-dlp', args, { env, timeout: 30000, maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
-            if (err) return reject(new Error(stderr.trim() || err.message));
-            const lines = stdout.trim().split('\n').filter(Boolean);
-            if (!lines.length) return reject(new Error('yt-dlp returned empty output'));
-            resolve(lines);
-        });
-    });
-}
-
-// Express Server API for Go Bot
+// Express API Server for Golang Play Requests
 const app = express();
 app.use(express.json());
-
 const PORT = process.env.PORT || 3005;
-const BOT_WEBHOOK = process.env.BOT_WEBHOOK || 'http://127.0.0.1:8080/internal/track-end';
 
-app.post('/play', async (req, res) => {
-    const { guildId, channelId, url, volume = 1.0 } = req.body;
-    if (!guildId || !channelId || !url) {
-        return res.status(400).json({ error: 'Missing guildId, channelId, or url' });
+app.post('/join-and-play', async (req, res) => {
+    const { guildId, channelId, streamUrl, volume = 1.0 } = req.body;
+    if (!guildId || !channelId || !streamUrl) {
+        return res.status(400).json({ error: 'Missing guildId, channelId, or streamUrl' });
     }
 
     try {
@@ -160,35 +259,9 @@ app.post('/play', async (req, res) => {
             });
         }
 
-        // Cookie file check
-        let cookieFile = '/opt/aetrna-music/prod/cookies.txt';
-        if (!fs.existsSync(cookieFile)) cookieFile = path.resolve(__dirname, '../cookies.txt');
-        if (!fs.existsSync(cookieFile)) cookieFile = path.resolve(__dirname, './cookies.txt');
-        const useCookies = fs.existsSync(cookieFile);
-
-        const spawnEnv = {
-            ...process.env,
-            HOME: '/root',
-            PATH: (process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') + ':/root/.deno/bin:/root/.local/bin',
-        };
-
-        const resolveArgs = [
-            ...(useCookies ? ['--cookies', cookieFile] : []),
-            '-f', 'bestaudio/best',
-            '--no-playlist', '--geo-bypass', '--no-check-certificates', '--no-warnings',
-            '--get-url',
-            url
-        ];
-
-        const resolvePromise = resolveStreamUrl(resolveArgs, spawnEnv);
-
         console.log(`⏳ [VoiceServer] Waiting for voice connection Ready...`);
         await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
         console.log(`✅ [VoiceServer] Native voice connection Ready!`);
-
-        const streamUrlLines = await resolvePromise;
-        const streamUrl = streamUrlLines[0];
-        console.log(`🔗 [VoiceServer] Resolved stream URL for guild ${guildId}`);
 
         let player = players.get(guildId);
         if (!player) {

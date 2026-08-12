@@ -60,7 +60,15 @@ func (b *Bot) Start() error {
 	log.Printf("✅ Go Bot online as %s#%s (UI, Queue, Spotify & Embeds Engine)", b.session.State.User.Username, b.session.State.User.Discriminator)
 
 	playCb := func(guildID string, song music.Song) error {
-		return b.voice.Play(guildID, song.ChannelID, song.URL, 1.0)
+		log.Printf("⏳ [Bot] Golang extracting stream URL for '%s'...", song.Title)
+		streamURL, err := commands.GetStreamURL(song.URL, b.cfg.CookiesPath)
+		if err != nil || streamURL == "" {
+			log.Printf("⚠️ [Bot] Golang yt-dlp fallback to song.URL: %v", err)
+			streamURL = song.URL
+		} else {
+			log.Printf("🔗 [Bot] Golang yt-dlp stream URL resolved successfully!")
+		}
+		return b.voice.PlayStream(guildID, song.ChannelID, streamURL, 1.0)
 	}
 	stopCb := func(guildID string) error {
 		return b.voice.Stop(guildID)
