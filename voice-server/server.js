@@ -1,20 +1,12 @@
-const path = require('path');
-const fs = require('fs');
-
-// Load environment variables from all possible .env paths
-let envPath = '/opt/aetrna-music/prod/.env';
-if (!fs.existsSync(envPath)) envPath = path.resolve(__dirname, '../.env');
-if (!fs.existsSync(envPath)) envPath = path.resolve(__dirname, './.env');
-require('dotenv').config({ path: envPath });
-
 const express = require('express');
-const { Client, GatewayIntentBits } = require('discord.js');
 const {
     joinVoiceChannel, createAudioPlayer, createAudioResource,
     AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType,
-    generateDependencyReport, getVoiceConnection
+    generateDependencyReport
 } = require('@discordjs/voice');
 const { spawn, execFile } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const http = require('http');
 const sodium = require('libsodium-wrappers');
 
@@ -35,18 +27,52 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3005;
 const BOT_WEBHOOK = process.env.BOT_WEBHOOK || 'http://127.0.0.1:8080/internal/track-end';
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const GATEWAY_SEND_WEBHOOK = process.env.GATEWAY_SEND_WEBHOOK || 'http://127.0.0.1:8080/internal/gateway-send';
 
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildVoiceStates,
-    ]
-});
-
+const adapters = new Map();
+const voiceStatesMap = new Map();
 const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
+
+function cleanEndpointString(endpoint) {
+    if (!endpoint) return undefined;
+    return endpoint.replace(/^wss?:\/\//, '').split(':')[0].trim();
+}
+
+function createCustomAdapter(guildId) {
+    return (methods) => {
+        adapters.set(guildId, methods);
+
+        return {
+            sendPayload(data) {
+                if (data && data.d && data.d.channel_id) {
+                    const current = voiceStatesMap.get(guildId) || {};
+                    current.channelId = data.d.channel_id;
+                    voiceStatesMap.set(guildId, current);
+                }
+
+                // Forward OP4 Voice State payload from @discordjs/voice to Go Bot Gateway session
+                const body = JSON.stringify({ guildId, payload: data });
+                const req = http.request(GATEWAY_SEND_WEBHOOK, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(body)
+                    }
+                });
+                req.on('error', (err) => console.error(`❌ [VoiceServer] CustomAdapter payload send error: ${err.message}`));
+                req.write(body);
+                req.end();
+                return true;
+            },
+            destroy() {
+                adapters.delete(guildId);
+                voiceStatesMap.delete(guildId);
+            }
+        };
+    };
+}
 
 function cleanupStreams(guildId) {
     if (activeStreams.has(guildId)) {
@@ -78,9 +104,52 @@ function resolveStreamUrl(args, env) {
     });
 }
 
-// Dummy handler for legacy compatibility
+// Receive Gateway Voice Credentials from Go Bot
 app.post('/voice-state', (req, res) => {
-    res.json({ status: 'ok', note: 'discord.js client handles voice states natively' });
+    const { guildId, channelId, token, endpoint, sessionId, userId } = req.body;
+    if (!guildId) return res.status(400).json({ error: 'Missing guildId' });
+
+    const cleanEndpoint = cleanEndpointString(endpoint);
+
+    const current = voiceStatesMap.get(guildId) || {};
+    if (token) current.token = token;
+    if (cleanEndpoint) current.endpoint = cleanEndpoint;
+    if (sessionId) current.sessionId = sessionId;
+    if (userId) current.userId = userId;
+    if (channelId) current.channelId = channelId;
+    voiceStatesMap.set(guildId, current);
+
+    const adapter = adapters.get(guildId);
+    if (adapter) {
+        if (current.token && current.endpoint && current.sessionId && current.userId) {
+            console.log(`🔑 [VoiceServer] Applying Voice State: User=${current.userId}, Session=${current.sessionId}, Endpoint=${current.endpoint}, Channel=${current.channelId}`);
+            
+            // Step A: Send Voice State Update FIRST so @discordjs/voice registers userId and sessionId
+            adapter.onVoiceStateUpdate({
+                session_id: current.sessionId,
+                channel_id: current.channelId,
+                user_id: current.userId,
+                guild_id: guildId
+            });
+
+            // Step B: Wait 50ms for @discordjs/voice state machine tick, THEN send Voice Server Update
+            setTimeout(() => {
+                adapter.onVoiceServerUpdate({
+                    token: current.token,
+                    endpoint: current.endpoint,
+                    guild_id: guildId
+                });
+                console.log(`✅ [VoiceServer] Applied Voice Server Update to adapter for guild ${guildId}`);
+            }, 50);
+
+            return res.json({ status: 'ok', updated: true });
+        }
+        console.log(`⏳ [VoiceServer] Partial voice state received for guild ${guildId}`);
+        return res.json({ status: 'ok', updated: false, pending: true });
+    }
+
+    console.log(`🔑 [VoiceServer] Voice state cached for guild ${guildId}`);
+    res.json({ status: 'ok', updated: false, cached: true });
 });
 
 app.post('/play', async (req, res) => {
@@ -92,36 +161,22 @@ app.post('/play', async (req, res) => {
     try {
         cleanupStreams(guildId);
 
-        // Ensure discord.js client is logged in and ready
-        if (!client.isReady()) {
-            console.log(`⏳ [VoiceServer] discord.js Client not ready yet. Waiting for Gateway connection...`);
-            if (!client.ws || !client.token) {
-                if (!DISCORD_TOKEN) {
-                    console.error(`❌ [VoiceServer] Cannot join voice: DISCORD_TOKEN is missing!`);
-                    return res.status(500).json({ error: 'DISCORD_TOKEN missing in environment' });
-                }
-                await client.login(DISCORD_TOKEN);
-            }
-            await new Promise((resolve) => {
-                if (client.isReady()) return resolve();
-                client.once('ready', resolve);
-            });
-        }
+        // Reset voice state cache for fresh join request
+        voiceStatesMap.delete(guildId);
+        const current = { channelId: String(channelId) };
+        voiceStatesMap.set(guildId, current);
 
-        const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
-        if (!guild) {
-            console.error(`❌ [VoiceServer] Guild ${guildId} not found in discord.js client cache`);
-            return res.status(404).json({ error: `Guild ${guildId} not found` });
-        }
-
-        // Join Voice Channel natively via guild.voiceAdapterCreator
-        let connection = getVoiceConnection(guildId);
+        let connection = connections.get(guildId);
         if (!connection || connection.joinConfig.channelId !== channelId || connection.state.status === VoiceConnectionStatus.Destroyed) {
-            console.log(`🎙️ [VoiceServer] Joining voice channel ${channelId} in guild ${guild.name} (${guildId}) via native adapter...`);
+            if (connection) {
+                try { connection.destroy(); } catch (e) {}
+            }
+
+            console.log(`🎙️ [VoiceServer] Joining voice channel ${channelId} in guild ${guildId}...`);
             connection = joinVoiceChannel({
                 channelId: String(channelId),
                 guildId: String(guildId),
-                adapterCreator: guild.voiceAdapterCreator,
+                adapterCreator: createCustomAdapter(String(guildId)),
                 selfDeaf: true,
                 selfMute: false,
             });
@@ -172,13 +227,13 @@ app.post('/play', async (req, res) => {
         // Start yt-dlp URL resolution in parallel
         const resolvePromise = resolveStreamUrl(resolveArgs, spawnEnv);
 
-        // Wait for Native Voice Connection Ready
+        // Wait for Voice Connection Ready
         try {
-            console.log(`⏳ [VoiceServer] Waiting for native voice connection Ready...`);
-            await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
-            console.log(`✅ [VoiceServer] Native Voice connection Ready!`);
+            console.log(`⏳ [VoiceServer] Waiting for voice connection Ready...`);
+            await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+            console.log(`✅ [VoiceServer] Voice connection Ready!`);
         } catch (stateErr) {
-            console.error(`❌ [VoiceServer] Native voice connection failed: ${stateErr.message}`);
+            console.error(`❌ [VoiceServer] Voice connection failed: ${stateErr.message}`);
             return res.status(500).json({ error: `Voice connection failed: ${stateErr.message}` });
         }
 
@@ -250,11 +305,13 @@ app.post('/stop', (req, res) => {
     const player = players.get(guildId);
     if (player) { player.stop(); players.delete(guildId); }
 
-    const connection = getVoiceConnection(guildId) || connections.get(guildId);
+    const connection = connections.get(guildId);
     if (connection) {
         try { connection.destroy(); } catch (e) {}
         connections.delete(guildId);
     }
+    adapters.delete(guildId);
+    voiceStatesMap.delete(guildId);
 
     res.json({ status: 'ok' });
 });
@@ -272,25 +329,8 @@ app.post('/resume', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', botReady: client.isReady(), connections: connections.size, players: players.size });
+    res.json({ status: 'ok', connections: connections.size, adapters: adapters.size, cachedStates: voiceStatesMap.size });
 });
-
-client.once('ready', () => {
-    console.log(`✅ [VoiceServer] discord.js Client logged in as ${client.user.tag}`);
-});
-
-client.on('error', (err) => {
-    console.error(`❌ [VoiceServer] discord.js Client error: ${err.message}`);
-});
-
-if (DISCORD_TOKEN) {
-    console.log(`🔑 [VoiceServer] Logging in discord.js Client with token...`);
-    client.login(DISCORD_TOKEN).catch((err) => {
-        console.error(`❌ [VoiceServer] discord.js Client login failed: ${err.message}`);
-    });
-} else {
-    console.warn(`⚠️ [VoiceServer] DISCORD_TOKEN is missing in environment variables. Will load dynamically on /play.`);
-}
 
 app.listen(PORT, '127.0.0.1', () => {
     console.log(`✅ Voice Server listening on http://127.0.0.1:${PORT}`);
