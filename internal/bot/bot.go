@@ -47,7 +47,7 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 func (b *Bot) Start() error {
 	// Node.js (voice-server) is the SINGLE Discord Gateway client.
 	// Go Bot is a pure HTTP backend microservice — no session.Open() needed.
-	log.Printf("✅ Go Bot Backend Microservice starting on :8080")
+	log.Printf("✅ Go Bot Backend Microservice starting on :47392")
 
 	playCb := func(guildID string, song music.Song) error {
 		log.Printf("⏳ [Bot] Extracting stream URL for '%s'...", song.Title)
@@ -67,7 +67,9 @@ func (b *Bot) Start() error {
 	b.store = music.NewQueueStore(playCb, stopCb)
 	b.handler = commands.NewHandler(b.cfg, b.db, b.store, spotifyCl)
 
-	b.startInternalWebhookServer() // blocking
+	// Start HTTP server in a goroutine (non-blocking) so main.go signal handler works
+	go b.startInternalWebhookServer()
+
 	return nil
 }
 
@@ -180,8 +182,10 @@ func (b *Bot) startInternalWebhookServer() {
 		}()
 	})
 
-	log.Printf("✅ [GoBot] Internal webhook server on 127.0.0.1:8080")
-	_ = (&http.Server{Addr: "127.0.0.1:8080", Handler: mux}).ListenAndServe()
+	log.Printf("✅ [GoBot] Starting HTTP webhook server on 127.0.0.1:47392...")
+	if err := (&http.Server{Addr: "127.0.0.1:47392", Handler: mux}).ListenAndServe(); err != nil {
+		log.Fatalf("💥 [GoBot] FATAL: HTTP webhook server failed on :47392 — %v", err)
+	}
 }
 
 // handleProxiedPlay handles /play and select_search_track.

@@ -65,7 +65,7 @@ const discordClient = new Client({
 });
 
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
-const GO_BACKEND = 'http://127.0.0.1:8080/internal/interaction';
+const GO_BACKEND = 'http://127.0.0.1:47392/internal/interaction';
 
 if (!BOT_TOKEN) {
     console.error('❌ [VoiceServer] DISCORD_TOKEN is missing!');
@@ -110,20 +110,27 @@ function serializeOptions(options) {
     }));
 }
 
-// Forward raw interaction data to Go Bot — Go Bot responds to Discord directly via REST
+// Forward raw interaction data to Go Bot
 function sendToGoBot(payload) {
     return new Promise((resolve) => {
         const body = JSON.stringify(payload);
+        console.log(`📬 [VoiceServer] Sending ${payload.command_name || payload.custom_id || 'interaction'} to Go Bot...`);
         const req = http.request(GO_BACKEND, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
             timeout: 12000,
         }, (res) => {
+            console.log(`✅ [VoiceServer] Go Bot responded HTTP ${res.statusCode} for ${payload.command_name || payload.custom_id}`);
             res.resume();
             resolve();
         });
+        req.on('timeout', () => {
+            console.error(`⏰ [VoiceServer] Go Bot timeout for ${payload.command_name || payload.custom_id}`);
+            req.destroy();
+            resolve();
+        });
         req.on('error', (err) => {
-            console.error(`❌ [VoiceServer] Go Bot interaction error: ${err.message}`);
+            console.error(`❌ [VoiceServer] Go Bot request error: ${err.message} (is bot.service running on :47392?)`);
             resolve();
         });
         req.write(body);
@@ -186,7 +193,7 @@ function cleanupStreams(guildId) {
 // Notify Go Bot of track end
 function notifyBotTrackEnd(guildId, reason) {
     const data = JSON.stringify({ guildId, reason });
-    const req = http.request('http://127.0.0.1:8080/internal/track-end', {
+    const req = http.request('http://127.0.0.1:47392/internal/track-end', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
     });
