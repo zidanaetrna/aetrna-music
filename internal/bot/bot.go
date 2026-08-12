@@ -160,11 +160,12 @@ func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceSe
 		return
 	}
 
+	cleanEndpoint := strings.Split(v.Endpoint, ":")[0]
 	b.Lock()
 	b.voiceTokens[v.GuildID] = v.Token
-	b.voiceEndpoints[v.GuildID] = v.Endpoint
+	b.voiceEndpoints[v.GuildID] = cleanEndpoint
 	token := v.Token
-	endpoint := v.Endpoint
+	endpoint := cleanEndpoint
 
 	sessionID := b.voiceSessionIDs[v.GuildID]
 	if sessionID == "" {

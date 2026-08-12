@@ -1,12 +1,16 @@
 const express = require('express');
 const {
     joinVoiceChannel, createAudioPlayer, createAudioResource,
-    AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType
+    AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType,
+    generateDependencyReport
 } = require('@discordjs/voice');
 const { spawn, execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+
+console.log('📋 [VoiceServer] Voice dependency report:');
+console.log(generateDependencyReport());
 
 const app = express();
 app.use(express.json());
@@ -28,9 +32,10 @@ function createCustomAdapter(guildId) {
         // Apply cached voice credentials if received prior to adapter registration
         const cachedState = voiceStatesMap.get(guildId);
         if (cachedState) {
-            console.log(`🔑 [VoiceServer] Applying cached voice state on adapter creation for guild ${guildId}`);
-            if (cachedState.token && cachedState.endpoint) {
-                methods.onVoiceServerUpdate({ token: cachedState.token, endpoint: cachedState.endpoint, guild_id: guildId });
+            const cleanEndpoint = cachedState.endpoint ? cachedState.endpoint.split(':')[0] : cachedState.endpoint;
+            console.log(`🔑 [VoiceServer] Applying cached voice state on adapter creation for guild ${guildId} (Endpoint: ${cleanEndpoint})`);
+            if (cachedState.token && cleanEndpoint) {
+                methods.onVoiceServerUpdate({ token: cachedState.token, endpoint: cleanEndpoint, guild_id: guildId });
             }
             if (cachedState.sessionId && cachedState.userId) {
                 methods.onVoiceStateUpdate({ session_id: cachedState.sessionId, guild_id: guildId, user_id: cachedState.userId });
@@ -97,10 +102,12 @@ app.post('/voice-state', (req, res) => {
     const { guildId, token, endpoint, sessionId, userId } = req.body;
     if (!guildId) return res.status(400).json({ error: 'Missing guildId' });
 
+    const cleanEndpoint = endpoint ? endpoint.split(':')[0] : endpoint;
+
     // Store in voiceStatesMap for cache
     const current = voiceStatesMap.get(guildId) || {};
     if (token) current.token = token;
-    if (endpoint) current.endpoint = endpoint;
+    if (cleanEndpoint) current.endpoint = cleanEndpoint;
     if (sessionId) current.sessionId = sessionId;
     if (userId) current.userId = userId;
     voiceStatesMap.set(guildId, current);
@@ -113,7 +120,7 @@ app.post('/voice-state', (req, res) => {
         if (current.sessionId && current.userId) {
             adapter.onVoiceStateUpdate({ session_id: current.sessionId, guild_id: guildId, user_id: current.userId });
         }
-        console.log(`✅ [VoiceServer] Voice state applied to active adapter for guild ${guildId}`);
+        console.log(`✅ [VoiceServer] Voice state applied to active adapter for guild ${guildId} (Endpoint: ${current.endpoint})`);
         return res.json({ status: 'ok', updated: true });
     }
 
