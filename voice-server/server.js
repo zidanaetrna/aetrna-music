@@ -90,9 +90,17 @@ if (BOT_TOKEN) {
         console.log(`✅ [VoiceServer] discord.js Client logged in as ${discordClient.user.tag}`);
         try {
             const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
-            console.log('⏳ Registering global slash commands...');
+            console.log('⏳ Registering slash commands...');
             await rest.put(Routes.applicationCommands(discordClient.user.id), { body: commands });
-            console.log('✅ Global slash commands registered successfully!');
+            
+            // Register instantly for all connected guilds to bypass global cache delay
+            for (const [gId] of discordClient.guilds.cache) {
+                try {
+                    await rest.put(Routes.applicationGuildCommands(discordClient.user.id, gId), { body: commands });
+                    console.log(`⚡ Instant guild commands registered for guild ${gId}`);
+                } catch (err) {}
+            }
+            console.log('✅ Slash commands registered successfully!');
         } catch (e) {
             console.error('⚠️ Failed to register slash commands:', e.message);
         }
