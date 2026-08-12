@@ -231,19 +231,87 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 		return
 	}
 
-	log.Printf("🔍 [Bot] Searching YouTube: %s", query)
-	songs, err := commands.SearchYouTube(query, 1, b.cfg.CookiesPath, b.cfg.YtdlpClients)
-	if err != nil || len(songs) == 0 {
-		log.Printf("⚠️ [Bot] No songs for '%s': %v", query, err)
-		followup(&discordgo.WebhookParams{Content: "❌ Ga nemu lagu yang lu cari!"})
-		return
+	queue := b.store.Get(p.GuildID)
+	var songs []music.Song
+
+	isSpotifyPlaylist := strings.Contains(query, "spotify.com/playlist/") || strings.Contains(query, "spotify.com/album/")
+	isSpotifyTrack := strings.Contains(query, "spotify.com/track/")
+
+	if isSpotifyPlaylist || isSpotifyTrack {
+		if b.spotify == nil || !b.spotify.IsEnabled() {
+			followup(&discordgo.WebhookParams{
+				Content: "❌ Spotify API belum dikonfigurasi! Pastikan `SPOTIFY_CLIENT_ID` & `SPOTIFY_CLIENT_SECRET` diset di `.env`.",
+			})
+			return
+		}
+
+		if isSpotifyPlaylist {
+			log.Printf("🟢 [Bot] Resolving Spotify playlist: %s", query)
+			tracks, err := b.spotify.GetPlaylistTracks(query, 50)
+			if err != nil || len(tracks) == 0 {
+				log.Printf("⚠️ [Bot] Failed to resolve Spotify playlist: %v", err)
+				followup(&discordgo.WebhookParams{Content: fmt.Sprintf("❌ Gagal mengambil playlist Spotify: %v", err)})
+				return
+			}
+
+			log.Printf("✅ [Bot] Found %d tracks in Spotify playlist", len(tracks))
+
+			// Resolve first track synchronously for immediate playback
+			firstQuery := fmt.Sprintf("%s - %s", tracks[0].Artist, tracks[0].Name)
+			log.Printf("🔍 [Bot] Searching YouTube for first Spotify track: %s", firstQuery)
+			firstSongs, err := commands.SearchYouTube(firstQuery, 1, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+			if err == nil && len(firstSongs) > 0 {
+				songs = append(songs, firstSongs[0])
+			}
+
+			if len(songs) == 0 {
+				followup(&discordgo.WebhookParams{Content: "❌ Gagal mencari lagu pertama dari playlist Spotify!"})
+				return
+			}
+
+			// Queue remaining tracks asynchronously in background
+			go func() {
+				for _, trk := range tracks[1:] {
+					tQuery := fmt.Sprintf("%s - %s", trk.Artist, trk.Name)
+					sSongs, err := commands.SearchYouTube(tQuery, 1, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+					if err == nil && len(sSongs) > 0 {
+						sSong := sSongs[0]
+						sSong.RequestedBy = p.UserID
+						sSong.ChannelID = p.MemberVoiceChannelID
+						queue.AddSong(sSong)
+					}
+				}
+				log.Printf("🎉 [Bot] Spotify playlist fully loaded (%d tracks) for guild %s", len(tracks), p.GuildID)
+			}()
+
+		} else if isSpotifyTrack {
+			log.Printf("🟢 [Bot] Resolving Spotify track: %s", query)
+			track, err := b.spotify.GetTrack(query)
+			if err != nil || track == nil {
+				log.Printf("⚠️ [Bot] Failed to resolve Spotify track: %v", err)
+				followup(&discordgo.WebhookParams{Content: fmt.Sprintf("❌ Gagal mengambil lagu Spotify: %v", err)})
+				return
+			}
+			query = fmt.Sprintf("%s - %s", track.Artist, track.Name)
+			log.Printf("✅ [Bot] Spotify track resolved to YouTube query: '%s'", query)
+		}
+	}
+
+	if len(songs) == 0 {
+		log.Printf("🔍 [Bot] Searching YouTube: %s", query)
+		ytSongs, err := commands.SearchYouTube(query, 1, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+		if err != nil || len(ytSongs) == 0 {
+			log.Printf("⚠️ [Bot] No songs for '%s': %v", query, err)
+			followup(&discordgo.WebhookParams{Content: "❌ Ga nemu lagu yang lu cari!"})
+			return
+		}
+		songs = ytSongs
 	}
 
 	song := songs[0]
 	song.RequestedBy = p.UserID
 	song.ChannelID = p.MemberVoiceChannelID
 
-	queue := b.store.Get(p.GuildID)
 	queue.AddSong(song)
 	queue.VoiceChannelID = p.MemberVoiceChannelID
 
