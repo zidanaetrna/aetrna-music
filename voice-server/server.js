@@ -188,6 +188,13 @@ app.post('/play', async (req, res) => {
 
             connection.on('stateChange', (oldState, newState) => {
                 console.log(`🔄 [VoiceServer] VoiceConnection ${guildId} state: ${oldState.status} ➔ ${newState.status}`);
+                if (newState.closeCode || newState.reason) {
+                    console.log(`⚠️ [VoiceServer CloseDetails ${guildId}] CloseCode: ${newState.closeCode}, Reason: ${JSON.stringify(newState.reason || {})}`);
+                }
+            });
+
+            connection.on('error', (error) => {
+                console.error(`❌ [VoiceServer ConnectionError ${guildId}]`, error);
             });
 
             connection.on('debug', (msg) => {
