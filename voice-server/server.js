@@ -29,28 +29,38 @@ function createCustomAdapter(guildId) {
     return (methods) => {
         adapters.set(guildId, methods);
 
-        // Apply cached voice credentials on NEXT TICK after VoiceConnection constructor completes
+        // Apply cached voice credentials on NEXT TICK (VoiceStateUpdate FIRST to set selfUserId, then VoiceServerUpdate)
         setImmediate(() => {
             const cachedState = voiceStatesMap.get(guildId);
             if (cachedState && cachedState.token && cachedState.endpoint && cachedState.sessionId && cachedState.userId) {
                 const cleanEndpoint = cachedState.endpoint.split(':')[0];
                 const targetChannel = cachedState.channelId;
-                console.log(`🔑 [VoiceServer] Applying FULL cached voice state on nextTick for guild ${guildId} (Endpoint: ${cleanEndpoint}, Channel: ${targetChannel})`);
-                methods.onVoiceServerUpdate({ token: cachedState.token, endpoint: cleanEndpoint, guild_id: guildId });
-                methods.onVoiceStateUpdate({ session_id: cachedState.sessionId, channel_id: targetChannel, user_id: cachedState.userId, guild_id: guildId });
+                console.log(`🔑 [VoiceServer] Applying FULL cached voice state (State FIRST, Server SECOND) for guild ${guildId} (Endpoint: ${cleanEndpoint}, Channel: ${targetChannel})`);
+                
+                // CRITICAL ORDER: onVoiceStateUpdate MUST BE FIRST so @discordjs/voice initializes selfUserId & sessionId
+                methods.onVoiceStateUpdate({
+                    session_id: cachedState.sessionId,
+                    channel_id: targetChannel,
+                    user_id: cachedState.userId,
+                    guild_id: guildId
+                });
+                
+                methods.onVoiceServerUpdate({
+                    token: cachedState.token,
+                    endpoint: cleanEndpoint,
+                    guild_id: guildId
+                });
             }
         });
 
         return {
             sendPayload(data) {
-                // Save channel_id directly from OP4 payload
                 if (data && data.d && data.d.channel_id) {
                     const current = voiceStatesMap.get(guildId) || {};
                     current.channelId = data.d.channel_id;
                     voiceStatesMap.set(guildId, current);
                 }
 
-                // Forward OP4 Voice State payload from @discordjs/voice to Go Bot Gateway
                 const body = JSON.stringify({ guildId, payload: data });
                 const req = http.request(GATEWAY_SEND_WEBHOOK, {
                     method: 'POST',
@@ -110,7 +120,6 @@ app.post('/voice-state', (req, res) => {
 
     const cleanEndpoint = endpoint ? endpoint.split(':')[0] : undefined;
 
-    // Store in voiceStatesMap for cache
     const current = voiceStatesMap.get(guildId) || {};
     if (token) current.token = token;
     if (cleanEndpoint) current.endpoint = cleanEndpoint;
@@ -121,12 +130,22 @@ app.post('/voice-state', (req, res) => {
 
     const adapter = adapters.get(guildId);
     if (adapter) {
-        // ONLY trigger voice updates when all parameters exist together to prevent @discordjs/voice abort
         if (current.token && current.endpoint && current.sessionId && current.userId) {
             setImmediate(() => {
-                adapter.onVoiceServerUpdate({ token: current.token, endpoint: current.endpoint, guild_id: guildId });
-                adapter.onVoiceStateUpdate({ session_id: current.sessionId, channel_id: current.channelId, user_id: current.userId, guild_id: guildId });
-                console.log(`✅ [VoiceServer] FULL Voice state applied on nextTick to active adapter for guild ${guildId} (Endpoint: ${current.endpoint}, Channel: ${current.channelId})`);
+                // CRITICAL ORDER: onVoiceStateUpdate FIRST, then onVoiceServerUpdate SECOND
+                adapter.onVoiceStateUpdate({
+                    session_id: current.sessionId,
+                    channel_id: current.channelId,
+                    user_id: current.userId,
+                    guild_id: guildId
+                });
+                
+                adapter.onVoiceServerUpdate({
+                    token: current.token,
+                    endpoint: current.endpoint,
+                    guild_id: guildId
+                });
+                console.log(`✅ [VoiceServer] FULL Voice state applied (State FIRST, Server SECOND) for guild ${guildId} (Endpoint: ${current.endpoint}, Channel: ${current.channelId})`);
             });
             return res.json({ status: 'ok', updated: true });
         }
@@ -147,7 +166,6 @@ app.post('/play', async (req, res) => {
     try {
         cleanupStreams(guildId);
 
-        // Store channelId in voiceState cache for this guild
         const current = voiceStatesMap.get(guildId) || {};
         current.channelId = channelId;
         voiceStatesMap.set(guildId, current);
@@ -164,6 +182,7 @@ app.post('/play', async (req, res) => {
                 guildId: guildId,
                 adapterCreator: createCustomAdapter(guildId),
                 selfDeaf: true,
+                selfMute: false,
             });
 
             connections.set(guildId, connection);
