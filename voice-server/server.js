@@ -393,8 +393,10 @@ app.get('/test-voice', async (req, res) => {
                 net.on('stateChange', (oldNetState, newNetState) => {
                     console.log(`🌐 [/test-voice NetState] ${oldNetState.code} (${oldNetState.status}) ➔ ${newNetState.code} (${newNetState.status})`);
                     if (newNetState.ws) {
-                        newNetState.ws.on('close', (code, reason) => {
-                            console.log(`🔌 [/test-voice Voice WS Closed!] Code: ${code}, Reason: "${reason}"`);
+                        newNetState.ws.on('close', (eventOrCode, reason) => {
+                            const code = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.code : eventOrCode;
+                            const rsn = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.reason : reason;
+                            console.log(`🔌 [/test-voice Voice WS Closed!] Code: ${code}, Reason: "${rsn}"`, JSON.stringify(eventOrCode));
                         });
                         newNetState.ws.on('error', (err) => {
                             console.log(`❌ [/test-voice Voice WS Error!]`, err.message);
