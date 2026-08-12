@@ -29,13 +29,13 @@ function createCustomAdapter(guildId) {
     return (methods) => {
         adapters.set(guildId, methods);
 
-        // Apply cached voice credentials ONLY when complete (token, endpoint, sessionId, userId)
+        // Apply cached voice credentials ONLY when complete (token, endpoint, sessionId, userId, channelId)
         const cachedState = voiceStatesMap.get(guildId);
         if (cachedState && cachedState.token && cachedState.endpoint && cachedState.sessionId && cachedState.userId) {
             const cleanEndpoint = cachedState.endpoint.split(':')[0];
-            console.log(`🔑 [VoiceServer] Applying FULL cached voice state on adapter creation for guild ${guildId} (Endpoint: ${cleanEndpoint})`);
+            console.log(`🔑 [VoiceServer] Applying FULL cached voice state on adapter creation for guild ${guildId} (Endpoint: ${cleanEndpoint}, Channel: ${cachedState.channelId})`);
             methods.onVoiceServerUpdate({ token: cachedState.token, endpoint: cleanEndpoint, guild_id: guildId });
-            methods.onVoiceStateUpdate({ session_id: cachedState.sessionId, guild_id: guildId, user_id: cachedState.userId });
+            methods.onVoiceStateUpdate({ session_id: cachedState.sessionId, channel_id: cachedState.channelId, user_id: cachedState.userId, guild_id: guildId });
         }
 
         return {
@@ -95,7 +95,7 @@ function resolveStreamUrl(args, env) {
 
 // Receive Gateway Voice Updates from Go Bot
 app.post('/voice-state', (req, res) => {
-    const { guildId, token, endpoint, sessionId, userId } = req.body;
+    const { guildId, channelId, token, endpoint, sessionId, userId } = req.body;
     if (!guildId) return res.status(400).json({ error: 'Missing guildId' });
 
     const cleanEndpoint = endpoint ? endpoint.split(':')[0] : undefined;
@@ -106,15 +106,16 @@ app.post('/voice-state', (req, res) => {
     if (cleanEndpoint) current.endpoint = cleanEndpoint;
     if (sessionId) current.sessionId = sessionId;
     if (userId) current.userId = userId;
+    if (channelId) current.channelId = channelId;
     voiceStatesMap.set(guildId, current);
 
     const adapter = adapters.get(guildId);
     if (adapter) {
-        // ONLY trigger voice updates when all 4 parameters exist together to prevent @discordjs/voice abort
+        // ONLY trigger voice updates when all parameters exist together to prevent @discordjs/voice abort
         if (current.token && current.endpoint && current.sessionId && current.userId) {
             adapter.onVoiceServerUpdate({ token: current.token, endpoint: current.endpoint, guild_id: guildId });
-            adapter.onVoiceStateUpdate({ session_id: current.sessionId, guild_id: guildId, user_id: current.userId });
-            console.log(`✅ [VoiceServer] FULL Voice state applied to active adapter for guild ${guildId} (Endpoint: ${current.endpoint})`);
+            adapter.onVoiceStateUpdate({ session_id: current.sessionId, channel_id: current.channelId, user_id: current.userId, guild_id: guildId });
+            console.log(`✅ [VoiceServer] FULL Voice state applied to active adapter for guild ${guildId} (Endpoint: ${current.endpoint}, Channel: ${current.channelId})`);
             return res.json({ status: 'ok', updated: true });
         }
         console.log(`⏳ [VoiceServer] Partial voice state received for guild ${guildId} (waiting for complete credentials)`);
@@ -133,6 +134,11 @@ app.post('/play', async (req, res) => {
 
     try {
         cleanupStreams(guildId);
+
+        // Store channelId in voiceState cache for this guild
+        const current = voiceStatesMap.get(guildId) || {};
+        current.channelId = channelId;
+        voiceStatesMap.set(guildId, current);
 
         // Join voice channel using Custom Adapter (delegates Gateway payloads to Go Bot)
         let connection = connections.get(guildId);
