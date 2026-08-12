@@ -362,13 +362,14 @@ app.get('/test-voice', async (req, res) => {
         return res.status(503).json({ error: 'Discord client not ready yet' });
     }
 
-    const guild = discordClient.guilds.cache.first();
-    if (!guild) return res.json({ error: 'No guilds found' });
+    const { guildId } = req.query;
+    let guild = guildId ? discordClient.guilds.cache.get(String(guildId)) : discordClient.guilds.cache.first();
+    if (!guild) return res.json({ error: `Guild ${guildId || 'first'} not found` });
 
     const channel = guild.channels.cache.find(c => c.isVoiceBased());
     if (!channel) return res.json({ error: `No voice channels in guild ${guild.name}` });
 
-    console.log(`🧪 [/test-voice] Starting diagnostic for guild ${guild.name} channel ${channel.name}...`);
+    console.log(`🧪 [/test-voice] Starting diagnostic for guild ${guild.name} (${guild.id}) channel ${channel.name}...`);
 
     try {
         const connection = joinVoiceChannel({
