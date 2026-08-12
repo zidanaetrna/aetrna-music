@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"runtime"
+	"strings"
 	"sync"
+	"time"
 
 	"aetrna-music/config"
 	"aetrna-music/db"
@@ -16,6 +19,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 )
+
+var startTime = time.Now()
 
 type Bot struct {
 	session *discordgo.Session
@@ -339,27 +344,78 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		}
 
 	case "filter":
+		var filterName string
 		var opts []*discordgo.ApplicationCommandInteractionDataOption
 		if len(p.Options) > 0 {
 			_ = json.Unmarshal(p.Options, &opts)
 		}
 		for _, opt := range opts {
 			if opt.Name == "name" {
-				b.handler.HandleFilter(b.session, i, fmt.Sprintf("%v", opt.Value))
-				return
+				filterName = fmt.Sprintf("%v", opt.Value)
 			}
 		}
-		content = "❌ Filter name required!"
+		filterName = strings.ToLower(strings.TrimSpace(filterName))
+		validFilters := map[string]bool{
+			"off": true, "bassboost": true, "nightcore": true, "vaporwave": true, "8d": true, "pop": true,
+		}
+		if !validFilters[filterName] {
+			content = "❌ Filter tidak valid! Pilihan: `off`, `bassboost`, `nightcore`, `vaporwave`, `8d`, `pop`"
+			flags = discordgo.MessageFlagsEphemeral
+		} else {
+			q := b.store.Get(p.GuildID)
+			if filterName == "off" {
+				q.SetFilter("none")
+			} else {
+				q.SetFilter(filterName)
+			}
+			content = fmt.Sprintf("🎛️ Audio DSP Filter diubah ke **%s**! Filter akan aktif di lagu berikutnya.", filterName)
+		}
 
 	case "help":
-		b.handler.HandleHelp(b.session, i)
-		return
+		embeds = []*discordgo.MessageEmbed{{
+			Title:       "🎵 aetrna-music Commands & Guide",
+			Description: "Prefix: `/` (Slash Commands)",
+			Color:       0x0099FF,
+			Fields: []*discordgo.MessageEmbedField{
+				{
+					Name:  "🎶 Playback Commands",
+					Value: "`/play <query>` - Play / queue lagu dari YouTube/Spotify\n`/pause` - Pause lagu\n`/resume` - Resume lagu\n`/skip` - Skip ke lagu berikutnya\n`/stop` - Stop & clear queue",
+				},
+				{
+					Name:  "📜 Queue & Collections",
+					Value: "`/queue` - Lihat daftar queue berhalaman\n`/nowplaying` - Lihat lagu yang diputar\n`/favorite` - Tambahkan lagu ke favorites\n`/favorites` - Lihat list favorites",
+				},
+				{
+					Name:  "🎛️ Audio DSP Filters",
+					Value: "`/filter <bassboost/nightcore/vaporwave/8d/pop/off>` - Dynamic audio equalizer",
+				},
+				{
+					Name:  "⭐ System & Info",
+					Value: "`/stats` - Performance & system metrics\n`/ping` - Check latency",
+				},
+			},
+			Footer: &discordgo.MessageEmbedFooter{
+				Text: "aetrna-music v2.0 • Ultra-fast Go Music Engine",
+			},
+		}}
+
 	case "stats":
-		b.handler.HandleStats(b.session, i)
-		return
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		uptime := time.Since(startTime).Round(time.Second)
+		embeds = []*discordgo.MessageEmbed{{
+			Title: "📊 Bot Performance & Statistics",
+			Color: 0x00FF00,
+			Fields: []*discordgo.MessageEmbedField{
+				{Name: "⏱️ Uptime", Value: uptime.String(), Inline: true},
+				{Name: "💾 Memory Alloc (RAM)", Value: fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024), Inline: true},
+				{Name: "⚡ Goroutines", Value: fmt.Sprintf("%d", runtime.NumGoroutine()), Inline: true},
+				{Name: "🖥️ Go Version", Value: runtime.Version(), Inline: true},
+			},
+		}}
+
 	case "ping":
-		b.handler.HandlePing(b.session, i)
-		return
+		content = "🏓 Pong! Webhook Interaction Engine Active ⚡"
 
 	// ── Buttons ───────────────────────────────────────────────
 	case "btn_pause":
