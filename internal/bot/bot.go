@@ -92,6 +92,7 @@ func (b *Bot) Stop() {
 type ProxiedInteraction struct {
 	ID                   string          `json:"id"`
 	Token                string          `json:"token"`
+	ApplicationID        string          `json:"application_id"`
 	Type                 int             `json:"type"` // 2=AppCommand, 3=MsgComponent
 	GuildID              string          `json:"guild_id"`
 	ChannelID            string          `json:"channel_id"`
@@ -105,12 +106,13 @@ type ProxiedInteraction struct {
 }
 
 // buildInteractionCreate reconstructs a *discordgo.InteractionCreate from a proxied payload.
-// discordgo's REST methods (InteractionRespond, FollowupMessageCreate, etc.) only need
-// the Interaction.Token, Interaction.ID, and GuildID — no Gateway state required.
+// discordgo REST methods only need Interaction.Token, Interaction.ID, Interaction.AppID,
+// and GuildID — no Gateway state required.
 func buildInteractionCreate(p ProxiedInteraction) *discordgo.InteractionCreate {
 	interaction := &discordgo.Interaction{
 		ID:        p.ID,
 		Token:     p.Token,
+		AppID:     p.ApplicationID, // Required for FollowupMessageCreate & InteractionResponseEdit
 		GuildID:   p.GuildID,
 		ChannelID: p.ChannelID,
 		Member: &discordgo.Member{
@@ -119,7 +121,6 @@ func buildInteractionCreate(p ProxiedInteraction) *discordgo.InteractionCreate {
 				Username: p.Username,
 			},
 		},
-		AppID: "",
 	}
 
 	if p.Type == 2 { // ApplicationCommand

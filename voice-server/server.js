@@ -132,6 +132,7 @@ discordClient.on('interactionCreate', async (interaction) => {
     const payload = {
         id: interaction.id,
         token: interaction.token,
+        application_id: interaction.applicationId,
         type: interaction.type,
         guild_id: interaction.guildId,
         channel_id: interaction.channelId,
