@@ -183,9 +183,16 @@ func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceSe
 	}
 	b.Unlock()
 
-	q := b.store.Get(v.GuildID)
-	log.Printf("🔑 [Bot] Forwarding VoiceServerUpdate to voice-server for guild %s (SessionID: %s)", v.GuildID, sessionID)
-	_ = b.voice.SendVoiceState(v.GuildID, q.VoiceChannelID, token, endpoint, sessionID, s.State.User.ID)
+	userID := ""
+	if s.State != nil && s.State.User != nil {
+		userID = s.State.User.ID
+	}
+
+	if token != "" && endpoint != "" && sessionID != "" && userID != "" {
+		q := b.store.Get(v.GuildID)
+		log.Printf("🔑 [Bot] Forwarding full VoiceServerUpdate to voice-server for guild %s (SessionID: %s, UserID: %s)", v.GuildID, sessionID, userID)
+		_ = b.voice.SendVoiceState(v.GuildID, q.VoiceChannelID, token, endpoint, sessionID, userID)
+	}
 }
 
 func (b *Bot) startInternalWebhookServer() {

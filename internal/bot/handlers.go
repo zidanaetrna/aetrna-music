@@ -166,17 +166,20 @@ func (b *Bot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCrea
 }
 
 func (b *Bot) handleVoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
-	if v.UserID == s.State.User.ID && b.voice != nil {
+	if s.State != nil && s.State.User != nil && v.UserID == s.State.User.ID && b.voice != nil {
 		b.Lock()
 		b.voiceSessionIDs[v.GuildID] = v.SessionID
 		token := b.voiceTokens[v.GuildID]
 		endpoint := b.voiceEndpoints[v.GuildID]
 		sessionID := v.SessionID
+		userID := s.State.User.ID
 		b.Unlock()
 
-		q := b.store.Get(v.GuildID)
-		log.Printf("🔑 [Bot] Forwarding VoiceStateUpdate to voice-server for guild %s (SessionID: %s)", v.GuildID, sessionID)
-		_ = b.voice.SendVoiceState(v.GuildID, q.VoiceChannelID, token, endpoint, sessionID, s.State.User.ID)
+		if token != "" && endpoint != "" && sessionID != "" && userID != "" {
+			q := b.store.Get(v.GuildID)
+			log.Printf("🔑 [Bot] Forwarding full VoiceStateUpdate to voice-server for guild %s (SessionID: %s, UserID: %s)", v.GuildID, sessionID, userID)
+			_ = b.voice.SendVoiceState(v.GuildID, q.VoiceChannelID, token, endpoint, sessionID, userID)
+		}
 	}
 
 	if b.store == nil {

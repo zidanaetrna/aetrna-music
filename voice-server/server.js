@@ -25,19 +25,23 @@ const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
 
+function cleanEndpointString(endpoint) {
+    if (!endpoint) return undefined;
+    return endpoint.replace(/^wss?:\/\//, '').split(':')[0].trim();
+}
+
 function createCustomAdapter(guildId) {
     return (methods) => {
         adapters.set(guildId, methods);
 
-        // Apply cached voice credentials on NEXT TICK (VoiceStateUpdate FIRST to set selfUserId, then VoiceServerUpdate)
+        // Apply cached voice credentials on NEXT TICK (VoiceStateUpdate FIRST, VoiceServerUpdate SECOND)
         setImmediate(() => {
             const cachedState = voiceStatesMap.get(guildId);
             if (cachedState && cachedState.token && cachedState.endpoint && cachedState.sessionId && cachedState.userId) {
-                const cleanEndpoint = cachedState.endpoint.split(':')[0];
+                const cleanEndpoint = cleanEndpointString(cachedState.endpoint);
                 const targetChannel = cachedState.channelId;
-                console.log(`🔑 [VoiceServer] Applying FULL cached voice state (State FIRST, Server SECOND) for guild ${guildId} (Endpoint: ${cleanEndpoint}, Channel: ${targetChannel})`);
+                console.log(`🔑 [VoiceServer] Applying FULL cached credentials: User=${cachedState.userId}, Session=${cachedState.sessionId}, Token=${cachedState.token.substring(0, 6)}..., Endpoint=${cleanEndpoint}, Channel=${targetChannel}`);
                 
-                // CRITICAL ORDER: onVoiceStateUpdate MUST BE FIRST so @discordjs/voice initializes selfUserId & sessionId
                 methods.onVoiceStateUpdate({
                     session_id: cachedState.sessionId,
                     channel_id: targetChannel,
@@ -118,7 +122,7 @@ app.post('/voice-state', (req, res) => {
     const { guildId, channelId, token, endpoint, sessionId, userId } = req.body;
     if (!guildId) return res.status(400).json({ error: 'Missing guildId' });
 
-    const cleanEndpoint = endpoint ? endpoint.split(':')[0] : undefined;
+    const cleanEndpoint = cleanEndpointString(endpoint);
 
     const current = voiceStatesMap.get(guildId) || {};
     if (token) current.token = token;
@@ -132,7 +136,7 @@ app.post('/voice-state', (req, res) => {
     if (adapter) {
         if (current.token && current.endpoint && current.sessionId && current.userId) {
             setImmediate(() => {
-                // CRITICAL ORDER: onVoiceStateUpdate FIRST, then onVoiceServerUpdate SECOND
+                console.log(`✅ [VoiceServer] FULL Voice state applied on nextTick: User=${current.userId}, Session=${current.sessionId}, Token=${current.token.substring(0, 6)}..., Endpoint=${current.endpoint}, Channel=${current.channelId}`);
                 adapter.onVoiceStateUpdate({
                     session_id: current.sessionId,
                     channel_id: current.channelId,
@@ -145,7 +149,6 @@ app.post('/voice-state', (req, res) => {
                     endpoint: current.endpoint,
                     guild_id: guildId
                 });
-                console.log(`✅ [VoiceServer] FULL Voice state applied (State FIRST, Server SECOND) for guild ${guildId} (Endpoint: ${current.endpoint}, Channel: ${current.channelId})`);
             });
             return res.json({ status: 'ok', updated: true });
         }
