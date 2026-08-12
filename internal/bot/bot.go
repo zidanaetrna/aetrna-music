@@ -13,6 +13,7 @@ import (
 	"aetrna-music/internal/spotify"
 	"aetrna-music/internal/voice"
 
+	"strings"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
