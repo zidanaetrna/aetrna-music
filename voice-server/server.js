@@ -76,11 +76,19 @@ discordClient.login(BOT_TOKEN).then(async () => {
     console.log(`✅ [VoiceServer] discord.js Client logged in as ${discordClient.user.tag} (Single Gateway Session)`);
     try {
         const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
-        await rest.put(Routes.applicationCommands(discordClient.user.id), { body: commands });
+        
+        // Clear ALL global commands to prevent duplicates from old Go Bot registrations
+        await rest.put(Routes.applicationCommands(discordClient.user.id), { body: [] });
+        console.log('🗑️ Cleared global slash commands');
+        
+        // Register ONLY guild-specific commands (instant, no propagation delay, no duplicates)
         for (const [gId] of discordClient.guilds.cache) {
             try {
                 await rest.put(Routes.applicationGuildCommands(discordClient.user.id, gId), { body: commands });
-            } catch (e) {}
+                console.log(`⚡ Guild commands registered for guild ${gId}`);
+            } catch (e) {
+                console.error(`⚠️ Failed for guild ${gId}:`, e.message);
+            }
         }
         console.log('✅ Slash commands registered!');
     } catch (e) {
@@ -123,9 +131,26 @@ function sendToGoBot(payload) {
     });
 }
 
-// Receive ALL interactions from Discord Gateway and proxy to Go Bot
+// Receive ALL interactions from Discord Gateway.
+// Node.js ALWAYS defers first (guarantees Discord ack within 3s).
+// Go Bot then edits the deferred message via REST (has 15 minutes).
 discordClient.on('interactionCreate', async (interaction) => {
     if (!interaction.guildId) return;
+
+    try {
+        // Immediately acknowledge to Discord (prevents "application did not respond")
+        if (interaction.isChatInputCommand()) {
+            await interaction.deferReply();
+        } else if (interaction.isButton() || interaction.isStringSelectMenu()) {
+            // deferUpdate silently acknowledges the button click, no "thinking..." shown
+            await interaction.deferUpdate();
+        } else {
+            return;
+        }
+    } catch (e) {
+        console.error('[VoiceServer] Failed to defer interaction:', e.message);
+        return;
+    }
 
     const voiceChannelId = interaction.member?.voice?.channelId || null;
 
@@ -139,15 +164,13 @@ discordClient.on('interactionCreate', async (interaction) => {
         user_id: interaction.user.id,
         username: interaction.user.username,
         member_voice_channel_id: voiceChannelId,
-        // Chat input command fields
         command_name: interaction.isChatInputCommand() ? interaction.commandName : null,
         options: interaction.isChatInputCommand() ? serializeOptions(interaction.options.data) : [],
-        // Button / Select Menu fields
         custom_id: (interaction.isButton() || interaction.isStringSelectMenu()) ? interaction.customId : null,
         values: interaction.isStringSelectMenu() ? interaction.values : [],
     };
 
-    // Fire and forget - Go Bot responds to Discord directly via REST
+    // Fire and forget — Go Bot has 15 minutes to edit the deferred message
     sendToGoBot(payload);
 });
 
