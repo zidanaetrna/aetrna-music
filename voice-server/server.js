@@ -216,6 +216,70 @@ function notifyBotTrackEnd(guildId, reason) {
     req.end();
 }
 
+function createVoiceConnection(guildId, channelId) {
+    let connection = connections.get(guildId);
+    if (connection) {
+        try { connection.destroy(); } catch (e) {}
+        connections.delete(guildId);
+    }
+
+    let guild = discordClient.guilds.cache.get(guildId);
+    if (!guild || !guild.voiceAdapterCreator) {
+        throw new Error(`Guild ${guildId} missing or invalid voiceAdapterCreator`);
+    }
+
+    console.log(`🎙️ [VoiceServer] Joining voice channel ${channelId} in guild ${guild.name}...`);
+    connection = joinVoiceChannel({
+        channelId: String(channelId),
+        guildId: String(guildId),
+        adapterCreator: guild.voiceAdapterCreator,
+        selfDeaf: true,
+        selfMute: false,
+    });
+
+    connections.set(guildId, connection);
+
+    connection.on('stateChange', (oldState, newState) => {
+        console.log(`🔄 [VoiceServer] VoiceConnection ${guildId}: ${oldState.status} ➔ ${newState.status}`);
+
+        const net = newState.networking || (oldState && oldState.networking);
+        if (net && !net._listenersAttached) {
+            net._listenersAttached = true;
+
+            net.on('stateChange', (oldNetState, newNetState) => {
+                console.log(`🌐 [VoiceServer NetState ${guildId}] ${oldNetState.code} (${oldNetState.status}) ➔ ${newNetState.code} (${newNetState.status})`);
+                if (newNetState.ws) {
+                    newNetState.ws.on('close', (eventOrCode, reason) => {
+                        const code = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.code : eventOrCode;
+                        const rsn = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.reason : reason;
+                        console.log(`🔌 [VoiceServer WS Closed ${guildId}] Code: ${code}, Reason: "${rsn}"`, JSON.stringify(eventOrCode));
+                    });
+                    newNetState.ws.on('error', (err) => {
+                        console.log(`❌ [VoiceServer WS Error ${guildId}]`, err.message);
+                    });
+                }
+            });
+
+            net.on('debug', (msg) => console.log(`🔍 [VoiceServer Debug ${guildId}]`, msg));
+            net.on('error', (err) => console.log(`❌ [VoiceServer Error ${guildId}]`, err));
+        }
+    });
+
+    connection.on(VoiceConnectionStatus.Disconnected, async () => {
+        try {
+            await Promise.race([
+                entersState(connection, VoiceConnectionStatus.Signalling, 3_000),
+                entersState(connection, VoiceConnectionStatus.Connecting, 3_000),
+            ]);
+        } catch {
+            try { connection.destroy(); } catch (e) {}
+            connections.delete(guildId);
+        }
+    });
+
+    return connection;
+}
+
 // Express API for Go Bot to trigger audio playback
 const app = express();
 app.use(express.json());
@@ -235,97 +299,44 @@ app.post('/join-and-play', async (req, res) => {
         const isSameChannel = connection && connection.joinConfig.channelId === String(channelId);
 
         if (!isReady || !isSameChannel) {
-            if (connection) {
-                console.log(`🧹 [VoiceServer] Destroying old/unready voice connection for guild ${guildId}`);
-                try { connection.destroy(); } catch (e) {}
-                connections.delete(guildId);
-            }
-
             let guild = discordClient.guilds.cache.get(guildId);
             if (!guild) {
-                console.log(`⚠️ [VoiceServer] Guild ${guildId} not in cache, fetching...`);
                 try {
                     await discordClient.guilds.fetch(guildId);
                     guild = discordClient.guilds.cache.get(guildId);
-                } catch (e) {
-                    console.error(`❌ [VoiceServer] Failed to fetch guild ${guildId}:`, e.message);
-                }
+                } catch (e) {}
             }
-
             if (!guild || !guild.voiceAdapterCreator) {
-                console.error(`❌ [VoiceServer] Invalid guild or missing voiceAdapterCreator for guild ${guildId}`);
                 return res.status(500).json({ error: `Missing voiceAdapterCreator for guild ${guildId}` });
             }
 
-            console.log(`🎙️ [VoiceServer] Joining voice channel ${channelId} in guild ${guildId}...`);
-            connection = joinVoiceChannel({
-                channelId: String(channelId),
-                guildId: String(guildId),
-                adapterCreator: guild.voiceAdapterCreator,
-                selfDeaf: true,
-                selfMute: false,
-            });
-
-            connections.set(guildId, connection);
-
-            connection.on('stateChange', (oldState, newState) => {
-                console.log(`🔄 [VoiceServer] VoiceConnection ${guildId}: ${oldState.status} ➔ ${newState.status}`);
-
-                const net = newState.networking || (oldState && oldState.networking);
-                if (net && !net._listenersAttached) {
-                    net._listenersAttached = true;
-
-                    net.on('stateChange', (oldNetState, newNetState) => {
-                        console.log(`🌐 [VoiceServer NetState ${guildId}] ${oldNetState.code} (${oldNetState.status}) ➔ ${newNetState.code} (${newNetState.status})`);
-                        if (newNetState.ws) {
-                            newNetState.ws.on('close', (eventOrCode, reason) => {
-                                const code = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.code : eventOrCode;
-                                const rsn = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.reason : reason;
-                                console.log(`🔌 [VoiceServer WS Closed ${guildId}] Code: ${code}, Reason: "${rsn}"`, JSON.stringify(eventOrCode));
-                            });
-                            newNetState.ws.on('error', (err) => {
-                                console.log(`❌ [VoiceServer WS Error ${guildId}]`, err.message);
-                            });
-                        }
-                    });
-
-                    net.on('debug', (msg) => console.log(`🔍 [VoiceServer Debug ${guildId}]`, msg));
-                    net.on('error', (err) => console.log(`❌ [VoiceServer Error ${guildId}]`, err));
-                }
-            });
-
-            connection.on('debug', (message) => {
-                console.log(`🔍 [VoiceConnection Debug ${guildId}]`, message);
-            });
-
-            connection.on('error', (err) => {
-                console.error(`❌ [VoiceServer] Connection error in ${guildId}:`, err.message);
-            });
-
-            connection.on(VoiceConnectionStatus.Disconnected, async () => {
-                try {
-                    await Promise.race([
-                        entersState(connection, VoiceConnectionStatus.Signalling, 3_000),
-                        entersState(connection, VoiceConnectionStatus.Connecting, 3_000),
-                    ]);
-                } catch {
-                    try { connection.destroy(); } catch (e) {}
-                    connections.delete(guildId);
-                }
-            });
+            connection = createVoiceConnection(guildId, channelId);
         }
 
         // Return HTTP 200 immediately to Go Bot
         res.json({ status: 'ok', message: 'Voice connection initiated' });
 
-        // Start playback asynchronously once connection reaches Ready
+        // Start playback asynchronously once connection reaches Ready with retry loop (Fixes Issue #11553)
         (async () => {
             try {
-                if (connection.state.status !== VoiceConnectionStatus.Ready) {
-                    console.log(`⏳ [VoiceServer] Waiting async for voice connection Ready in guild ${guildId}...`);
-                    await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
-                    console.log(`✅ [VoiceServer] Voice connection Ready for guild ${guildId}!`);
+                let attempts = 0;
+                while (connection.state.status !== VoiceConnectionStatus.Ready && attempts < 3) {
+                    attempts++;
+                    try {
+                        console.log(`⏳ [VoiceServer] Waiting async for voice connection Ready in guild ${guildId} (attempt ${attempts}/3)...`);
+                        await entersState(connection, VoiceConnectionStatus.Ready, 8_000);
+                    } catch (e) {
+                        console.log(`⚠️ [VoiceServer] Voice connection attempt ${attempts} timed out/stuck in ${connection.state.status}. Retrying...`);
+                        if (attempts < 3) {
+                            await new Promise(r => setTimeout(r, 1000));
+                            connection = createVoiceConnection(guildId, channelId);
+                        } else {
+                            throw e;
+                        }
+                    }
                 }
+
+                console.log(`✅ [VoiceServer] Voice connection Ready for guild ${guildId}!`);
 
                 let player = players.get(guildId);
                 if (!player) {
