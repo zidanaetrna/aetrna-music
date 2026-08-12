@@ -250,6 +250,10 @@ app.post('/join-and-play', async (req, res) => {
 
             connection.on('stateChange', (oldState, newState) => {
                 console.log(`🔄 [VoiceServer] VoiceConnection ${guildId}: ${oldState.status} ➔ ${newState.status}`);
+                if (newState.networking) {
+                    newState.networking.on('debug', (msg) => console.log(`🔍 [VoiceNetworking Debug ${guildId}]`, msg));
+                    newState.networking.on('error', (err) => console.log(`❌ [VoiceNetworking Error ${guildId}]`, err));
+                }
             });
 
             connection.on('debug', (message) => {
@@ -381,8 +385,12 @@ app.get('/test-voice', async (req, res) => {
 
         connection.on('stateChange', (oldState, newState) => {
             console.log(`🔄 [/test-voice State] ${oldState.status} ➔ ${newState.status}`);
+            if (newState.networking) {
+                newState.networking.on('debug', (msg) => console.log('🔍 [Networking Debug]', msg));
+                newState.networking.on('error', (err) => console.log('❌ [Networking Error]', err));
+            }
             if (oldState.status === 'connecting' && newState.status === 'signalling') {
-                console.log(`⚠️ [/test-voice Reset!] oldState:`, JSON.stringify(oldState), `newState:`, JSON.stringify(newState));
+                console.log(`⚠️ [/test-voice Reset!] oldState:`, oldState.status, `newState:`, newState.status);
             }
         });
 
