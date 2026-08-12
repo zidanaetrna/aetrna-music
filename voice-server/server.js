@@ -213,12 +213,20 @@ app.post('/play', async (req, res) => {
         const resolvePromise = resolveStreamUrl(resolveArgs, spawnEnv);
 
         // Step 3: Wait for Voice Connection Ready
+        const statusInterval = setInterval(() => {
+            if (connection) {
+                console.log(`📊 [VoiceServer] Guild ${guildId} voice status: ${connection.state.status}`);
+            }
+        }, 1000);
+
         try {
             console.log(`⏳ [VoiceServer] Waiting for voice connection Ready...`);
             await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+            clearInterval(statusInterval);
             console.log(`✅ [VoiceServer] Voice connection Ready!`);
         } catch (stateErr) {
-            console.error(`❌ [VoiceServer] Voice connection failed: ${stateErr.message}`);
+            clearInterval(statusInterval);
+            console.error(`❌ [VoiceServer] Voice connection failed: ${stateErr.message} (Final state: ${connection ? connection.state.status : 'unknown'})`);
             return res.status(500).json({ error: `Voice connection failed: ${stateErr.message}` });
         }
 
