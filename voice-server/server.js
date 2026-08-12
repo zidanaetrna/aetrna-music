@@ -29,19 +29,27 @@ function createCustomAdapter(guildId) {
     return (methods) => {
         adapters.set(guildId, methods);
 
-        // Apply cached voice credentials on NEXT TICK after VoiceConnection constructor finishes
+        // Apply cached voice credentials on NEXT TICK after VoiceConnection constructor completes
         setImmediate(() => {
             const cachedState = voiceStatesMap.get(guildId);
             if (cachedState && cachedState.token && cachedState.endpoint && cachedState.sessionId && cachedState.userId) {
                 const cleanEndpoint = cachedState.endpoint.split(':')[0];
-                console.log(`🔑 [VoiceServer] Applying FULL cached voice state on nextTick for guild ${guildId} (Endpoint: ${cleanEndpoint}, Channel: ${cachedState.channelId})`);
+                const targetChannel = cachedState.channelId;
+                console.log(`🔑 [VoiceServer] Applying FULL cached voice state on nextTick for guild ${guildId} (Endpoint: ${cleanEndpoint}, Channel: ${targetChannel})`);
                 methods.onVoiceServerUpdate({ token: cachedState.token, endpoint: cleanEndpoint, guild_id: guildId });
-                methods.onVoiceStateUpdate({ session_id: cachedState.sessionId, channel_id: cachedState.channelId, user_id: cachedState.userId, guild_id: guildId });
+                methods.onVoiceStateUpdate({ session_id: cachedState.sessionId, channel_id: targetChannel, user_id: cachedState.userId, guild_id: guildId });
             }
         });
 
         return {
             sendPayload(data) {
+                // Save channel_id directly from OP4 payload
+                if (data && data.d && data.d.channel_id) {
+                    const current = voiceStatesMap.get(guildId) || {};
+                    current.channelId = data.d.channel_id;
+                    voiceStatesMap.set(guildId, current);
+                }
+
                 // Forward OP4 Voice State payload from @discordjs/voice to Go Bot Gateway
                 const body = JSON.stringify({ guildId, payload: data });
                 const req = http.request(GATEWAY_SEND_WEBHOOK, {
@@ -144,7 +152,7 @@ app.post('/play', async (req, res) => {
         current.channelId = channelId;
         voiceStatesMap.set(guildId, current);
 
-        // Join voice channel using Custom Adapter (delegates Gateway payloads to Go Bot)
+        // Step 1: Join voice channel IMMEDIATELY so OP4 join payload is sent right away
         let connection = connections.get(guildId);
         if (!connection || connection.joinConfig.channelId !== channelId || connection.state.status === VoiceConnectionStatus.Destroyed) {
             if (connection) {
@@ -181,24 +189,6 @@ app.post('/play', async (req, res) => {
             });
         }
 
-        // Get or create audio player
-        let player = players.get(guildId);
-        if (!player) {
-            player = createAudioPlayer();
-            players.set(guildId, player);
-
-            player.on(AudioPlayerStatus.Idle, () => {
-                cleanupStreams(guildId);
-                notifyBotTrackEnd(guildId, 'finished');
-            });
-
-            player.on('error', (err) => {
-                console.error(`❌ [VoiceServer] Player error in guild ${guildId}:`, err.message);
-                cleanupStreams(guildId);
-                notifyBotTrackEnd(guildId, 'error');
-            });
-        }
-
         // Cookie file check
         let cookieFile = '/opt/aetrna-music/prod/cookies.txt';
         if (!fs.existsSync(cookieFile)) cookieFile = path.resolve(__dirname, '../cookies.txt');
@@ -219,17 +209,10 @@ app.post('/play', async (req, res) => {
             '-g', url
         ];
 
-        // Step 1: Resolve stream URL async (non-blocking)
-        let streamUrl;
-        try {
-            streamUrl = await resolveStreamUrl(resolveArgs, spawnEnv);
-            console.log(`🔗 [VoiceServer] Resolved stream URL for guild ${guildId}`);
-        } catch (e) {
-            console.error(`❌ [VoiceServer] yt-dlp resolve error: ${e.message}`);
-            return res.status(500).json({ error: `yt-dlp resolve failed: ${e.message}` });
-        }
+        // Step 2: Start yt-dlp URL resolution in parallel
+        const resolvePromise = resolveStreamUrl(resolveArgs, spawnEnv);
 
-        // Step 2: Wait for Voice Connection Ready
+        // Step 3: Wait for Voice Connection Ready
         try {
             console.log(`⏳ [VoiceServer] Waiting for voice connection Ready...`);
             await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
@@ -239,7 +222,35 @@ app.post('/play', async (req, res) => {
             return res.status(500).json({ error: `Voice connection failed: ${stateErr.message}` });
         }
 
-        // Step 3: Stream directly via ffmpeg
+        // Step 4: Await stream URL from yt-dlp
+        let streamUrl;
+        try {
+            streamUrl = await resolvePromise;
+            console.log(`🔗 [VoiceServer] Resolved stream URL for guild ${guildId}`);
+        } catch (e) {
+            console.error(`❌ [VoiceServer] yt-dlp resolve error: ${e.message}`);
+            return res.status(500).json({ error: `yt-dlp resolve failed: ${e.message}` });
+        }
+
+        // Get or create audio player
+        let player = players.get(guildId);
+        if (!player) {
+            player = createAudioPlayer();
+            players.set(guildId, player);
+
+            player.on(AudioPlayerStatus.Idle, () => {
+                cleanupStreams(guildId);
+                notifyBotTrackEnd(guildId, 'finished');
+            });
+
+            player.on('error', (err) => {
+                console.error(`❌ [VoiceServer] Player error in guild ${guildId}:`, err.message);
+                cleanupStreams(guildId);
+                notifyBotTrackEnd(guildId, 'error');
+            });
+        }
+
+        // Step 5: Stream directly via ffmpeg
         const ffmpegArgs = [
             '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
             '-i', streamUrl,
