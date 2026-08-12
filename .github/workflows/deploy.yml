@@ -62,7 +62,12 @@ jobs:
 
           # Execute VPS deployment setup
           ssh ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }} "
-            which node >/dev/null 2>&1 || (apt-get update -y && apt-get install -y nodejs npm)
+            # Ensure Node.js 22 LTS is installed (required for DAVE E2EE @snazzah/davey NAPI-RS addons)
+            if ! command -v node >/dev/null 2>&1 || [ $(node -v | cut -d. -f1 | tr -d 'v') -lt 22 ]; then
+              echo "📥 Upgrading Node.js to v22 LTS for DAVE E2EE protocol support..."
+              curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+              apt-get install -y nodejs
+            fi
             which ffmpeg >/dev/null 2>&1 || (apt-get update -y && apt-get install -y ffmpeg)
             echo '📥 Updating yt-dlp to latest binary release...'
             wget -q -O /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp || true
