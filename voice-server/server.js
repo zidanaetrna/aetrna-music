@@ -1,6 +1,14 @@
 const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 
+// Load DAVE E2EE protocol module before @discordjs/voice initializes
+try {
+    require('@snazzah/davey');
+    console.log('✅ [VoiceServer] DAVE E2EE protocol (@snazzah/davey) loaded successfully!');
+} catch (e) {
+    console.error('⚠️ [VoiceServer] DAVE E2EE protocol module failed to load:', e.message);
+}
+
 const express = require('express');
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const {
