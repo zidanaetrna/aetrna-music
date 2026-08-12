@@ -33,6 +33,16 @@ type YtdlpSearchResult struct {
 	Uploader   string  `json:"uploader"`
 }
 
+func prepareYtdlpCmd(args ...string) *exec.Cmd {
+	cmd := exec.Command("yt-dlp", args...)
+	pathEnv := os.Getenv("PATH")
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("PATH=/opt/node22/bin:/usr/bin:/usr/local/bin:%s:/root/.deno/bin:/root/.local/bin", pathEnv),
+		"HOME=/root",
+	)
+	return cmd
+}
+
 func sanitizeQuery(query string) string {
 	query = strings.TrimSpace(query)
 	if strings.Contains(query, "music.youtube.com") {
@@ -67,7 +77,7 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 
 	args = append(args, targetQuery)
 
-	cmd := exec.Command("yt-dlp", args...)
+	cmd := prepareYtdlpCmd(args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -155,7 +165,7 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 
 	args = append(args, targetQuery)
 
-	cmd := exec.Command("yt-dlp", args...)
+	cmd := prepareYtdlpCmd(args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -352,9 +362,7 @@ func GetStreamURL(query string, cookiesPath string) (string, error) {
 		args = append([]string{"--cookies", cookiesPath}, args...)
 	}
 
-	cmd := exec.Command("yt-dlp", args...)
-	pathEnv := os.Getenv("PATH")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("PATH=%s:/root/.deno/bin:/root/.local/bin", pathEnv), "HOME=/root")
+	cmd := prepareYtdlpCmd(args...)
 
 	out, err := cmd.Output()
 	if err != nil {
