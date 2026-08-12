@@ -357,6 +357,41 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', clientReady: discordClient.isReady(), connections: connections.size });
 });
 
+app.get('/test-voice', async (req, res) => {
+    if (!discordClient.isReady()) {
+        return res.status(503).json({ error: 'Discord client not ready yet' });
+    }
+
+    const guild = discordClient.guilds.cache.first();
+    if (!guild) return res.json({ error: 'No guilds found' });
+
+    const channel = guild.channels.cache.find(c => c.isVoiceBased());
+    if (!channel) return res.json({ error: `No voice channels in guild ${guild.name}` });
+
+    console.log(`🧪 [/test-voice] Starting diagnostic for guild ${guild.name} channel ${channel.name}...`);
+
+    try {
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: guild.id,
+            adapterCreator: guild.voiceAdapterCreator,
+            selfDeaf: true,
+        });
+
+        connection.on('stateChange', (oldState, newState) => {
+            console.log(`🔄 [/test-voice State] ${oldState.status} ➔ ${newState.status}`);
+        });
+
+        connection.on('debug', (msg) => {
+            console.log(`🔍 [/test-voice Debug]`, typeof msg === 'object' ? JSON.stringify(msg) : msg);
+        });
+
+        res.json({ status: 'initiated', guild: guild.name, channel: channel.name });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.listen(PORT, '127.0.0.1', () => {
     console.log(`✅ Voice Server listening on http://127.0.0.1:${PORT}`);
 });
