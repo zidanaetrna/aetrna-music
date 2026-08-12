@@ -45,6 +45,8 @@ type GuildQueue struct {
 	// TrackEndCh is signalled by the bot when Lavalink fires a TrackEnd event.
 	TrackEndCh chan struct{}
 
+	idleTimer *time.Timer
+
 	mu sync.RWMutex
 }
 
@@ -65,12 +67,22 @@ func NewGuildQueue(guildID string, playCb PlayCallback, stopCb StopCallback) *Gu
 func (q *GuildQueue) AddSong(song Song) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if q.idleTimer != nil {
+		q.idleTimer.Stop()
+		q.idleTimer = nil
+		fmt.Printf("⏱️ [GuildQueue %s] Cancelled idle disconnect timer (new song added)\n", q.GuildID)
+	}
 	q.Songs = append(q.Songs, song)
 }
 
 func (q *GuildQueue) InsertNext(song Song) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if q.idleTimer != nil {
+		q.idleTimer.Stop()
+		q.idleTimer = nil
+		fmt.Printf("⏱️ [GuildQueue %s] Cancelled idle disconnect timer (song inserted next)\n", q.GuildID)
+	}
 	q.Songs = append([]Song{song}, q.Songs...)
 }
 
@@ -96,6 +108,10 @@ func (q *GuildQueue) Skip() {
 
 func (q *GuildQueue) Stop() {
 	q.mu.Lock()
+	if q.idleTimer != nil {
+		q.idleTimer.Stop()
+		q.idleTimer = nil
+	}
 	q.Songs = make([]Song, 0)
 	q.NowPlaying = nil
 	q.IsPlaying = false
@@ -159,6 +175,11 @@ func (q *GuildQueue) SetFilter(filter string) {
 func (q *GuildQueue) PlayNext() {
 	q.mu.Lock()
 
+	if q.idleTimer != nil {
+		q.idleTimer.Stop()
+		q.idleTimer = nil
+	}
+
 	if q.NowPlaying != nil {
 		q.History = append(q.History, *q.NowPlaying)
 		if len(q.History) > 50 {
@@ -173,6 +194,24 @@ func (q *GuildQueue) PlayNext() {
 		} else {
 			q.IsPlaying = false
 			q.NowPlaying = nil
+
+			// Start 3-minute (180s) idle disconnect timer when queue finishes
+			gid := q.GuildID
+			stopCb := q.StopCb
+			fmt.Printf("⏳ [GuildQueue %s] Queue empty. Starting 3-minute idle disconnect timer...\n", gid)
+			q.idleTimer = time.AfterFunc(3*time.Minute, func() {
+				q.mu.Lock()
+				defer q.mu.Unlock()
+				if !q.IsPlaying && len(q.Songs) == 0 {
+					fmt.Printf("🧹 [GuildQueue %s] 3-minute idle timer expired. Auto-disconnecting from voice channel...\n", gid)
+					if stopCb != nil {
+						_ = stopCb(gid)
+					}
+					q.VoiceChannelID = ""
+					q.idleTimer = nil
+				}
+			})
+
 			q.mu.Unlock()
 			return
 		}
