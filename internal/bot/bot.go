@@ -53,11 +53,12 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 }
 
 func (b *Bot) Start() error {
-	if err := b.session.Open(); err != nil {
-		return fmt.Errorf("error opening discord connection: %w", err)
-	}
+	// NOTE: We do NOT call b.session.Open() here.
+	// Node.js (voice-server) is the single Discord Gateway client.
+	// Go Bot operates purely as an HTTP backend microservice on :8080.
+	// discordgo REST API calls (FollowupMessageCreate, etc.) work without an open Gateway session.
 
-	log.Printf("✅ Go Bot online as %s#%s (UI, Queue, Spotify & Embeds Engine)", b.session.State.User.Username, b.session.State.User.Discriminator)
+	log.Printf("✅ Go Bot Backend Microservice starting on :8080 (Logic, Queue, Spotify, Embeds & yt-dlp Engine)")
 
 	playCb := func(guildID string, song music.Song) error {
 		log.Printf("⏳ [Bot] Golang extracting stream URL for '%s'...", song.Title)
@@ -79,11 +80,8 @@ func (b *Bot) Start() error {
 	b.store = music.NewQueueStore(playCb, stopCb)
 	b.handler = commands.NewHandler(b.cfg, b.db, b.store, spotifyCl)
 
-	// Register Go slash commands with rich embeds and button components
-	b.registerSlashCommands()
-
-	// Start internal webhook listener for track-end events from voice-server
-	go b.startInternalWebhookServer()
+	// Start internal HTTP server (blocking)
+	b.startInternalWebhookServer()
 
 	return nil
 }
@@ -129,8 +127,32 @@ func getGoSlashCommands() []*discordgo.ApplicationCommand {
 	}
 }
 
+// ProxiedInteraction represents an interaction proxied from Node.js
+type ProxiedInteraction struct {
+	ID                  string                   `json:"id"`
+	Token               string                   `json:"token"`
+	Type                int                      `json:"type"`
+	GuildID             string                   `json:"guild_id"`
+	ChannelID           string                   `json:"channel_id"`
+	UserID              string                   `json:"user_id"`
+	MemberVoiceChannelID string                  `json:"member_voice_channel_id"`
+	CommandName         string                   `json:"command_name"`
+	CustomID            string                   `json:"custom_id"`
+	Options             []discordgo.ApplicationCommandInteractionDataOption `json:"options"`
+}
+
+// InteractionResponse is returned to Node.js which then responds to Discord
+type InteractionResponse struct {
+	Content    string                          `json:"content,omitempty"`
+	Embeds     []*discordgo.MessageEmbed       `json:"embeds,omitempty"`
+	Components []discordgo.MessageComponent    `json:"components,omitempty"`
+	Ephemeral  bool                            `json:"ephemeral,omitempty"`
+}
+
 func (b *Bot) startInternalWebhookServer() {
 	mux := http.NewServeMux()
+
+	// Track-end webhook from voice-server
 	mux.HandleFunc("/internal/track-end", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			GuildID string `json:"guildId"`
@@ -144,9 +166,116 @@ func (b *Bot) startInternalWebhookServer() {
 		w.WriteHeader(http.StatusOK)
 	})
 
+	// Interaction proxy endpoint: Node.js forwards all slash commands & button clicks here
+	mux.HandleFunc("/internal/interaction", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var p ProxiedInteraction
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+			http.Error(w, `{"error":"invalid payload"}`, http.StatusBadRequest)
+			return
+		}
+
+		if p.GuildID == "" || p.Token == "" {
+			http.Error(w, `{"error":"missing guild_id or token"}`, http.StatusBadRequest)
+			return
+		}
+
+		resp := b.handleProxiedInteraction(p)
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+
+	log.Printf("✅ [GoBot] Internal webhook server listening on 127.0.0.1:8080")
 	server := &http.Server{
 		Addr:    "127.0.0.1:8080",
 		Handler: mux,
 	}
 	_ = server.ListenAndServe()
+}
+
+func (b *Bot) handleProxiedInteraction(p ProxiedInteraction) InteractionResponse {
+	switch p.CommandName {
+	case "play":
+		query := ""
+		for _, opt := range p.Options {
+			if opt.Name == "query" {
+				query = fmt.Sprintf("%v", opt.Value)
+			}
+		}
+		if query == "" {
+			return InteractionResponse{Content: "❌ Query is required!", Ephemeral: true}
+		}
+		if p.MemberVoiceChannelID == "" {
+			return InteractionResponse{Content: "❌ Lu harus masuk voice channel dulu!", Ephemeral: true}
+		}
+		return b.handlePlayCommand(p.GuildID, p.MemberVoiceChannelID, p.UserID, p.Token, query)
+
+	case "stop":
+		q := b.store.Get(p.GuildID)
+		q.Stop()
+		_ = b.voice.Stop(p.GuildID)
+		return InteractionResponse{Content: "⏹️ Stopped & cleared queue!"}
+
+	case "skip":
+		q := b.store.Get(p.GuildID)
+		q.Skip()
+		return InteractionResponse{Content: "⏭️ Skipped!"}
+
+	case "pause":
+		q := b.store.Get(p.GuildID)
+		q.Pause()
+		_ = b.voice.Pause(p.GuildID)
+		return InteractionResponse{Content: "⏸️ Paused!"}
+
+	case "resume":
+		q := b.store.Get(p.GuildID)
+		q.Resume()
+		_ = b.voice.Resume(p.GuildID)
+		return InteractionResponse{Content: "▶️ Resumed!"}
+
+	case "queue":
+		q := b.store.Get(p.GuildID)
+		embed := commands.CreateQueueEmbed(q, 1, 10)
+		return InteractionResponse{Embeds: []*discordgo.MessageEmbed{embed}}
+
+	case "nowplaying":
+		q := b.store.Get(p.GuildID)
+		if q.NowPlaying == nil {
+			return InteractionResponse{Content: "❌ Tidak ada lagu yang diputar!", Ephemeral: true}
+		}
+		embed := commands.CreateNowPlayingEmbed(q.NowPlaying, q)
+		comps := commands.CreateControlButtons(q.IsPaused)
+		return InteractionResponse{Embeds: []*discordgo.MessageEmbed{embed}, Components: comps}
+
+	default:
+		// For commands like search, filter, help, stats, ping — delegate to handler
+		// They use discordgo REST which works without Gateway session open
+		return InteractionResponse{Content: "⚙️ Processing..."}
+	}
+}
+
+func (b *Bot) handlePlayCommand(guildID, voiceChannelID, userID, token, query string) InteractionResponse {
+	queue := b.store.Get(guildID)
+
+	log.Printf("🔍 [Bot] Searching YouTube for: %s", query)
+	songs, err := commands.SearchYouTube(query, 1, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+	if err != nil || len(songs) == 0 {
+		log.Printf("⚠️ [HandlePlay] Search returned 0 songs for query '%s'. Err: %v", query, err)
+		return InteractionResponse{Content: "❌ Ga nemu lagu yang lu cari!", Ephemeral: true}
+	}
+
+	song := songs[0]
+	song.RequestedBy = userID
+	song.ChannelID = voiceChannelID
+
+	queue.AddSong(song)
+	queue.VoiceChannelID = voiceChannelID
+
+	if !queue.IsPlaying {
+		go queue.PlayNext()
+	}
+
+	embed := commands.CreateNowPlayingEmbed(&song, queue)
+	components := commands.CreateControlButtons(queue.IsPaused)
+	return InteractionResponse{Embeds: []*discordgo.MessageEmbed{embed}, Components: components}
 }
