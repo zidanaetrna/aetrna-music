@@ -34,29 +34,6 @@ function createCustomAdapter(guildId) {
     return (methods) => {
         adapters.set(guildId, methods);
 
-        // Apply cached voice credentials on NEXT TICK (VoiceStateUpdate FIRST, VoiceServerUpdate SECOND)
-        setImmediate(() => {
-            const cachedState = voiceStatesMap.get(guildId);
-            if (cachedState && cachedState.token && cachedState.endpoint && cachedState.sessionId && cachedState.userId) {
-                const cleanEndpoint = cleanEndpointString(cachedState.endpoint);
-                const targetChannel = cachedState.channelId;
-                console.log(`🔑 [VoiceServer] Applying FULL cached credentials: User=${cachedState.userId}, Session=${cachedState.sessionId}, Token=${cachedState.token.substring(0, 6)}..., Endpoint=${cleanEndpoint}, Channel=${targetChannel}`);
-                
-                methods.onVoiceStateUpdate({
-                    session_id: cachedState.sessionId,
-                    channel_id: targetChannel,
-                    user_id: cachedState.userId,
-                    guild_id: guildId
-                });
-                
-                methods.onVoiceServerUpdate({
-                    token: cachedState.token,
-                    endpoint: cleanEndpoint,
-                    guild_id: guildId
-                });
-            }
-        });
-
         return {
             sendPayload(data) {
                 if (data && data.d && data.d.channel_id) {
@@ -65,6 +42,7 @@ function createCustomAdapter(guildId) {
                     voiceStatesMap.set(guildId, current);
                 }
 
+                // Forward OP4 Voice State payload from @discordjs/voice to Go Bot Gateway
                 const body = JSON.stringify({ guildId, payload: data });
                 const req = http.request(GATEWAY_SEND_WEBHOOK, {
                     method: 'POST',
@@ -136,7 +114,8 @@ app.post('/voice-state', (req, res) => {
     if (adapter) {
         if (current.token && current.endpoint && current.sessionId && current.userId) {
             setImmediate(() => {
-                console.log(`✅ [VoiceServer] FULL Voice state applied on nextTick: User=${current.userId}, Session=${current.sessionId}, Token=${current.token.substring(0, 6)}..., Endpoint=${current.endpoint}, Channel=${current.channelId}`);
+                console.log(`✅ [VoiceServer] Applying FRESH Voice State to adapter: User=${current.userId}, Session=${current.sessionId}, Token=${current.token.substring(0, 6)}..., Endpoint=${current.endpoint}, Channel=${current.channelId}`);
+                
                 adapter.onVoiceStateUpdate({
                     session_id: current.sessionId,
                     channel_id: current.channelId,
@@ -169,8 +148,9 @@ app.post('/play', async (req, res) => {
     try {
         cleanupStreams(guildId);
 
-        const current = voiceStatesMap.get(guildId) || {};
-        current.channelId = channelId;
+        // Reset voice state cache for fresh join request
+        voiceStatesMap.delete(guildId);
+        const current = { channelId };
         voiceStatesMap.set(guildId, current);
 
         // Step 1: Join voice channel IMMEDIATELY so OP4 join payload is sent right away
