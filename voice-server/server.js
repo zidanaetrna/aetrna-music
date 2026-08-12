@@ -54,6 +54,7 @@ const GATEWAY_SEND_WEBHOOK = process.env.GATEWAY_SEND_WEBHOOK || 'http://127.0.0
 
 const adapters = new Map();
 const voiceStatesMap = new Map();
+const lastSentPayloads = new Map();
 const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
@@ -69,10 +70,20 @@ function createCustomAdapter(guildId) {
 
         return {
             sendPayload(data) {
-                if (data && data.d && data.d.channel_id) {
-                    const current = voiceStatesMap.get(guildId) || {};
-                    current.channelId = data.d.channel_id;
-                    voiceStatesMap.set(guildId, current);
+                if (data && data.d) {
+                    if (data.d.channel_id) {
+                        const current = voiceStatesMap.get(guildId) || {};
+                        current.channelId = data.d.channel_id;
+                        voiceStatesMap.set(guildId, current);
+                    }
+
+                    // Deduplicate OP4 Gateway join payload so Discord Gateway token is NEVER invalidated mid-handshake
+                    const payloadKey = `${guildId}:${data.d.channel_id}:${data.d.self_mute}:${data.d.self_deaf}`;
+                    if (lastSentPayloads.get(guildId) === payloadKey) {
+                        console.log(`🛡️ [VoiceServer] Suppressing duplicate sendPayload for guild ${guildId}`);
+                        return true;
+                    }
+                    lastSentPayloads.set(guildId, payloadKey);
                 }
 
                 // Forward OP4 Voice State payload from @discordjs/voice to Go Bot Gateway session
@@ -92,6 +103,7 @@ function createCustomAdapter(guildId) {
             destroy() {
                 adapters.delete(guildId);
                 voiceStatesMap.delete(guildId);
+                lastSentPayloads.delete(guildId);
             }
         };
     };
@@ -184,8 +196,9 @@ app.post('/play', async (req, res) => {
     try {
         cleanupStreams(guildId);
 
-        // Reset voice state cache for fresh join request
+        // Reset voice state cache and last payload key for fresh join request
         voiceStatesMap.delete(guildId);
+        lastSentPayloads.delete(guildId);
         const current = { channelId: String(channelId) };
         voiceStatesMap.set(guildId, current);
 
