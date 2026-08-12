@@ -217,11 +217,15 @@ app.post('/join-and-play', async (req, res) => {
         cleanupStreams(guildId);
 
         let connection = connections.get(guildId);
-        const isDestroyed = !connection || connection.state.status === VoiceConnectionStatus.Destroyed;
-        const isWrongChannel = connection && connection.joinConfig.channelId !== channelId;
+        const isReady = connection && connection.state.status === VoiceConnectionStatus.Ready;
+        const isSameChannel = connection && connection.joinConfig.channelId === String(channelId);
 
-        if (isDestroyed || isWrongChannel) {
-            if (connection) { try { connection.destroy(); } catch (e) {} }
+        if (!isReady || !isSameChannel) {
+            if (connection) {
+                console.log(`🧹 [VoiceServer] Destroying old/unready voice connection for guild ${guildId}`);
+                try { connection.destroy(); } catch (e) {}
+                connections.delete(guildId);
+            }
 
             let guild = discordClient.guilds.cache.get(guildId);
             if (!guild) guild = await discordClient.guilds.fetch(guildId).catch(() => null);
@@ -263,47 +267,60 @@ app.post('/join-and-play', async (req, res) => {
             });
         }
 
-        console.log(`⏳ [VoiceServer] Waiting for voice connection Ready...`);
-        await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
-        console.log(`✅ [VoiceServer] Native voice connection Ready!`);
+        // Return HTTP 200 immediately to Go Bot
+        res.json({ status: 'ok', message: 'Voice connection initiated' });
 
-        let player = players.get(guildId);
-        if (!player) {
-            player = createAudioPlayer();
-            players.set(guildId, player);
+        // Start playback asynchronously once connection reaches Ready
+        (async () => {
+            try {
+                if (connection.state.status !== VoiceConnectionStatus.Ready) {
+                    console.log(`⏳ [VoiceServer] Waiting async for voice connection Ready in guild ${guildId}...`);
+                    await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+                    console.log(`✅ [VoiceServer] Voice connection Ready for guild ${guildId}!`);
+                }
 
-            player.on(AudioPlayerStatus.Idle, () => {
-                console.log(`🎵 [VoiceServer] Track finished for guild ${guildId}`);
+                let player = players.get(guildId);
+                if (!player) {
+                    player = createAudioPlayer();
+                    players.set(guildId, player);
+
+                    player.on(AudioPlayerStatus.Idle, () => {
+                        console.log(`🎵 [VoiceServer] Track finished for guild ${guildId}`);
+                        cleanupStreams(guildId);
+                        notifyBotTrackEnd(guildId, 'finished');
+                    });
+
+                    player.on('error', (err) => {
+                        console.error(`❌ [VoiceServer] Player error in ${guildId}:`, err.message);
+                        cleanupStreams(guildId);
+                        notifyBotTrackEnd(guildId, 'error');
+                    });
+                }
+
+                console.log(`▶️ [VoiceServer] Starting FFmpeg audio stream for guild ${guildId}...`);
+                const ffmpeg = spawn('ffmpeg', [
+                    '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+                    '-i', streamUrl,
+                    '-analyzeduration', '0', '-loglevel', 'error',
+                    '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
+                ], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+                activeStreams.set(guildId, { ffmpeg });
+                ffmpeg.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.log(`[ffmpeg] ${msg}`); });
+
+                const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.Raw, inlineVolume: true });
+                resource.volume.setVolume(volume);
+
+                player.play(resource);
+                connection.subscribe(player);
+            } catch (asyncErr) {
+                console.error(`❌ [VoiceServer] Async voice connection/playback failed for guild ${guildId}:`, asyncErr.message);
                 cleanupStreams(guildId);
-                notifyBotTrackEnd(guildId, 'finished');
-            });
-
-            player.on('error', (err) => {
-                console.error(`❌ [VoiceServer] Player error in ${guildId}:`, err.message);
-                cleanupStreams(guildId);
-                notifyBotTrackEnd(guildId, 'error');
-            });
-        }
-
-        const ffmpeg = spawn('ffmpeg', [
-            '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
-            '-i', streamUrl,
-            '-analyzeduration', '0', '-loglevel', 'error',
-            '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
-        ], { stdio: ['ignore', 'pipe', 'pipe'] });
-
-        activeStreams.set(guildId, { ffmpeg });
-        ffmpeg.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.log(`[ffmpeg] ${msg}`); });
-
-        const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.Raw, inlineVolume: true });
-        resource.volume.setVolume(volume);
-
-        player.play(resource);
-        connection.subscribe(player);
-
-        res.json({ status: 'ok' });
+                notifyBotTrackEnd(guildId, 'connection_failed');
+            }
+        })();
     } catch (err) {
-        console.error('❌ [VoiceServer] Playback error:', err.message);
+        console.error('❌ [VoiceServer] Playback initiation error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
