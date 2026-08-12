@@ -9,6 +9,17 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 
+const sodium = require('libsodium-wrappers');
+
+(async () => {
+    try {
+        await sodium.ready;
+        console.log('✅ [VoiceServer] libsodium-wrappers initialized!');
+    } catch (e) {
+        console.error('⚠️ [VoiceServer] libsodium-wrappers ready warning:', e.message);
+    }
+})();
+
 console.log('📋 [VoiceServer] Voice dependency report:');
 console.log(generateDependencyReport());
 
