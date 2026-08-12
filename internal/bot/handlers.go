@@ -2,6 +2,7 @@ package bot
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -165,6 +166,19 @@ func (b *Bot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCrea
 }
 
 func (b *Bot) handleVoiceStateUpdate(s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
+	if v.UserID == s.State.User.ID && b.voice != nil {
+		b.Lock()
+		b.voiceSessionIDs[v.GuildID] = v.SessionID
+		token := b.voiceTokens[v.GuildID]
+		endpoint := b.voiceEndpoints[v.GuildID]
+		sessionID := v.SessionID
+		b.Unlock()
+
+		q := b.store.Get(v.GuildID)
+		log.Printf("🔑 [Bot] Forwarding VoiceStateUpdate to voice-server for guild %s (SessionID: %s)", v.GuildID, sessionID)
+		_ = b.voice.SendVoiceState(v.GuildID, q.VoiceChannelID, token, endpoint, sessionID, s.State.User.ID)
+	}
+
 	if b.store == nil {
 		return
 	}

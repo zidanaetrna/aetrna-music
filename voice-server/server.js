@@ -16,6 +16,7 @@ const BOT_WEBHOOK = process.env.BOT_WEBHOOK || 'http://127.0.0.1:8080/internal/t
 const GATEWAY_SEND_WEBHOOK = process.env.GATEWAY_SEND_WEBHOOK || 'http://127.0.0.1:8080/internal/gateway-send';
 
 const adapters = new Map();
+const voiceStatesMap = new Map();
 const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
@@ -23,6 +24,19 @@ const activeStreams = new Map();
 function createCustomAdapter(guildId) {
     return (methods) => {
         adapters.set(guildId, methods);
+
+        // Apply cached voice credentials if received prior to adapter registration
+        const cachedState = voiceStatesMap.get(guildId);
+        if (cachedState) {
+            console.log(`🔑 [VoiceServer] Applying cached voice state on adapter creation for guild ${guildId}`);
+            if (cachedState.token && cachedState.endpoint) {
+                methods.onVoiceServerUpdate({ token: cachedState.token, endpoint: cachedState.endpoint, guild_id: guildId });
+            }
+            if (cachedState.sessionId && cachedState.userId) {
+                methods.onVoiceStateUpdate({ session_id: cachedState.sessionId, guild_id: guildId, user_id: cachedState.userId });
+            }
+        }
+
         return {
             sendPayload(data) {
                 // Forward OP4 Voice State payload from @discordjs/voice to Go Bot Gateway
@@ -41,6 +55,7 @@ function createCustomAdapter(guildId) {
             },
             destroy() {
                 adapters.delete(guildId);
+                voiceStatesMap.delete(guildId);
             }
         };
     };
@@ -80,18 +95,30 @@ function resolveStreamUrl(args, env) {
 // Receive Gateway Voice Updates from Go Bot
 app.post('/voice-state', (req, res) => {
     const { guildId, token, endpoint, sessionId, userId } = req.body;
-    const adapter = adapters.get(guildId);
+    if (!guildId) return res.status(400).json({ error: 'Missing guildId' });
 
+    // Store in voiceStatesMap for cache
+    const current = voiceStatesMap.get(guildId) || {};
+    if (token) current.token = token;
+    if (endpoint) current.endpoint = endpoint;
+    if (sessionId) current.sessionId = sessionId;
+    if (userId) current.userId = userId;
+    voiceStatesMap.set(guildId, current);
+
+    const adapter = adapters.get(guildId);
     if (adapter) {
-        if (token && endpoint) {
-            adapter.onVoiceServerUpdate({ token, endpoint, guild_id: guildId });
+        if (current.token && current.endpoint) {
+            adapter.onVoiceServerUpdate({ token: current.token, endpoint: current.endpoint, guild_id: guildId });
         }
-        if (sessionId && userId) {
-            adapter.onVoiceStateUpdate({ session_id: sessionId, guild_id: guildId, user_id: userId });
+        if (current.sessionId && current.userId) {
+            adapter.onVoiceStateUpdate({ session_id: current.sessionId, guild_id: guildId, user_id: current.userId });
         }
+        console.log(`✅ [VoiceServer] Voice state applied to active adapter for guild ${guildId}`);
         return res.json({ status: 'ok', updated: true });
     }
-    res.json({ status: 'ok', updated: false, message: 'Adapter not registered yet' });
+
+    console.log(`🔑 [VoiceServer] Voice state cached for guild ${guildId} (awaiting adapter creation)`);
+    res.json({ status: 'ok', updated: false, cached: true });
 });
 
 app.post('/play', async (req, res) => {
@@ -236,6 +263,7 @@ app.post('/stop', (req, res) => {
         connections.delete(guildId);
     }
     adapters.delete(guildId);
+    voiceStatesMap.delete(guildId);
 
     res.json({ status: 'ok' });
 });
@@ -253,7 +281,7 @@ app.post('/resume', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', connections: connections.size, adapters: adapters.size });
+    res.json({ status: 'ok', connections: connections.size, adapters: adapters.size, cachedStates: voiceStatesMap.size });
 });
 
 app.listen(PORT, '127.0.0.1', () => {
