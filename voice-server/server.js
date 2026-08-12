@@ -157,6 +157,13 @@ app.post('/voice-state', (req, res) => {
     const adapter = adapters.get(guildId);
     if (adapter) {
         if (current.token && current.endpoint && current.sessionId && current.userId) {
+            const stateKey = `${current.sessionId}:${current.token}:${current.endpoint}`;
+            if (current.appliedKey === stateKey) {
+                console.log(`🛡️ [VoiceServer] Suppressing duplicate voice state application for guild ${guildId}`);
+                return res.json({ status: 'ok', updated: false, alreadyApplied: true });
+            }
+            current.appliedKey = stateKey;
+
             console.log(`🔑 [VoiceServer] Applying Voice State: User=${current.userId}, Session=${current.sessionId}, Endpoint=${current.endpoint}, Channel=${current.channelId}`);
             
             // Step A: Send Voice State Update FIRST so @discordjs/voice registers userId and sessionId
