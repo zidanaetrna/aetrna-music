@@ -5,17 +5,19 @@ import (
 )
 
 type QueueStore struct {
-	queues map[string]*GuildQueue
-	playCb PlayCallback
-	stopCb StopCallback
-	mu     sync.RWMutex
+	queues     map[string]*GuildQueue
+	playCb     PlayCallback
+	stopCb     StopCallback
+	preFetchCb PreFetchCallback
+	mu         sync.RWMutex
 }
 
-func NewQueueStore(playCb PlayCallback, stopCb StopCallback) *QueueStore {
+func NewQueueStore(playCb PlayCallback, stopCb StopCallback, preFetchCb PreFetchCallback) *QueueStore {
 	return &QueueStore{
-		queues: make(map[string]*GuildQueue),
-		playCb: playCb,
-		stopCb: stopCb,
+		queues:     make(map[string]*GuildQueue),
+		playCb:     playCb,
+		stopCb:     stopCb,
+		preFetchCb: preFetchCb,
 	}
 }
 
@@ -25,7 +27,7 @@ func (s *QueueStore) Get(guildID string) *GuildQueue {
 
 	queue, exists := s.queues[guildID]
 	if !exists {
-		queue = NewGuildQueue(guildID, s.playCb, s.stopCb)
+		queue = NewGuildQueue(guildID, s.playCb, s.stopCb, s.preFetchCb)
 		s.queues[guildID] = queue
 	}
 	return queue

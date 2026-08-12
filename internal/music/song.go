@@ -3,17 +3,20 @@ package music
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Song struct {
-	Title       string `json:"title"`
-	URL         string `json:"url"`
-	Duration    int    `json:"duration"` // Seconds
-	Thumbnail   string `json:"thumbnail"`
-	Author      string `json:"author"`
-	RequestedBy string `json:"requested_by"`
-	ChannelID   string `json:"channel_id"`
-	VideoID     string `json:"video_id"`
+	Title       string    `json:"title"`
+	URL         string    `json:"url"`
+	StreamURL   string    `json:"stream_url"`
+	ResolvedAt  time.Time `json:"resolved_at"`
+	Duration    int       `json:"duration"` // Seconds
+	Thumbnail   string    `json:"thumbnail"`
+	Author      string    `json:"author"`
+	RequestedBy string    `json:"requested_by"`
+	ChannelID   string    `json:"channel_id"`
+	VideoID     string    `json:"video_id"`
 }
 
 func FormatDuration(seconds int) string {

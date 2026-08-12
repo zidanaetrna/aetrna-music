@@ -55,21 +55,28 @@ func (b *Bot) Start() error {
 	log.Printf("✅ Go Bot Backend Microservice starting on :47392")
 
 	playCb := func(guildID string, song music.Song) error {
-		log.Printf("⏳ [Bot] Extracting stream URL for '%s'...", song.Title)
-		streamURL, err := commands.GetStreamURL(song.URL, b.cfg.CookiesPath)
-		if err != nil || streamURL == "" {
-			log.Printf("⚠️ [Bot] yt-dlp fallback to raw URL: %v", err)
-			streamURL = song.URL
-		} else {
+		streamURL := song.StreamURL
+		if streamURL == "" || time.Since(song.ResolvedAt) > 15*time.Minute {
+			log.Printf("⏳ [Bot] Extracting stream URL for '%s'...", song.Title)
+			var err error
+			streamURL, err = commands.GetStreamURL(song.URL, b.cfg.CookiesPath)
+			if err != nil {
+				return err
+			}
 			log.Printf("🔗 [Bot] yt-dlp stream URL resolved!")
+		} else {
+			log.Printf("⚡ [Bot] Using pre-fetched stream URL for '%s' (0ms transition!)", song.Title)
 		}
 		return b.voice.PlayStream(guildID, song.ChannelID, streamURL, 1.0)
 	}
 	stopCb := func(guildID string) error { return b.voice.Stop(guildID) }
+	preFetchCb := func(songURL string) (string, error) {
+		return commands.GetStreamURL(songURL, b.cfg.CookiesPath)
+	}
 
 	spotifyCl := spotify.NewClient(b.cfg.SpotifyClientID, b.cfg.SpotifyClientSecret)
 	b.spotify = spotifyCl
-	b.store = music.NewQueueStore(playCb, stopCb)
+	b.store = music.NewQueueStore(playCb, stopCb, preFetchCb)
 	b.handler = commands.NewHandler(b.cfg, b.db, b.store, spotifyCl)
 
 	// Start HTTP server in a goroutine (non-blocking) so main.go signal handler works

@@ -22,6 +22,9 @@ type PlayCallback func(guildID string, song Song) error
 // StopCallback is called when the queue wants to stop/disconnect Lavalink.
 type StopCallback func(guildID string) error
 
+// PreFetchCallback is called in background to pre-resolve stream URLs before song starts.
+type PreFetchCallback func(songURL string) (string, error)
+
 type GuildQueue struct {
 	GuildID        string
 	VoiceChannelID string
@@ -38,11 +41,12 @@ type GuildQueue struct {
 	Filter    string
 	Autoplay  bool
 
-	// Lavalink callbacks injected from bot layer
-	PlayCb PlayCallback
-	StopCb StopCallback
+	// Callbacks injected from bot layer
+	PlayCb     PlayCallback
+	StopCb     StopCallback
+	PreFetchCb PreFetchCallback
 
-	// TrackEndCh is signalled by the bot when Lavalink fires a TrackEnd event.
+	// TrackEndCh is signalled by the bot when track finishes.
 	TrackEndCh chan struct{}
 
 	idleTimer *time.Timer
@@ -50,7 +54,7 @@ type GuildQueue struct {
 	mu sync.RWMutex
 }
 
-func NewGuildQueue(guildID string, playCb PlayCallback, stopCb StopCallback) *GuildQueue {
+func NewGuildQueue(guildID string, playCb PlayCallback, stopCb StopCallback, preFetchCb PreFetchCallback) *GuildQueue {
 	return &GuildQueue{
 		GuildID:    guildID,
 		Volume:     100,
@@ -61,29 +65,70 @@ func NewGuildQueue(guildID string, playCb PlayCallback, stopCb StopCallback) *Gu
 		TrackEndCh: make(chan struct{}, 1),
 		PlayCb:     playCb,
 		StopCb:     stopCb,
+		PreFetchCb: preFetchCb,
 	}
+}
+
+func (q *GuildQueue) PreFetchNext() {
+	q.mu.Lock()
+	if len(q.Songs) == 0 || q.PreFetchCb == nil {
+		q.mu.Unlock()
+		return
+	}
+
+	song := q.Songs[0]
+	if song.StreamURL != "" && time.Since(song.ResolvedAt) < 15*time.Minute {
+		q.mu.Unlock()
+		return
+	}
+
+	targetSongURL := song.URL
+	targetSongTitle := song.Title
+	preFetchCb := q.PreFetchCb
+	q.mu.Unlock()
+
+	go func() {
+		fmt.Printf("⚡ [GuildQueue %s] Pre-fetching StreamURL in background for next track: '%s'...\n", q.GuildID, targetSongTitle)
+		streamURL, err := preFetchCb(targetSongURL)
+		if err != nil {
+			fmt.Printf("⚠️ [GuildQueue %s] Pre-fetch failed for '%s': %v\n", q.GuildID, targetSongTitle, err)
+			return
+		}
+
+		q.mu.Lock()
+		defer q.mu.Unlock()
+		if len(q.Songs) > 0 && q.Songs[0].URL == targetSongURL {
+			q.Songs[0].StreamURL = streamURL
+			q.Songs[0].ResolvedAt = time.Now()
+			fmt.Printf("✅ [GuildQueue %s] Successfully pre-fetched StreamURL for '%s' (ready for 0ms transition!)\n", q.GuildID, targetSongTitle)
+		}
+	}()
 }
 
 func (q *GuildQueue) AddSong(song Song) {
 	q.mu.Lock()
-	defer q.mu.Unlock()
 	if q.idleTimer != nil {
 		q.idleTimer.Stop()
 		q.idleTimer = nil
 		fmt.Printf("⏱️ [GuildQueue %s] Cancelled idle disconnect timer (new song added)\n", q.GuildID)
 	}
 	q.Songs = append(q.Songs, song)
+	q.mu.Unlock()
+
+	q.PreFetchNext()
 }
 
 func (q *GuildQueue) InsertNext(song Song) {
 	q.mu.Lock()
-	defer q.mu.Unlock()
 	if q.idleTimer != nil {
 		q.idleTimer.Stop()
 		q.idleTimer = nil
 		fmt.Printf("⏱️ [GuildQueue %s] Cancelled idle disconnect timer (song inserted next)\n", q.GuildID)
 	}
 	q.Songs = append([]Song{song}, q.Songs...)
+	q.mu.Unlock()
+
+	q.PreFetchNext()
 }
 
 func (q *GuildQueue) Pause() {
@@ -242,6 +287,9 @@ func (q *GuildQueue) PlayNext() {
 			return
 		}
 	}
+
+	// Trigger background pre-fetch for the next song in queue while current song plays
+	q.PreFetchNext()
 
 	// Wait for TrackEnd event (signalled by bot from Lavalink WS event)
 	<-q.TrackEndCh
