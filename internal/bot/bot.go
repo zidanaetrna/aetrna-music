@@ -213,6 +213,12 @@ func (b *Bot) startInternalWebhookServer() {
 			} `json:"payload"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.GuildID != "" {
+			b.Lock()
+			delete(b.voiceTokens, body.GuildID)
+			delete(b.voiceEndpoints, body.GuildID)
+			delete(b.voiceSessionIDs, body.GuildID)
+			b.Unlock()
+
 			_ = b.session.ChannelVoiceJoinManual(body.GuildID, body.Payload.D.ChannelID, body.Payload.D.SelfMute, body.Payload.D.SelfDeaf)
 		}
 		w.WriteHeader(http.StatusOK)
