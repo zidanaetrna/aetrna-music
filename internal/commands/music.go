@@ -33,7 +33,16 @@ type YtdlpSearchResult struct {
 	Uploader   string  `json:"uploader"`
 }
 
+func sanitizeQuery(query string) string {
+	query = strings.TrimSpace(query)
+	if strings.Contains(query, "music.youtube.com") {
+		query = strings.ReplaceAll(query, "music.youtube.com", "www.youtube.com")
+	}
+	return query
+}
+
 func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients string) ([]music.Song, error) {
+	query = sanitizeQuery(query)
 	log.Printf("🔍 [SearchYouTube] Searching query: %s (limit: %d)", query, limit)
 
 	targetQuery := query
@@ -124,6 +133,7 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 }
 
 func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpClients string) ([]music.Song, error) {
+	query = sanitizeQuery(query)
 	log.Printf("🔄 [SearchYouTubeFallback] Running fallback search for query: %s", query)
 	targetQuery := query
 	if !strings.HasPrefix(query, "http://") && !strings.HasPrefix(query, "https://") {
@@ -324,6 +334,7 @@ func getVoiceState(s *discordgo.Session, guildID, userID string) (*discordgo.Voi
 }
 
 func GetStreamURL(query string, cookiesPath string) (string, error) {
+	query = sanitizeQuery(query)
 	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 	args := []string{
 		"-f", "bestaudio/best",
@@ -332,7 +343,7 @@ func GetStreamURL(query string, cookiesPath string) (string, error) {
 		"--no-check-certificates",
 		"--no-warnings",
 		"--user-agent", userAgent,
-		"--extractor-args", "youtube:player_client=tv,android,web",
+		"--extractor-args", "youtube:player_client=android,ios,web,tv",
 		"-g",
 		query,
 	}
