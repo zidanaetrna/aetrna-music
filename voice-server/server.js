@@ -208,6 +208,16 @@ app.post('/play', async (req, res) => {
 
             connection.on('stateChange', (oldState, newState) => {
                 console.log(`🔄 [VoiceServer] VoiceConnection ${guildId} state: ${oldState.status} ➔ ${newState.status}`);
+
+                if (newState.networking && newState.networking.ws) {
+                    const wsInstance = newState.networking.ws;
+                    if (!wsInstance._hasDebugListeners) {
+                        wsInstance._hasDebugListeners = true;
+                        wsInstance.on('error', (err) => console.error(`❌ [VoiceServer WS Error ${guildId}]`, err));
+                        wsInstance.on('close', (code, reason) => console.log(`🚪 [VoiceServer WS Close ${guildId}] Code: ${code}, Reason: ${reason ? reason.toString() : 'none'}`));
+                    }
+                }
+
                 try {
                     console.log(`🔍 [VoiceServer OldState] ${JSON.stringify(oldState)}`);
                     console.log(`🔍 [VoiceServer NewState] ${JSON.stringify(newState)}`);
