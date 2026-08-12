@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 
 	"aetrna-music/config"
 	"aetrna-music/db"
@@ -12,9 +13,6 @@ import (
 	"aetrna-music/internal/music"
 	"aetrna-music/internal/spotify"
 	"aetrna-music/internal/voice"
-
-	"strings"
-	"sync"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -29,9 +27,6 @@ type Bot struct {
 	voice   *voice.Client
 
 	sync.RWMutex
-	voiceTokens     map[string]string
-	voiceEndpoints  map[string]string
-	voiceSessionIDs map[string]string
 }
 
 func New(cfg *config.Config, database *db.DB) (*Bot, error) {
@@ -41,95 +36,63 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 	}
 
 	b := &Bot{
-		session:         dg,
-		cfg:             cfg,
-		db:              database,
-		voice:           voice.NewClient("http://127.0.0.1:3005"),
-		voiceTokens:     make(map[string]string),
-		voiceEndpoints:  make(map[string]string),
-		voiceSessionIDs: make(map[string]string),
+		session: dg,
+		cfg:     cfg,
+		db:      database,
+		voice:   voice.NewClient("http://127.0.0.1:3005"),
 	}
 
 	dg.AddHandler(b.handleInteraction)
 	dg.AddHandler(b.handleMessageCreate)
-	dg.AddHandler(b.handleVoiceStateUpdate)
-	dg.AddHandler(b.handleVoiceServerUpdate)
 
 	dg.StateEnabled = true
-	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates | discordgo.IntentMessageContent
+	// Scope intents: Go Bot handles UI, Messages, Slash Commands (No GuildVoiceStates to avoid Gateway voice routing collision)
+	dg.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
 
 	return b, nil
 }
 
 func (b *Bot) Start() error {
-	log.Printf("✅ Go Backend Microservice running on port 8080")
+	if err := b.session.Open(); err != nil {
+		return fmt.Errorf("error opening discord connection: %w", err)
+	}
+
+	log.Printf("✅ Go Bot online as %s#%s (UI, Queue, Spotify & Embeds Engine)", b.session.State.User.Username, b.session.State.User.Discriminator)
+
+	playCb := func(guildID string, song music.Song) error {
+		return b.voice.Play(guildID, song.ChannelID, song.URL, 1.0)
+	}
+	stopCb := func(guildID string) error {
+		return b.voice.Stop(guildID)
+	}
 
 	spotifyCl := spotify.NewClient(b.cfg.SpotifyClientID, b.cfg.SpotifyClientSecret)
 	b.spotify = spotifyCl
+	b.store = music.NewQueueStore(playCb, stopCb)
+	b.handler = commands.NewHandler(b.cfg, b.db, b.store, spotifyCl)
 
-	// Start internal webhook server
-	b.startInternalWebhookServer()
+	// Register Go slash commands with rich embeds and button components
+	b.registerSlashCommands()
+
+	// Start internal webhook listener for track-end events from voice-server
+	go b.startInternalWebhookServer()
 
 	return nil
 }
 
-func (b *Bot) Stop() {
+func (b *Bot) Close() {
 	if b.session != nil {
 		_ = b.session.Close()
 	}
 }
 
+func (b *Bot) Stop() {
+	b.Close()
+}
+
 func (b *Bot) registerSlashCommands() {
-	cmdList := []*discordgo.ApplicationCommand{
-		{
-			Name:        "play",
-			Description: "Play or queue a song/playlist from YouTube or Spotify",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "query",
-					Description: "Search query or video/playlist URL",
-					Required:    true,
-				},
-			},
-		},
-		{
-			Name:        "search",
-			Description: "Search tracks with interactive select dropdown menu",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "query",
-					Description: "Search query",
-					Required:    true,
-				},
-			},
-		},
-		{Name: "pause", Description: "Pause currently playing song"},
-		{Name: "resume", Description: "Resume paused song"},
-		{Name: "skip", Description: "Skip current song"},
-		{Name: "stop", Description: "Stop playback and clear queue"},
-		{Name: "queue", Description: "Display upcoming music queue"},
-		{Name: "nowplaying", Description: "Display current playing song card with controls"},
-		{Name: "favorite", Description: "Add current song to your SQLite favorites"},
-		{Name: "favorites", Description: "List your favorite songs"},
-		{
-			Name:        "filter",
-			Description: "Apply dynamic FFmpeg audio equalizer filter",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "name",
-					Description: "Filter name (off, bassboost, nightcore, vaporwave, 8d, pop)",
-					Required:    true,
-				},
-			},
-		},
-		{Name: "help", Description: "Show music bot commands and features guide"},
-		{Name: "stats", Description: "Show bot performance metrics and memory usage"},
-		{Name: "ping", Description: "Check bot latency to Discord API"},
-		{Name: "ytauth", Description: "YouTube authentication and cookies setup instructions"},
-	}
+	cmdList := getGoSlashCommands()
+	log.Printf("📋 Registering %d Go slash commands...", len(cmdList))
 
 	for _, cmd := range cmdList {
 		_, err := b.session.ApplicationCommandCreate(b.session.State.User.ID, "", cmd)
@@ -139,31 +102,22 @@ func (b *Bot) registerSlashCommands() {
 	}
 }
 
-
-func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceServerUpdate) {
-	if b.voice == nil || v.Endpoint == "" || v.Token == "" {
-		return
-	}
-
-	cleanEndpoint := strings.Split(v.Endpoint, ":")[0]
-	b.Lock()
-	b.voiceTokens[v.GuildID] = v.Token
-	b.voiceEndpoints[v.GuildID] = cleanEndpoint
-	token := v.Token
-	endpoint := cleanEndpoint
-
-	sessionID := b.voiceSessionIDs[v.GuildID]
-	b.Unlock()
-
-	userID := ""
-	if s.State != nil && s.State.User != nil {
-		userID = s.State.User.ID
-	}
-
-	if token != "" && endpoint != "" && sessionID != "" && userID != "" {
-		q := b.store.Get(v.GuildID)
-		log.Printf("🔑 [Bot] Forwarding full VoiceServerUpdate to voice-server for guild %s (SessionID: %s, UserID: %s)", v.GuildID, sessionID, userID)
-		_ = b.voice.SendVoiceState(v.GuildID, q.VoiceChannelID, token, endpoint, sessionID, userID)
+func getGoSlashCommands() []*discordgo.ApplicationCommand {
+	return []*discordgo.ApplicationCommand{
+		{Name: "play", Description: "Play a song from YouTube or Spotify", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "query", Description: "Song name, YouTube URL, or Spotify link", Required: true}}},
+		{Name: "search", Description: "Search for a song on YouTube", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "query", Description: "Song name", Required: true}}},
+		{Name: "skip", Description: "Skip the current song"},
+		{Name: "stop", Description: "Stop playback and clear queue"},
+		{Name: "pause", Description: "Pause playback"},
+		{Name: "resume", Description: "Resume playback"},
+		{Name: "queue", Description: "Show upcoming queue with page navigation"},
+		{Name: "nowplaying", Description: "Show interactive Now Playing card with buttons"},
+		{Name: "favorite", Description: "Add current song to your favorites"},
+		{Name: "favorites", Description: "List your favorite songs"},
+		{Name: "filter", Description: "Apply an audio filter", Options: []*discordgo.ApplicationCommandOption{{Type: discordgo.ApplicationCommandOptionString, Name: "name", Description: "Filter name (bassboost, nightcore, etc.)", Required: true}}},
+		{Name: "help", Description: "Show help and command guide"},
+		{Name: "stats", Description: "Show bot system statistics"},
+		{Name: "ping", Description: "Check bot latency"},
 	}
 }
 
@@ -178,34 +132,6 @@ func (b *Bot) startInternalWebhookServer() {
 			log.Printf("🎵 [InternalWebhook] Track end event for guild %s (%s)", body.GuildID, body.Reason)
 			q := b.store.Get(body.GuildID)
 			go q.PlayNext()
-		}
-		w.WriteHeader(http.StatusOK)
-	})
-
-	mux.HandleFunc("/internal/gateway-send", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			GuildID string `json:"guildId"`
-			Payload struct {
-				Op int `json:"op"`
-				D  struct {
-					GuildID   string `json:"guild_id"`
-					ChannelID string `json:"channel_id"`
-					SelfMute  bool   `json:"self_mute"`
-					SelfDeaf  bool   `json:"self_deaf"`
-				} `json:"d"`
-			} `json:"payload"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.GuildID != "" {
-			b.Lock()
-			delete(b.voiceTokens, body.GuildID)
-			delete(b.voiceEndpoints, body.GuildID)
-			delete(b.voiceSessionIDs, body.GuildID)
-			b.Unlock()
-
-			v, err := b.session.ChannelVoiceJoin(body.GuildID, body.Payload.D.ChannelID, body.Payload.D.SelfMute, body.Payload.D.SelfDeaf)
-			if err == nil && v != nil {
-				log.Printf("🎙️ [Bot] Registered VoiceConnection in discordgo for guild %s", body.GuildID)
-			}
 		}
 		w.WriteHeader(http.StatusOK)
 	})
