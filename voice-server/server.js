@@ -156,6 +156,14 @@ app.post('/play', async (req, res) => {
 
             connections.set(guildId, connection);
 
+            connection.on('stateChange', (oldState, newState) => {
+                console.log(`🔄 [VoiceServer] VoiceConnection ${guildId} state: ${oldState.status} ➔ ${newState.status}`);
+            });
+
+            connection.on('debug', (msg) => {
+                console.log(`🐛 [VoiceServer Debug ${guildId}] ${msg}`);
+            });
+
             connection.on(VoiceConnectionStatus.Disconnected, async () => {
                 try {
                     await Promise.race([
