@@ -6,7 +6,8 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/opt/aetrna-music/voice-server
-ExecStart=/usr/bin/node server.js
+ExecStart=/opt/node22/bin/node server.js
+Environment=PATH=/opt/node22/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 EnvironmentFile=-/opt/aetrna-music/prod/.env
 Restart=on-failure
 RestartSec=3
