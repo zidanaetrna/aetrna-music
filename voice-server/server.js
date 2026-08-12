@@ -242,8 +242,20 @@ app.post('/join-and-play', async (req, res) => {
             }
 
             let guild = discordClient.guilds.cache.get(guildId);
-            if (!guild) guild = await discordClient.guilds.fetch(guildId).catch(() => null);
-            if (!guild) throw new Error(`Guild ${guildId} not found`);
+            if (!guild) {
+                console.log(`⚠️ [VoiceServer] Guild ${guildId} not in cache, fetching...`);
+                try {
+                    await discordClient.guilds.fetch(guildId);
+                    guild = discordClient.guilds.cache.get(guildId);
+                } catch (e) {
+                    console.error(`❌ [VoiceServer] Failed to fetch guild ${guildId}:`, e.message);
+                }
+            }
+
+            if (!guild || !guild.voiceAdapterCreator) {
+                console.error(`❌ [VoiceServer] Invalid guild or missing voiceAdapterCreator for guild ${guildId}`);
+                return res.status(500).json({ error: `Missing voiceAdapterCreator for guild ${guildId}` });
+            }
 
             console.log(`🎙️ [VoiceServer] Joining voice channel ${channelId} in guild ${guildId}...`);
             connection = joinVoiceChannel({
