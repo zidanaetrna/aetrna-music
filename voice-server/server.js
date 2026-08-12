@@ -242,6 +242,10 @@ app.post('/join-and-play', async (req, res) => {
                 console.log(`🔄 [VoiceServer] VoiceConnection ${guildId}: ${oldState.status} ➔ ${newState.status}`);
             });
 
+            connection.on('debug', (message) => {
+                console.log(`🔍 [VoiceConnection Debug ${guildId}] ${message}`);
+            });
+
             connection.on('error', (err) => {
                 console.error(`❌ [VoiceServer] Connection error in ${guildId}:`, err.message);
             });
