@@ -385,12 +385,29 @@ app.get('/test-voice', async (req, res) => {
 
         connection.on('stateChange', (oldState, newState) => {
             console.log(`🔄 [/test-voice State] ${oldState.status} ➔ ${newState.status}`);
-            if (newState.networking) {
-                newState.networking.on('debug', (msg) => console.log('🔍 [Networking Debug]', msg));
-                newState.networking.on('error', (err) => console.log('❌ [Networking Error]', err));
+
+            const net = newState.networking || (oldState && oldState.networking);
+            if (net && !net._listenersAttached) {
+                net._listenersAttached = true;
+
+                net.on('stateChange', (oldNetState, newNetState) => {
+                    console.log(`🌐 [/test-voice NetState] ${oldNetState.code} (${oldNetState.status}) ➔ ${newNetState.code} (${newNetState.status})`);
+                    if (newNetState.ws) {
+                        newNetState.ws.on('close', (code, reason) => {
+                            console.log(`🔌 [/test-voice Voice WS Closed!] Code: ${code}, Reason: "${reason}"`);
+                        });
+                        newNetState.ws.on('error', (err) => {
+                            console.log(`❌ [/test-voice Voice WS Error!]`, err.message);
+                        });
+                    }
+                });
+
+                net.on('debug', (msg) => console.log('🔍 [Networking Debug]', msg));
+                net.on('error', (err) => console.log('❌ [Networking Error]', err));
             }
+
             if (oldState.status === 'connecting' && newState.status === 'signalling') {
-                console.log(`⚠️ [/test-voice Reset!] oldState:`, oldState.status, `newState:`, newState.status);
+                console.log(`⚠️ [/test-voice Reset!] Connecting ➔ Signalling reset detected!`);
             }
         });
 
