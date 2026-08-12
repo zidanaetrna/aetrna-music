@@ -72,6 +72,12 @@ if (!BOT_TOKEN) {
     process.exit(1);
 }
 
+discordClient.on('raw', (packet) => {
+    if (packet.t === 'VOICE_SERVER_UPDATE' || packet.t === 'VOICE_STATE_UPDATE') {
+        console.log(`📡 [Gateway Event ${packet.t}] guild=${packet.d?.guild_id || packet.d?.guildId} session=${packet.d?.session_id} channel=${packet.d?.channel_id} endpoint=${packet.d?.endpoint}`);
+    }
+});
+
 discordClient.login(BOT_TOKEN).then(async () => {
     console.log(`✅ [VoiceServer] discord.js Client logged in as ${discordClient.user.tag} (Single Gateway Session)`);
     try {
@@ -247,7 +253,7 @@ app.post('/join-and-play', async (req, res) => {
             });
 
             connection.on('debug', (message) => {
-                console.log(`🔍 [VoiceConnection Debug ${guildId}] ${message}`);
+                console.log(`🔍 [VoiceConnection Debug ${guildId}]`, message);
             });
 
             connection.on('error', (err) => {
