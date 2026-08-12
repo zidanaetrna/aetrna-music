@@ -1,3 +1,12 @@
+const path = require('path');
+const fs = require('fs');
+
+// Load environment variables from all possible .env paths
+let envPath = '/opt/aetrna-music/prod/.env';
+if (!fs.existsSync(envPath)) envPath = path.resolve(__dirname, '../.env');
+if (!fs.existsSync(envPath)) envPath = path.resolve(__dirname, './.env');
+require('dotenv').config({ path: envPath });
+
 const express = require('express');
 const { Client, GatewayIntentBits } = require('discord.js');
 const {
@@ -6,8 +15,6 @@ const {
     generateDependencyReport, getVoiceConnection
 } = require('@discordjs/voice');
 const { spawn, execFile } = require('child_process');
-const fs = require('fs');
-const path = require('path');
 const http = require('http');
 const sodium = require('libsodium-wrappers');
 
@@ -85,6 +92,22 @@ app.post('/play', async (req, res) => {
     try {
         cleanupStreams(guildId);
 
+        // Ensure discord.js client is logged in and ready
+        if (!client.isReady()) {
+            console.log(`⏳ [VoiceServer] discord.js Client not ready yet. Waiting for Gateway connection...`);
+            if (!client.ws || !client.token) {
+                if (!DISCORD_TOKEN) {
+                    console.error(`❌ [VoiceServer] Cannot join voice: DISCORD_TOKEN is missing!`);
+                    return res.status(500).json({ error: 'DISCORD_TOKEN missing in environment' });
+                }
+                await client.login(DISCORD_TOKEN);
+            }
+            await new Promise((resolve) => {
+                if (client.isReady()) return resolve();
+                client.once('ready', resolve);
+            });
+        }
+
         const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
         if (!guild) {
             console.error(`❌ [VoiceServer] Guild ${guildId} not found in discord.js client cache`);
@@ -94,7 +117,7 @@ app.post('/play', async (req, res) => {
         // Join Voice Channel natively via guild.voiceAdapterCreator
         let connection = getVoiceConnection(guildId);
         if (!connection || connection.joinConfig.channelId !== channelId || connection.state.status === VoiceConnectionStatus.Destroyed) {
-            console.log(`🎙️ [VoiceServer] Joining voice channel ${channelId} in guild ${guildId} via native adapter...`);
+            console.log(`🎙️ [VoiceServer] Joining voice channel ${channelId} in guild ${guild.name} (${guildId}) via native adapter...`);
             connection = joinVoiceChannel({
                 channelId: String(channelId),
                 guildId: String(guildId),
@@ -256,12 +279,17 @@ client.once('ready', () => {
     console.log(`✅ [VoiceServer] discord.js Client logged in as ${client.user.tag}`);
 });
 
+client.on('error', (err) => {
+    console.error(`❌ [VoiceServer] discord.js Client error: ${err.message}`);
+});
+
 if (DISCORD_TOKEN) {
+    console.log(`🔑 [VoiceServer] Logging in discord.js Client with token...`);
     client.login(DISCORD_TOKEN).catch((err) => {
         console.error(`❌ [VoiceServer] discord.js Client login failed: ${err.message}`);
     });
 } else {
-    console.warn(`⚠️ [VoiceServer] DISCORD_TOKEN is missing in environment variables.`);
+    console.warn(`⚠️ [VoiceServer] DISCORD_TOKEN is missing in environment variables. Will load dynamically on /play.`);
 }
 
 app.listen(PORT, '127.0.0.1', () => {
