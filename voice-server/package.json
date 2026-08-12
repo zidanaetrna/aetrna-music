@@ -7,11 +7,11 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@discordjs/voice": "^0.18.0",
+    "@discordjs/voice": "^0.19.2",
     "@snazzah/davey": "^0.1.6",
     "@stablelib/xchacha20poly1305": "^1.0.1",
     "@noble/ciphers": "^0.4.1",
-    "discord.js": "^14.16.3",
+    "discord.js": "^14.17.3",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "opusscript": "^0.0.8",
