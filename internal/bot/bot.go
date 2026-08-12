@@ -219,7 +219,10 @@ func (b *Bot) startInternalWebhookServer() {
 			delete(b.voiceSessionIDs, body.GuildID)
 			b.Unlock()
 
-			_ = b.session.ChannelVoiceJoinManual(body.GuildID, body.Payload.D.ChannelID, body.Payload.D.SelfMute, body.Payload.D.SelfDeaf)
+			v, err := b.session.ChannelVoiceJoin(body.GuildID, body.Payload.D.ChannelID, body.Payload.D.SelfMute, body.Payload.D.SelfDeaf)
+			if err == nil && v != nil {
+				log.Printf("🎙️ [Bot] Registered VoiceConnection in discordgo for guild %s", body.GuildID)
+			}
 		}
 		w.WriteHeader(http.StatusOK)
 	})

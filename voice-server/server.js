@@ -1,8 +1,27 @@
 const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 
+const https = require('https');
+const originalHttpsRequest = https.request;
+https.request = function(url, options, callback) {
+    const targetUrl = typeof url === 'string' ? url : (url && url.href ? url.href : '');
+    const isDiscordMedia = targetUrl.includes('discord.media') ||
+                           (options && options.host && options.host.includes('discord.media')) ||
+                           (url && url.host && url.host.includes('discord.media'));
+    if (isDiscordMedia) {
+        if (typeof url === 'object' && url !== null) {
+            url.headers = url.headers || {};
+            url.headers['User-Agent'] = 'DiscordBot (https://github.com/discordjs/discord.js, 14.16.3)';
+        }
+        if (options && typeof options === 'object') {
+            options.headers = options.headers || {};
+            options.headers['User-Agent'] = 'DiscordBot (https://github.com/discordjs/discord.js, 14.16.3)';
+        }
+    }
+    return originalHttpsRequest.call(this, url, options, callback);
+};
+
 const express = require('express');
-const { Client, GatewayIntentBits } = require('discord.js');
 const {
     joinVoiceChannel, createAudioPlayer, createAudioResource,
     AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType,
@@ -13,7 +32,6 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const sodium = require('libsodium-wrappers');
-require('dotenv').config();
 
 console.log('📋 [VoiceServer] Voice dependency report:');
 console.log(generateDependencyReport());
@@ -27,34 +45,67 @@ console.log(generateDependencyReport());
     }
 })();
 
-// Initialize discord.js Client for native Gateway & Voice management
-const discordClient = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildVoiceStates
-    ]
-});
-
-const BOT_TOKEN = process.env.DISCORD_TOKEN;
-if (BOT_TOKEN) {
-    discordClient.login(BOT_TOKEN).then(() => {
-        console.log(`✅ [VoiceServer] discord.js Client logged in as ${discordClient.user.tag}`);
-    }).catch(err => {
-        console.error('❌ [VoiceServer] discord.js Client login failed:', err.message);
-    });
-} else {
-    console.error('⚠️ [VoiceServer] DISCORD_TOKEN is missing in environment!');
-}
-
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3005;
 const BOT_WEBHOOK = process.env.BOT_WEBHOOK || 'http://127.0.0.1:8080/internal/track-end';
+const GATEWAY_SEND_WEBHOOK = process.env.GATEWAY_SEND_WEBHOOK || 'http://127.0.0.1:8080/internal/gateway-send';
 
+const adapters = new Map();
+const voiceStatesMap = new Map();
+const lastSentPayloads = new Map();
 const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
+
+function cleanEndpointString(endpoint) {
+    if (!endpoint) return undefined;
+    return endpoint.replace(/^wss?:\/\//, '').split(':')[0].trim();
+}
+
+function createCustomAdapter(guildId) {
+    return (methods) => {
+        adapters.set(guildId, methods);
+
+        return {
+            sendPayload(data) {
+                if (data && data.d) {
+                    if (data.d.channel_id) {
+                        const current = voiceStatesMap.get(guildId) || {};
+                        current.channelId = data.d.channel_id;
+                        voiceStatesMap.set(guildId, current);
+                    }
+
+                    const payloadKey = `${guildId}:${data.d.channel_id}:${data.d.self_mute}:${data.d.self_deaf}`;
+                    if (lastSentPayloads.get(guildId) === payloadKey) {
+                        console.log(`🛡️ [VoiceServer] Suppressing duplicate sendPayload for guild ${guildId}`);
+                        return true;
+                    }
+                    lastSentPayloads.set(guildId, payloadKey);
+                }
+
+                const body = JSON.stringify({ guildId, payload: data });
+                const req = http.request(GATEWAY_SEND_WEBHOOK, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(body)
+                    }
+                });
+                req.on('error', (err) => console.error(`❌ [VoiceServer] CustomAdapter payload send error: ${err.message}`));
+                req.write(body);
+                req.end();
+                return true;
+            },
+            destroy() {
+                adapters.delete(guildId);
+                voiceStatesMap.delete(guildId);
+                lastSentPayloads.delete(guildId);
+            }
+        };
+    };
+}
 
 function cleanupStreams(guildId) {
     if (activeStreams.has(guildId)) {
@@ -86,6 +137,57 @@ function resolveStreamUrl(args, env) {
     });
 }
 
+// Receive Gateway Voice Credentials from Go Bot
+app.post('/voice-state', (req, res) => {
+    const { guildId, channelId, token, endpoint, sessionId, userId } = req.body;
+    if (!guildId) return res.status(400).json({ error: 'Missing guildId' });
+
+    const cleanEndpoint = cleanEndpointString(endpoint);
+
+    const current = voiceStatesMap.get(guildId) || {};
+    if (token) current.token = token;
+    if (cleanEndpoint) current.endpoint = cleanEndpoint;
+    if (sessionId) current.sessionId = sessionId;
+    if (userId) current.userId = userId;
+    if (channelId) current.channelId = channelId;
+    voiceStatesMap.set(guildId, current);
+
+    const adapter = adapters.get(guildId);
+    if (adapter) {
+        if (current.token && current.endpoint && current.sessionId && current.userId) {
+            const stateKey = `${current.sessionId}:${current.token}:${current.endpoint}`;
+            if (current.appliedKey === stateKey) {
+                console.log(`🛡️ [VoiceServer] Suppressing duplicate voice state application for guild ${guildId}`);
+                return res.json({ status: 'ok', updated: false, alreadyApplied: true });
+            }
+            current.appliedKey = stateKey;
+
+            console.log(`🔑 [VoiceServer] Applying Voice State: User=${current.userId}, Session=${current.sessionId}, Endpoint=${current.endpoint}, Channel=${current.channelId}`);
+            
+            adapter.onVoiceStateUpdate({
+                session_id: current.sessionId,
+                channel_id: current.channelId,
+                user_id: current.userId,
+                guild_id: guildId
+            });
+
+            adapter.onVoiceServerUpdate({
+                token: current.token,
+                endpoint: current.endpoint,
+                guild_id: guildId
+            });
+
+            console.log(`✅ [VoiceServer] Applied Voice State and Server Update to adapter synchronously for guild ${guildId}`);
+            return res.json({ status: 'ok', updated: true });
+        }
+        console.log(`⏳ [VoiceServer] Partial voice state received for guild ${guildId}`);
+        return res.json({ status: 'ok', updated: false, pending: true });
+    }
+
+    console.log(`🔑 [VoiceServer] Voice state cached for guild ${guildId}`);
+    res.json({ status: 'ok', updated: false, cached: true });
+});
+
 app.post('/play', async (req, res) => {
     const { guildId, channelId, url, volume = 1.0 } = req.body;
     if (!guildId || !channelId || !url) {
@@ -95,27 +197,22 @@ app.post('/play', async (req, res) => {
     try {
         cleanupStreams(guildId);
 
+        voiceStatesMap.delete(guildId);
+        lastSentPayloads.delete(guildId);
+        const current = { channelId: String(channelId) };
+        voiceStatesMap.set(guildId, current);
+
         let connection = connections.get(guildId);
         if (!connection || connection.joinConfig.channelId !== channelId || connection.state.status === VoiceConnectionStatus.Destroyed) {
             if (connection) {
                 try { connection.destroy(); } catch (e) {}
             }
 
-            console.log(`🎙️ [VoiceServer] Joining voice channel ${channelId} in guild ${guildId} via discord.js native adapter...`);
-
-            // Fetch guild from discord.js cache or API
-            let guild = discordClient.guilds.cache.get(guildId);
-            if (!guild) {
-                guild = await discordClient.guilds.fetch(guildId).catch(() => null);
-            }
-            if (!guild) {
-                throw new Error(`Guild ${guildId} not found in discord.js client cache`);
-            }
-
+            console.log(`🎙️ [VoiceServer] Joining voice channel ${channelId} in guild ${guildId}...`);
             connection = joinVoiceChannel({
                 channelId: String(channelId),
                 guildId: String(guildId),
-                adapterCreator: guild.voiceAdapterCreator,
+                adapterCreator: createCustomAdapter(String(guildId)),
                 selfDeaf: true,
                 selfMute: false,
             });
@@ -163,20 +260,17 @@ app.post('/play', async (req, res) => {
             '-g', url
         ];
 
-        // Start yt-dlp URL resolution in parallel
         const resolvePromise = resolveStreamUrl(resolveArgs, spawnEnv);
 
-        // Wait for Voice Connection Ready
         try {
-            console.log(`⏳ [VoiceServer] Waiting for native voice connection Ready...`);
+            console.log(`⏳ [VoiceServer] Waiting for voice connection Ready...`);
             await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
-            console.log(`✅ [VoiceServer] Native voice connection Ready!`);
+            console.log(`✅ [VoiceServer] Voice connection Ready!`);
         } catch (stateErr) {
-            console.error(`❌ [VoiceServer] Native voice connection failed: ${stateErr.message}`);
-            return res.status(500).json({ error: `Native voice connection failed: ${stateErr.message}` });
+            console.error(`❌ [VoiceServer] Voice connection failed: ${stateErr.message}`);
+            return res.status(500).json({ error: `Voice connection failed: ${stateErr.message}` });
         }
 
-        // Await stream URL from yt-dlp
         let streamUrl;
         try {
             streamUrl = await resolvePromise;
@@ -186,7 +280,6 @@ app.post('/play', async (req, res) => {
             return res.status(500).json({ error: `yt-dlp resolve failed: ${e.message}` });
         }
 
-        // Get or create audio player
         let player = players.get(guildId);
         if (!player) {
             player = createAudioPlayer();
@@ -204,7 +297,6 @@ app.post('/play', async (req, res) => {
             });
         }
 
-        // Stream directly via ffmpeg
         const ffmpegArgs = [
             '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
             '-i', streamUrl,
@@ -249,6 +341,8 @@ app.post('/stop', (req, res) => {
         try { connection.destroy(); } catch (e) {}
         connections.delete(guildId);
     }
+    adapters.delete(guildId);
+    voiceStatesMap.delete(guildId);
 
     res.json({ status: 'ok' });
 });
@@ -266,7 +360,7 @@ app.post('/resume', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', connections: connections.size, clientReady: discordClient.isReady() });
+    res.json({ status: 'ok', connections: connections.size, adapters: adapters.size, cachedStates: voiceStatesMap.size });
 });
 
 app.listen(PORT, '127.0.0.1', () => {
