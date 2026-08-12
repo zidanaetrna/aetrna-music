@@ -1,6 +1,26 @@
 const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 
+const https = require('https');
+const originalHttpsRequest = https.request;
+https.request = function(url, options, callback) {
+    const targetUrl = typeof url === 'string' ? url : (url && url.href ? url.href : '');
+    const isDiscordMedia = targetUrl.includes('discord.media') ||
+                           (options && options.host && options.host.includes('discord.media')) ||
+                           (url && url.host && url.host.includes('discord.media'));
+    if (isDiscordMedia) {
+        if (typeof url === 'object' && url !== null) {
+            url.headers = url.headers || {};
+            url.headers['User-Agent'] = 'DiscordBot (https://github.com/discordjs/discord.js, 14.16.3)';
+        }
+        if (options && typeof options === 'object') {
+            options.headers = options.headers || {};
+            options.headers['User-Agent'] = 'DiscordBot (https://github.com/discordjs/discord.js, 14.16.3)';
+        }
+    }
+    return originalHttpsRequest.call(this, url, options, callback);
+};
+
 const express = require('express');
 const {
     joinVoiceChannel, createAudioPlayer, createAudioResource,
