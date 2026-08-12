@@ -357,8 +357,11 @@ app.post('/join-and-play', async (req, res) => {
                 }
 
                 console.log(`▶️ [VoiceServer] Starting FFmpeg audio stream for guild ${guildId}...`);
+                const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
                 const ffmpeg = spawn('ffmpeg', [
                     '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+                    '-user_agent', userAgent,
+                    '-headers', `User-Agent: ${userAgent}\r\n`,
                     '-i', streamUrl,
                     '-analyzeduration', '0', '-loglevel', 'error',
                     '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'

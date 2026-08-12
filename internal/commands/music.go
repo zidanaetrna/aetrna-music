@@ -324,12 +324,15 @@ func getVoiceState(s *discordgo.Session, guildID, userID string) (*discordgo.Voi
 }
 
 func GetStreamURL(query string, cookiesPath string) (string, error) {
+	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 	args := []string{
 		"-f", "bestaudio/best",
 		"--no-playlist",
 		"--geo-bypass",
 		"--no-check-certificates",
 		"--no-warnings",
+		"--user-agent", userAgent,
+		"--extractor-args", "youtube:player_client=tv,android,web",
 		"-g",
 		query,
 	}
