@@ -22,6 +22,7 @@ https.request = function(url, options, callback) {
 };
 
 const express = require('express');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const {
     joinVoiceChannel, createAudioPlayer, createAudioResource,
     AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType,
@@ -32,6 +33,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const sodium = require('libsodium-wrappers');
+require('dotenv').config();
 
 console.log('📋 [VoiceServer] Voice dependency report:');
 console.log(generateDependencyReport());
@@ -45,66 +47,60 @@ console.log(generateDependencyReport());
     }
 })();
 
-const app = express();
-app.use(express.json());
+// Slash command definitions
+const commands = [
+    new SlashCommandBuilder()
+        .setName('play')
+        .setDescription('Play a song from YouTube')
+        .addStringOption(option => option.setName('query').setDescription('Song name or YouTube URL').setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('stop')
+        .setDescription('Stop playback and leave the voice channel'),
+    new SlashCommandBuilder()
+        .setName('skip')
+        .setDescription('Skip the current song'),
+    new SlashCommandBuilder()
+        .setName('pause')
+        .setDescription('Pause playback'),
+    new SlashCommandBuilder()
+        .setName('resume')
+        .setDescription('Resume playback'),
+    new SlashCommandBuilder()
+        .setName('queue')
+        .setDescription('Show the current music queue')
+].map(cmd => cmd.toJSON());
 
-const PORT = process.env.PORT || 3005;
-const BOT_WEBHOOK = process.env.BOT_WEBHOOK || 'http://127.0.0.1:8080/internal/track-end';
-const GATEWAY_SEND_WEBHOOK = process.env.GATEWAY_SEND_WEBHOOK || 'http://127.0.0.1:8080/internal/gateway-send';
-
-const adapters = new Map();
-const voiceStatesMap = new Map();
-const lastSentPayloads = new Map();
+// State stores
 const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
+const guildQueues = new Map(); // guildId -> Array<{ title, url }>
 
-function cleanEndpointString(endpoint) {
-    if (!endpoint) return undefined;
-    return endpoint.replace(/^wss?:\/\//, '').split(':')[0].trim();
-}
+// Initialize single discord.js Client
+const discordClient = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildVoiceStates
+    ]
+});
 
-function createCustomAdapter(guildId) {
-    return (methods) => {
-        adapters.set(guildId, methods);
-
-        return {
-            sendPayload(data) {
-                if (data && data.d) {
-                    if (data.d.channel_id) {
-                        const current = voiceStatesMap.get(guildId) || {};
-                        current.channelId = data.d.channel_id;
-                        voiceStatesMap.set(guildId, current);
-                    }
-
-                    const payloadKey = `${guildId}:${data.d.channel_id}:${data.d.self_mute}:${data.d.self_deaf}`;
-                    if (lastSentPayloads.get(guildId) === payloadKey) {
-                        console.log(`🛡️ [VoiceServer] Suppressing duplicate sendPayload for guild ${guildId}`);
-                        return true;
-                    }
-                    lastSentPayloads.set(guildId, payloadKey);
-                }
-
-                const body = JSON.stringify({ guildId, payload: data });
-                const req = http.request(GATEWAY_SEND_WEBHOOK, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Content-Length': Buffer.byteLength(body)
-                    }
-                });
-                req.on('error', (err) => console.error(`❌ [VoiceServer] CustomAdapter payload send error: ${err.message}`));
-                req.write(body);
-                req.end();
-                return true;
-            },
-            destroy() {
-                adapters.delete(guildId);
-                voiceStatesMap.delete(guildId);
-                lastSentPayloads.delete(guildId);
-            }
-        };
-    };
+const BOT_TOKEN = process.env.DISCORD_TOKEN;
+if (BOT_TOKEN) {
+    discordClient.login(BOT_TOKEN).then(async () => {
+        console.log(`✅ [VoiceServer] discord.js Client logged in as ${discordClient.user.tag}`);
+        try {
+            const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
+            console.log('⏳ Registering global slash commands...');
+            await rest.put(Routes.applicationCommands(discordClient.user.id), { body: commands });
+            console.log('✅ Global slash commands registered successfully!');
+        } catch (e) {
+            console.error('⚠️ Failed to register slash commands:', e.message);
+        }
+    }).catch(err => {
+        console.error('❌ [VoiceServer] discord.js Client login failed:', err.message);
+    });
+} else {
+    console.error('⚠️ [VoiceServer] DISCORD_TOKEN is missing in environment!');
 }
 
 function cleanupStreams(guildId) {
@@ -115,104 +111,49 @@ function cleanupStreams(guildId) {
     }
 }
 
-function notifyBotTrackEnd(guildId, reason) {
-    const data = JSON.stringify({ guildId, reason });
-    const req = http.request(BOT_WEBHOOK, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
-    });
-    req.on('error', () => {});
-    req.write(data);
-    req.end();
-}
-
 function resolveStreamUrl(args, env) {
     return new Promise((resolve, reject) => {
         execFile('yt-dlp', args, { env, timeout: 30000, maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
             if (err) return reject(new Error(stderr.trim() || err.message));
-            const url = stdout.trim().split('\n')[0];
-            if (!url) return reject(new Error('yt-dlp returned empty URL'));
-            resolve(url);
+            const lines = stdout.trim().split('\n').filter(Boolean);
+            if (!lines.length) return reject(new Error('yt-dlp returned empty output'));
+            resolve(lines);
         });
     });
 }
 
-// Receive Gateway Voice Credentials from Go Bot
-app.post('/voice-state', (req, res) => {
-    const { guildId, channelId, token, endpoint, sessionId, userId } = req.body;
-    if (!guildId) return res.status(400).json({ error: 'Missing guildId' });
-
-    const cleanEndpoint = cleanEndpointString(endpoint);
-
-    const current = voiceStatesMap.get(guildId) || {};
-    if (token) current.token = token;
-    if (cleanEndpoint) current.endpoint = cleanEndpoint;
-    if (sessionId) current.sessionId = sessionId;
-    if (userId) current.userId = userId;
-    if (channelId) current.channelId = channelId;
-    voiceStatesMap.set(guildId, current);
-
-    const adapter = adapters.get(guildId);
-    if (adapter) {
-        if (current.token && current.endpoint && current.sessionId && current.userId) {
-            const stateKey = `${current.sessionId}:${current.token}:${current.endpoint}`;
-            if (current.appliedKey === stateKey) {
-                console.log(`🛡️ [VoiceServer] Suppressing duplicate voice state application for guild ${guildId}`);
-                return res.json({ status: 'ok', updated: false, alreadyApplied: true });
-            }
-            current.appliedKey = stateKey;
-
-            console.log(`🔑 [VoiceServer] Applying Voice State: User=${current.userId}, Session=${current.sessionId}, Endpoint=${current.endpoint}, Channel=${current.channelId}`);
-            
-            adapter.onVoiceStateUpdate({
-                session_id: current.sessionId,
-                channel_id: current.channelId,
-                user_id: current.userId,
-                guild_id: guildId
-            });
-
-            adapter.onVoiceServerUpdate({
-                token: current.token,
-                endpoint: current.endpoint,
-                guild_id: guildId
-            });
-
-            console.log(`✅ [VoiceServer] Applied Voice State and Server Update to adapter synchronously for guild ${guildId}`);
-            return res.json({ status: 'ok', updated: true });
+async function playNextInQueue(guildId, channelId, interactionChannel) {
+    const queue = guildQueues.get(guildId) || [];
+    if (!queue.length) {
+        cleanupStreams(guildId);
+        const connection = connections.get(guildId);
+        if (connection) {
+            try { connection.destroy(); } catch (e) {}
+            connections.delete(guildId);
         }
-        console.log(`⏳ [VoiceServer] Partial voice state received for guild ${guildId}`);
-        return res.json({ status: 'ok', updated: false, pending: true });
+        if (interactionChannel) {
+            interactionChannel.send('🎶 Queue is empty. Leaving voice channel.').catch(() => {});
+        }
+        return;
     }
 
-    console.log(`🔑 [VoiceServer] Voice state cached for guild ${guildId}`);
-    res.json({ status: 'ok', updated: false, cached: true });
-});
-
-app.post('/play', async (req, res) => {
-    const { guildId, channelId, url, volume = 1.0 } = req.body;
-    if (!guildId || !channelId || !url) {
-        return res.status(400).json({ error: 'Missing guildId, channelId, or url' });
-    }
+    const currentTrack = queue[0];
 
     try {
         cleanupStreams(guildId);
 
-        voiceStatesMap.delete(guildId);
-        lastSentPayloads.delete(guildId);
-        const current = { channelId: String(channelId) };
-        voiceStatesMap.set(guildId, current);
-
         let connection = connections.get(guildId);
         if (!connection || connection.joinConfig.channelId !== channelId || connection.state.status === VoiceConnectionStatus.Destroyed) {
-            if (connection) {
-                try { connection.destroy(); } catch (e) {}
-            }
+            if (connection) { try { connection.destroy(); } catch (e) {} }
+
+            const guild = discordClient.guilds.cache.get(guildId) || await discordClient.guilds.fetch(guildId).catch(() => null);
+            if (!guild) throw new Error('Guild not found');
 
             console.log(`🎙️ [VoiceServer] Joining voice channel ${channelId} in guild ${guildId}...`);
             connection = joinVoiceChannel({
                 channelId: String(channelId),
                 guildId: String(guildId),
-                adapterCreator: createCustomAdapter(String(guildId)),
+                adapterCreator: guild.voiceAdapterCreator,
                 selfDeaf: true,
                 selfMute: false,
             });
@@ -226,26 +167,13 @@ app.post('/play', async (req, res) => {
             connection.on('error', (error) => {
                 console.error(`❌ [VoiceServer ConnectionError ${guildId}]`, error);
             });
-
-            connection.on(VoiceConnectionStatus.Disconnected, async () => {
-                try {
-                    await Promise.race([
-                        entersState(connection, VoiceConnectionStatus.Signalling, 3_000),
-                        entersState(connection, VoiceConnectionStatus.Connecting, 3_000),
-                    ]);
-                } catch {
-                    try { connection.destroy(); } catch (e) {}
-                    connections.delete(guildId);
-                }
-            });
         }
 
-        // Cookie file check
+        // Check cookies file
         let cookieFile = '/opt/aetrna-music/prod/cookies.txt';
         if (!fs.existsSync(cookieFile)) cookieFile = path.resolve(__dirname, '../cookies.txt');
         if (!fs.existsSync(cookieFile)) cookieFile = path.resolve(__dirname, './cookies.txt');
         const useCookies = fs.existsSync(cookieFile);
-        if (useCookies) console.log(`🔑 [VoiceServer] Found cookies file at: ${cookieFile}`);
 
         const spawnEnv = {
             ...process.env,
@@ -257,28 +185,19 @@ app.post('/play', async (req, res) => {
             ...(useCookies ? ['--cookies', cookieFile] : []),
             '-f', 'bestaudio/best',
             '--no-playlist', '--geo-bypass', '--no-check-certificates', '--no-warnings',
-            '-g', url
+            '--get-title', '--get-url',
+            currentTrack.url
         ];
 
         const resolvePromise = resolveStreamUrl(resolveArgs, spawnEnv);
 
-        try {
-            console.log(`⏳ [VoiceServer] Waiting for voice connection Ready...`);
-            await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
-            console.log(`✅ [VoiceServer] Voice connection Ready!`);
-        } catch (stateErr) {
-            console.error(`❌ [VoiceServer] Voice connection failed: ${stateErr.message}`);
-            return res.status(500).json({ error: `Voice connection failed: ${stateErr.message}` });
-        }
+        console.log(`⏳ [VoiceServer] Waiting for voice connection Ready...`);
+        await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+        console.log(`✅ [VoiceServer] Native voice connection Ready!`);
 
-        let streamUrl;
-        try {
-            streamUrl = await resolvePromise;
-            console.log(`🔗 [VoiceServer] Resolved stream URL for guild ${guildId}`);
-        } catch (e) {
-            console.error(`❌ [VoiceServer] yt-dlp resolve error: ${e.message}`);
-            return res.status(500).json({ error: `yt-dlp resolve failed: ${e.message}` });
-        }
+        const [title, streamUrl] = await resolvePromise;
+        currentTrack.title = title || currentTrack.url;
+        console.log(`🔗 [VoiceServer] Resolved: ${currentTrack.title}`);
 
         let player = players.get(guildId);
         if (!player) {
@@ -286,14 +205,19 @@ app.post('/play', async (req, res) => {
             players.set(guildId, player);
 
             player.on(AudioPlayerStatus.Idle, () => {
-                cleanupStreams(guildId);
-                notifyBotTrackEnd(guildId, 'finished');
+                console.log(`🎵 [VoiceServer] Track finished for guild ${guildId}`);
+                const q = guildQueues.get(guildId) || [];
+                q.shift(); // Remove played song
+                guildQueues.set(guildId, q);
+                playNextInQueue(guildId, channelId, interactionChannel);
             });
 
             player.on('error', (err) => {
                 console.error(`❌ [VoiceServer] Player error in guild ${guildId}:`, err.message);
-                cleanupStreams(guildId);
-                notifyBotTrackEnd(guildId, 'error');
+                const q = guildQueues.get(guildId) || [];
+                q.shift();
+                guildQueues.set(guildId, q);
+                playNextInQueue(guildId, channelId, interactionChannel);
             });
         }
 
@@ -316,51 +240,132 @@ app.post('/play', async (req, res) => {
             inputType: StreamType.Raw,
             inlineVolume: true,
         });
-        resource.volume.setVolume(volume);
 
         player.play(resource);
         connection.subscribe(player);
 
-        res.json({ status: 'ok', message: 'Playback started' });
+        if (interactionChannel) {
+            const embed = new EmbedBuilder()
+                .setColor(0x00FF7F)
+                .setTitle('🎵 Now Playing')
+                .setDescription(`[${currentTrack.title}](${currentTrack.url})`)
+                .setTimestamp();
+            interactionChannel.send({ embeds: [embed] }).catch(() => {});
+        }
 
     } catch (err) {
-        console.error('❌ [VoiceServer] Play error:', err);
-        res.status(500).json({ error: err.message });
+        console.error('❌ Playback error:', err.message);
+        if (interactionChannel) {
+            interactionChannel.send(`❌ Playback error: ${err.message}`).catch(() => {});
+        }
+        const q = guildQueues.get(guildId) || [];
+        q.shift();
+        guildQueues.set(guildId, q);
+        playNextInQueue(guildId, channelId, interactionChannel);
+    }
+}
+
+// Handle Slash Commands
+discordClient.on('interactionCreate', async (interaction) => {
+    if (!interaction.isChatInputCommand()) return;
+
+    const { commandName, guildId, member, channel } = interaction;
+    if (!guildId || !member) return;
+
+    const voiceChannel = member.voice?.channel;
+
+    if (commandName === 'play') {
+        const query = interaction.options.getString('query');
+        if (!voiceChannel) {
+            return interaction.reply({ content: '❌ You must be in a voice channel to use `/play`!', ephemeral: true });
+        }
+
+        await interaction.deferReply();
+
+        let trackUrl = query;
+        if (!query.startsWith('http')) {
+            trackUrl = `ytsearch1:${query}`;
+        }
+
+        const queue = guildQueues.get(guildId) || [];
+        const isFirstSong = queue.length === 0;
+
+        queue.push({ title: query, url: trackUrl });
+        guildQueues.set(guildId, queue);
+
+        const embed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle('🎶 Added to Queue')
+            .setDescription(`\`${query}\``)
+            .setFooter({ text: `Position in queue: ${queue.length}` });
+
+        await interaction.editReply({ embeds: [embed] });
+
+        if (isFirstSong) {
+            playNextInQueue(guildId, voiceChannel.id, channel);
+        }
+    } else if (commandName === 'stop') {
+        guildQueues.delete(guildId);
+        cleanupStreams(guildId);
+
+        const player = players.get(guildId);
+        if (player) { player.stop(); players.delete(guildId); }
+
+        const connection = connections.get(guildId);
+        if (connection) {
+            try { connection.destroy(); } catch (e) {}
+            connections.delete(guildId);
+        }
+
+        await interaction.reply('⏹️ Stopped playback and cleared queue.');
+    } else if (commandName === 'skip') {
+        const player = players.get(guildId);
+        if (player) {
+            player.stop();
+            await interaction.reply('⏭️ Skipped current track.');
+        } else {
+            await interaction.reply({ content: '❌ Nothing is playing right now.', ephemeral: true });
+        }
+    } else if (commandName === 'pause') {
+        const player = players.get(guildId);
+        if (player) {
+            player.pause();
+            await interaction.reply('⏸️ Paused playback.');
+        } else {
+            await interaction.reply({ content: '❌ Nothing is playing right now.', ephemeral: true });
+        }
+    } else if (commandName === 'resume') {
+        const player = players.get(guildId);
+        if (player) {
+            player.unpause();
+            await interaction.reply('▶️ Resumed playback.');
+        } else {
+            await interaction.reply({ content: '❌ Nothing is playing right now.', ephemeral: true });
+        }
+    } else if (commandName === 'queue') {
+        const queue = guildQueues.get(guildId) || [];
+        if (!queue.length) {
+            return interaction.reply('🎶 Queue is currently empty.');
+        }
+
+        const description = queue.slice(0, 10).map((t, i) => `${i + 1}. \`${t.title}\``).join('\n');
+        const embed = new EmbedBuilder()
+            .setColor(0x9900FF)
+            .setTitle('📜 Current Music Queue')
+            .setDescription(description)
+            .setFooter({ text: `Total tracks in queue: ${queue.length}` });
+
+        await interaction.reply({ embeds: [embed] });
     }
 });
 
-app.post('/stop', (req, res) => {
-    const { guildId } = req.body;
-    cleanupStreams(guildId);
-
-    const player = players.get(guildId);
-    if (player) { player.stop(); players.delete(guildId); }
-
-    const connection = connections.get(guildId);
-    if (connection) {
-        try { connection.destroy(); } catch (e) {}
-        connections.delete(guildId);
-    }
-    adapters.delete(guildId);
-    voiceStatesMap.delete(guildId);
-
-    res.json({ status: 'ok' });
-});
-
-app.post('/pause', (req, res) => {
-    const player = players.get(req.body.guildId);
-    if (player) player.pause();
-    res.json({ status: 'ok' });
-});
-
-app.post('/resume', (req, res) => {
-    const player = players.get(req.body.guildId);
-    if (player) player.unpause();
-    res.json({ status: 'ok' });
-});
+// Express Server
+const app = express();
+app.use(express.json());
+const PORT = process.env.PORT || 3005;
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', connections: connections.size, adapters: adapters.size, cachedStates: voiceStatesMap.size });
+    res.json({ status: 'ok', clientReady: discordClient.isReady(), connections: connections.size });
 });
 
 app.listen(PORT, '127.0.0.1', () => {

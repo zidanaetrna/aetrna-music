@@ -62,30 +62,13 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 }
 
 func (b *Bot) Start() error {
-	if err := b.session.Open(); err != nil {
-		return fmt.Errorf("error opening discord connection: %w", err)
-	}
-
-	log.Printf("✅ Bot online as %s#%s", b.session.State.User.Username, b.session.State.User.Discriminator)
-
-	playCb := func(guildID string, song music.Song) error {
-		return b.voice.Play(guildID, song.ChannelID, song.URL, 1.0)
-	}
-	stopCb := func(guildID string) error {
-		_ = b.session.ChannelVoiceJoinManual(guildID, "", false, false)
-		return b.voice.Stop(guildID)
-	}
+	log.Printf("✅ Go Backend Microservice running on port 8080")
 
 	spotifyCl := spotify.NewClient(b.cfg.SpotifyClientID, b.cfg.SpotifyClientSecret)
 	b.spotify = spotifyCl
-	b.store = music.NewQueueStore(playCb, stopCb)
-	b.handler = commands.NewHandler(b.cfg, b.db, b.store, spotifyCl)
 
-	// Register slash commands
-	b.registerSlashCommands()
-
-	// Start internal webhook listener for track-end events from voice-server
-	go b.startInternalWebhookServer()
+	// Start internal webhook server
+	b.startInternalWebhookServer()
 
 	return nil
 }
