@@ -166,7 +166,7 @@ app.post('/voice-state', (req, res) => {
 
             console.log(`🔑 [VoiceServer] Applying Voice State: User=${current.userId}, Session=${current.sessionId}, Endpoint=${current.endpoint}, Channel=${current.channelId}`);
             
-            // Step A: Send Voice State Update FIRST so @discordjs/voice registers userId and sessionId
+            // Synchronously apply both VoiceStateUpdate and VoiceServerUpdate on the exact same tick
             adapter.onVoiceStateUpdate({
                 session_id: current.sessionId,
                 channel_id: current.channelId,
@@ -174,16 +174,13 @@ app.post('/voice-state', (req, res) => {
                 guild_id: guildId
             });
 
-            // Step B: Wait 50ms for @discordjs/voice state machine tick, THEN send Voice Server Update
-            setTimeout(() => {
-                adapter.onVoiceServerUpdate({
-                    token: current.token,
-                    endpoint: current.endpoint,
-                    guild_id: guildId
-                });
-                console.log(`✅ [VoiceServer] Applied Voice Server Update to adapter for guild ${guildId}`);
-            }, 50);
+            adapter.onVoiceServerUpdate({
+                token: current.token,
+                endpoint: current.endpoint,
+                guild_id: guildId
+            });
 
+            console.log(`✅ [VoiceServer] Applied Voice State and Server Update to adapter synchronously for guild ${guildId}`);
             return res.json({ status: 'ok', updated: true });
         }
         console.log(`⏳ [VoiceServer] Partial voice state received for guild ${guildId}`);
