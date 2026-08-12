@@ -29,14 +29,16 @@ function createCustomAdapter(guildId) {
     return (methods) => {
         adapters.set(guildId, methods);
 
-        // Apply cached voice credentials ONLY when complete (token, endpoint, sessionId, userId, channelId)
-        const cachedState = voiceStatesMap.get(guildId);
-        if (cachedState && cachedState.token && cachedState.endpoint && cachedState.sessionId && cachedState.userId) {
-            const cleanEndpoint = cachedState.endpoint.split(':')[0];
-            console.log(`🔑 [VoiceServer] Applying FULL cached voice state on adapter creation for guild ${guildId} (Endpoint: ${cleanEndpoint}, Channel: ${cachedState.channelId})`);
-            methods.onVoiceServerUpdate({ token: cachedState.token, endpoint: cleanEndpoint, guild_id: guildId });
-            methods.onVoiceStateUpdate({ session_id: cachedState.sessionId, channel_id: cachedState.channelId, user_id: cachedState.userId, guild_id: guildId });
-        }
+        // Apply cached voice credentials on NEXT TICK after VoiceConnection constructor finishes
+        setImmediate(() => {
+            const cachedState = voiceStatesMap.get(guildId);
+            if (cachedState && cachedState.token && cachedState.endpoint && cachedState.sessionId && cachedState.userId) {
+                const cleanEndpoint = cachedState.endpoint.split(':')[0];
+                console.log(`🔑 [VoiceServer] Applying FULL cached voice state on nextTick for guild ${guildId} (Endpoint: ${cleanEndpoint}, Channel: ${cachedState.channelId})`);
+                methods.onVoiceServerUpdate({ token: cachedState.token, endpoint: cleanEndpoint, guild_id: guildId });
+                methods.onVoiceStateUpdate({ session_id: cachedState.sessionId, channel_id: cachedState.channelId, user_id: cachedState.userId, guild_id: guildId });
+            }
+        });
 
         return {
             sendPayload(data) {
@@ -113,9 +115,11 @@ app.post('/voice-state', (req, res) => {
     if (adapter) {
         // ONLY trigger voice updates when all parameters exist together to prevent @discordjs/voice abort
         if (current.token && current.endpoint && current.sessionId && current.userId) {
-            adapter.onVoiceServerUpdate({ token: current.token, endpoint: current.endpoint, guild_id: guildId });
-            adapter.onVoiceStateUpdate({ session_id: current.sessionId, channel_id: current.channelId, user_id: current.userId, guild_id: guildId });
-            console.log(`✅ [VoiceServer] FULL Voice state applied to active adapter for guild ${guildId} (Endpoint: ${current.endpoint}, Channel: ${current.channelId})`);
+            setImmediate(() => {
+                adapter.onVoiceServerUpdate({ token: current.token, endpoint: current.endpoint, guild_id: guildId });
+                adapter.onVoiceStateUpdate({ session_id: current.sessionId, channel_id: current.channelId, user_id: current.userId, guild_id: guildId });
+                console.log(`✅ [VoiceServer] FULL Voice state applied on nextTick to active adapter for guild ${guildId} (Endpoint: ${current.endpoint}, Channel: ${current.channelId})`);
+            });
             return res.json({ status: 'ok', updated: true });
         }
         console.log(`⏳ [VoiceServer] Partial voice state received for guild ${guildId} (waiting for complete credentials)`);
