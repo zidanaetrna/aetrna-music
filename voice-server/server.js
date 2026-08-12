@@ -172,9 +172,9 @@ app.post('/play', async (req, res) => {
             }
 
             connection = joinVoiceChannel({
-                channelId: channelId,
-                guildId: guildId,
-                adapterCreator: createCustomAdapter(guildId),
+                channelId: String(channelId),
+                guildId: String(guildId),
+                adapterCreator: createCustomAdapter(String(guildId)),
                 selfDeaf: true,
                 selfMute: false,
             });
