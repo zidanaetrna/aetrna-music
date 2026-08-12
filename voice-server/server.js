@@ -258,9 +258,27 @@ app.post('/join-and-play', async (req, res) => {
 
             connection.on('stateChange', (oldState, newState) => {
                 console.log(`🔄 [VoiceServer] VoiceConnection ${guildId}: ${oldState.status} ➔ ${newState.status}`);
-                if (newState.networking) {
-                    newState.networking.on('debug', (msg) => console.log(`🔍 [VoiceNetworking Debug ${guildId}]`, msg));
-                    newState.networking.on('error', (err) => console.log(`❌ [VoiceNetworking Error ${guildId}]`, err));
+
+                const net = newState.networking || (oldState && oldState.networking);
+                if (net && !net._listenersAttached) {
+                    net._listenersAttached = true;
+
+                    net.on('stateChange', (oldNetState, newNetState) => {
+                        console.log(`🌐 [VoiceServer NetState ${guildId}] ${oldNetState.code} (${oldNetState.status}) ➔ ${newNetState.code} (${newNetState.status})`);
+                        if (newNetState.ws) {
+                            newNetState.ws.on('close', (eventOrCode, reason) => {
+                                const code = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.code : eventOrCode;
+                                const rsn = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.reason : reason;
+                                console.log(`🔌 [VoiceServer WS Closed ${guildId}] Code: ${code}, Reason: "${rsn}"`, JSON.stringify(eventOrCode));
+                            });
+                            newNetState.ws.on('error', (err) => {
+                                console.log(`❌ [VoiceServer WS Error ${guildId}]`, err.message);
+                            });
+                        }
+                    });
+
+                    net.on('debug', (msg) => console.log(`🔍 [VoiceServer Debug ${guildId}]`, msg));
+                    net.on('error', (err) => console.log(`❌ [VoiceServer Error ${guildId}]`, err));
                 }
             });
 
