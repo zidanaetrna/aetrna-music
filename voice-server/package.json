@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
+    "@snazzah/davey": "^0.1.6",
     "discord.js": "^14.15.0",
     "express": "^4.19.2",
     "opusscript": "^0.0.8",
