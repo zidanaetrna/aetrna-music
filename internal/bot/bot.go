@@ -170,17 +170,6 @@ func (b *Bot) handleVoiceServerUpdate(s *discordgo.Session, v *discordgo.VoiceSe
 	endpoint := cleanEndpoint
 
 	sessionID := b.voiceSessionIDs[v.GuildID]
-	if sessionID == "" {
-		if g, err := s.State.Guild(v.GuildID); err == nil {
-			for _, vs := range g.VoiceStates {
-				if vs.UserID == s.State.User.ID {
-					sessionID = vs.SessionID
-					b.voiceSessionIDs[v.GuildID] = sessionID
-					break
-				}
-			}
-		}
-	}
 	b.Unlock()
 
 	userID := ""
