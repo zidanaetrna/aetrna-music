@@ -105,6 +105,7 @@ type ProxiedInteraction struct {
 	CommandName          string          `json:"command_name"`
 	Options              json.RawMessage `json:"options"`
 	CustomID             string          `json:"custom_id"`
+	MessageID            string          `json:"message_id"`
 	Values               []string        `json:"values"`
 }
 
@@ -120,6 +121,10 @@ func buildInteractionCreate(p ProxiedInteraction) *discordgo.InteractionCreate {
 		Member: &discordgo.Member{
 			User: &discordgo.User{ID: p.UserID, Username: p.Username},
 		},
+	}
+
+	if p.MessageID != "" {
+		interaction.Message = &discordgo.Message{ID: p.MessageID}
 	}
 
 	if p.Type == 2 { // ApplicationCommand
@@ -435,22 +440,30 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		}
 		flags = discordgo.MessageFlagsEphemeral
 
-	case "btn_lyrics_minus2":
+	case "btn_lyrics_minus2", "btn_lyrics_plus2", "btn_lyrics_reset":
 		q := b.store.Get(p.GuildID)
-		q.LyricsOffset -= 2 * time.Second
-		content = fmt.Sprintf("⏪ Offset sinkronisasi lirik diubah: **%v**", q.LyricsOffset)
-		flags = discordgo.MessageFlagsEphemeral
+		if cmd == "btn_lyrics_minus2" {
+			q.LyricsOffset -= 2 * time.Second
+		} else if cmd == "btn_lyrics_plus2" {
+			q.LyricsOffset += 2 * time.Second
+		} else {
+			q.LyricsOffset = 0
+		}
 
-	case "btn_lyrics_plus2":
-		q := b.store.Get(p.GuildID)
-		q.LyricsOffset += 2 * time.Second
-		content = fmt.Sprintf("⏩ Offset sinkronisasi lirik diubah: **%v**", q.LyricsOffset)
-		flags = discordgo.MessageFlagsEphemeral
+		if p.MessageID != "" && q.NowPlaying != nil && q.NowPlaying.Lyrics != nil {
+			if lRes, ok := q.NowPlaying.Lyrics.(*lyrics.LyricsResult); ok {
+				dur := q.CurrentDuration() + 300*time.Millisecond + q.LyricsOffset
+				updEmbed := commands.CreateLyricsEmbed(q.NowPlaying, lRes, dur)
+				comps := commands.CreateLyricsButtons()
+				_, _ = b.session.FollowupMessageEdit(i.Interaction, p.MessageID, &discordgo.WebhookEdit{
+					Embeds:     &[]*discordgo.MessageEmbed{updEmbed},
+					Components: &comps,
+				})
+			}
+		}
 
-	case "btn_lyrics_reset":
-		q := b.store.Get(p.GuildID)
-		q.LyricsOffset = 0
-		content = "🔄 Offset sinkronisasi lirik di-reset ke 0s!"
+		offsetSec := float64(q.LyricsOffset.Milliseconds()) / 1000.0
+		content = fmt.Sprintf("⏱️ Sync Offset diubah: `%+.1fs`", offsetSec)
 		flags = discordgo.MessageFlagsEphemeral
 
 	case "btn_close_lyrics":

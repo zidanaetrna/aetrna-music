@@ -191,6 +191,7 @@ discordClient.on('interactionCreate', async (interaction) => {
         command_name: interaction.isChatInputCommand() ? interaction.commandName : null,
         options: interaction.isChatInputCommand() ? serializeOptions(interaction.options.data) : [],
         custom_id: (interaction.isButton() || interaction.isStringSelectMenu()) ? interaction.customId : null,
+        message_id: (interaction.isButton() || interaction.isStringSelectMenu()) ? interaction.message?.id : null,
         values: interaction.isStringSelectMenu() ? interaction.values : [],
     };
 
