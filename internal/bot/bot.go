@@ -633,26 +633,41 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 	q.SetLyricsCancel(cancel)
 
 	go func(targetMsgID string, targetSongURL string) {
-		ticker := time.NewTicker(2500 * time.Millisecond)
-		defer ticker.Stop()
-
 		for {
+			if !q.IsPlayingAndMatching(targetSongURL) {
+				return
+			}
+			np := q.NowPlaying
+			dur := q.CurrentDuration()
+
+			updEmbed := commands.CreateLyricsEmbed(np, lResult, dur)
+			_, _ = b.session.FollowupMessageEdit(i.Interaction, targetMsgID, &discordgo.WebhookEdit{
+				Embeds:     &[]*discordgo.MessageEmbed{updEmbed},
+				Components: &comps,
+			})
+
+			// Calculate adaptive sleep duration until the next lyric line begins
+			sleepDuration := 2500 * time.Millisecond
+			if lResult != nil && lResult.IsSynced && len(lResult.Synced) > 0 {
+				for _, line := range lResult.Synced {
+					if line.Timestamp > dur {
+						diff := line.Timestamp - dur
+						if diff < 1500*time.Millisecond {
+							sleepDuration = 1500 * time.Millisecond
+						} else if diff > 5*time.Second {
+							sleepDuration = 5 * time.Second
+						} else {
+							sleepDuration = diff
+						}
+						break
+					}
+				}
+			}
+
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
-				if !q.IsPlayingAndMatching(targetSongURL) {
-					return
-				}
-				np := q.NowPlaying
-
-				dur := q.CurrentDuration()
-				updEmbed := commands.CreateLyricsEmbed(np, lResult, dur)
-
-				_, _ = b.session.FollowupMessageEdit(i.Interaction, targetMsgID, &discordgo.WebhookEdit{
-					Embeds:     &[]*discordgo.MessageEmbed{updEmbed},
-					Components: &comps,
-				})
+			case <-time.After(sleepDuration):
 			}
 		}
 	}(msg.ID, song.URL)
