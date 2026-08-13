@@ -453,19 +453,24 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		}
 		flags = discordgo.MessageFlagsEphemeral
 
-	case "btn_lyrics_minus2", "btn_lyrics_plus2", "btn_lyrics_reset":
+	case "btn_lyrics_minus3", "btn_lyrics_minus1", "btn_lyrics_plus1", "btn_lyrics_plus3", "btn_lyrics_reset":
 		q := b.store.Get(p.GuildID)
-		if cmd == "btn_lyrics_minus2" {
-			q.LyricsOffset -= 2 * time.Second
-		} else if cmd == "btn_lyrics_plus2" {
-			q.LyricsOffset += 2 * time.Second
-		} else {
+		switch cmd {
+		case "btn_lyrics_minus3":
+			q.LyricsOffset -= 3 * time.Second
+		case "btn_lyrics_minus1":
+			q.LyricsOffset -= 1 * time.Second
+		case "btn_lyrics_plus1":
+			q.LyricsOffset += 1 * time.Second
+		case "btn_lyrics_plus3":
+			q.LyricsOffset += 3 * time.Second
+		default:
 			q.LyricsOffset = 0
 		}
 
 		if p.MessageID != "" && q.NowPlaying != nil && q.NowPlaying.Lyrics != nil {
 			if lRes, ok := q.NowPlaying.Lyrics.(*lyrics.LyricsResult); ok {
-				dur := q.CurrentDuration() + 300*time.Millisecond + q.LyricsOffset
+				dur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
 				updEmbed := commands.CreateLyricsEmbed(q.NowPlaying, lRes, dur)
 				comps := commands.CreateLyricsButtons()
 				_, _ = b.session.FollowupMessageEdit(i.Interaction, p.MessageID, &discordgo.WebhookEdit{
@@ -667,7 +672,7 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 		}
 	}
 
-	currentDur := q.CurrentDuration()
+	currentDur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
 	embed := commands.CreateLyricsEmbed(song, lResult, currentDur)
 	comps := commands.CreateLyricsButtons()
 
@@ -690,8 +695,8 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 				return
 			}
 			np := q.NowPlaying
-			// Add +300ms predictive latency compensation offset & user custom LyricsOffset
-			dur := q.CurrentDuration() + 300*time.Millisecond + q.LyricsOffset
+			// Compensate -5.0s FFmpeg audio buffering & streaming startup latency + user LyricsOffset
+			dur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
 
 			updEmbed := commands.CreateLyricsEmbed(np, lResult, dur)
 			_, _ = b.session.FollowupMessageEdit(i.Interaction, targetMsgID, &discordgo.WebhookEdit{
