@@ -61,7 +61,7 @@ type GuildQueue struct {
 func NewGuildQueue(guildID string, playCb PlayCallback, stopCb StopCallback, preFetchCb PreFetchCallback) *GuildQueue {
 	return &GuildQueue{
 		GuildID:    guildID,
-		Volume:     100,
+		Volume:     1.0,
 		Loop:       LoopOff,
 		Filter:     "none",
 		Songs:      make([]Song, 0),

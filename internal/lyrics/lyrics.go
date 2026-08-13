@@ -3,6 +3,7 @@ package lyrics
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -40,20 +41,14 @@ var (
 
 // FetchLyrics attempts to fetch synced/plain lyrics from LRCLIB API.
 func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, error) {
-	trackName = cleanQuery(trackName)
-	artistName = cleanQuery(artistName)
-
-	var title, artist string
-	if strings.Contains(trackName, " - ") {
-		parts := strings.SplitN(trackName, " - ", 2)
-		artist = strings.TrimSpace(parts[0])
-		title = strings.TrimSpace(parts[1])
-	} else {
-		title = trackName
-		artist = artistName
+	title, artist := extractTitleAndArtist(trackName)
+	if artist == "" {
+		artist = cleanQuery(artistName)
 	}
 
-	// 1. Try search with title + artist
+	log.Printf("🔍 [Lyrics] Extracted title: '%s' | artist: '%s' from raw: '%s'", title, artist, trackName)
+
+	// 1. Try search with extracted title + artist
 	if title != "" && artist != "" {
 		if resp, err := queryLRCLIBSubSearch(fmt.Sprintf("%s %s", title, artist)); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
 			return parseResponse(resp), nil
@@ -67,12 +62,35 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 		}
 	}
 
-	// 3. Fallback search with full trackName
-	if resp, err := queryLRCLIBSubSearch(trackName); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
+	// 3. Fallback search with full cleaned trackName
+	cleanFull := cleanQuery(trackName)
+	if resp, err := queryLRCLIBSubSearch(cleanFull); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
 		return parseResponse(resp), nil
 	}
 
 	return nil, fmt.Errorf("lyrics not found for '%s'", trackName)
+}
+
+func extractTitleAndArtist(rawQuery string) (string, string) {
+	cleaned := cleanQuery(rawQuery)
+
+	// Check Japanese quote brackets 「Title」 or 『Title』
+	reBracket := regexp.MustCompile(`^(.*?)[「『\(\[](.*?)[」』\)\]](.*)$`)
+	matches := reBracket.FindStringSubmatch(cleaned)
+	if len(matches) >= 4 {
+		artistCandidate := strings.TrimSpace(matches[1])
+		titleCandidate := strings.TrimSpace(matches[2])
+		if artistCandidate != "" && titleCandidate != "" {
+			return titleCandidate, artistCandidate
+		}
+	}
+
+	if strings.Contains(cleaned, " - ") {
+		parts := strings.SplitN(cleaned, " - ", 2)
+		return strings.TrimSpace(parts[1]), strings.TrimSpace(parts[0])
+	}
+
+	return cleaned, ""
 }
 
 func queryLRCLIBGet(trackName, artistName string, durationSec int) (*lrclibResponse, error) {

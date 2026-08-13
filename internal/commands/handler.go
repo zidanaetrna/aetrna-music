@@ -33,6 +33,14 @@ func NewHandler(cfg *config.Config, database *db.DB, store *music.QueueStore, sp
 
 // CreateNowPlayingEmbed constructs the custom Now Playing UI card with full-width album cover banner
 func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue) *discordgo.MessageEmbed {
+	volPct := int(queue.Volume * 100)
+	if queue.Volume > 1.0 {
+		volPct = int(queue.Volume)
+	}
+	if volPct <= 0 {
+		volPct = 100
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Title:       "🎵 NOW PLAYING",
 		Description: fmt.Sprintf("**[%s](%s)**", song.Title, song.URL),
@@ -50,7 +58,7 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue) *discordgo
 			},
 			{
 				Name:   "🔊 Volume",
-				Value:  fmt.Sprintf("%d%%", int(queue.Volume*100)),
+				Value:  fmt.Sprintf("%d%%", volPct),
 				Inline: true,
 			},
 			{
@@ -86,9 +94,8 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue) *discordgo
 	}, embed.Fields...)
 
 	if song.Thumbnail != "" {
-		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: song.Thumbnail}
+		embed.Image = &discordgo.MessageEmbedImage{URL: song.Thumbnail}
 	}
-	embed.Image = &discordgo.MessageEmbedImage{URL: BuildProgressBarImageURL(currentSec, song.Duration)}
 
 	return embed
 }
