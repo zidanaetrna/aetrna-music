@@ -367,6 +367,7 @@ app.post('/join-and-play', async (req, res) => {
                     '-headers', `User-Agent: ${userAgent}\r\n`,
                     '-i', streamUrl,
                     '-analyzeduration', '0', '-loglevel', 'error',
+                    '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
                     '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
                 ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
