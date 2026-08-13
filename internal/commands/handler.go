@@ -240,21 +240,56 @@ func CreateLyricsEmbed(song *music.Song, res interface{}, currentDur time.Durati
 		sb.WriteString(fmt.Sprintf("**Artist:** %s\n\n", lResult.ArtistName))
 	}
 
-	startLine := activeIdx - 2
-	if startLine < 0 {
-		startLine = 0
-	}
-	endLine := startLine + 5
-	if endLine > len(lResult.Synced) {
-		endLine = len(lResult.Synced)
-	}
+	if activeIdx == -1 {
+		sb.WriteString("🎵 *(Intro / Instrumental)*\n\n")
+		startLine := 0
+		endLine := 4
+		if endLine > len(lResult.Synced) {
+			endLine = len(lResult.Synced)
+		}
+		for i := startLine; i < endLine; i++ {
+			sb.WriteString(fmt.Sprintf("♪ *%s*\n\n", lResult.Synced[i].Text))
+		}
+	} else {
+		isInstrumentalBreak := false
+		isOutro := false
 
-	for i := startLine; i < endLine; i++ {
-		line := lResult.Synced[i]
-		if i == activeIdx {
-			sb.WriteString(fmt.Sprintf("👉 ▶️ **\"%s\"** ◄\n\n", line.Text))
-		} else {
-			sb.WriteString(fmt.Sprintf("♪ *%s*\n\n", line.Text))
+		if activeIdx < len(lResult.Synced)-1 {
+			nextLineTs := lResult.Synced[activeIdx+1].Timestamp
+			curLineTs := lResult.Synced[activeIdx].Timestamp
+			// Safe threshold: >= 8s gap, >= 4.5s elapsed after current line, until 1.5s before next line
+			if nextLineTs-curLineTs >= 8*time.Second && currentDur-curLineTs >= 4500*time.Millisecond && currentDur < nextLineTs-1500*time.Millisecond {
+				isInstrumentalBreak = true
+			}
+		} else if activeIdx == len(lResult.Synced)-1 {
+			lastLineTs := lResult.Synced[activeIdx].Timestamp
+			if currentDur-lastLineTs >= 6*time.Second {
+				isOutro = true
+			}
+		}
+
+		startLine := activeIdx - 2
+		if startLine < 0 {
+			startLine = 0
+		}
+		endLine := startLine + 5
+		if endLine > len(lResult.Synced) {
+			endLine = len(lResult.Synced)
+		}
+
+		for i := startLine; i < endLine; i++ {
+			line := lResult.Synced[i]
+			if i == activeIdx {
+				if isOutro {
+					sb.WriteString("🎼 *(Outro / Music Ending)*\n\n")
+				} else if isInstrumentalBreak {
+					sb.WriteString("🎸 *(Instrumental Break)*\n\n")
+				} else {
+					sb.WriteString(fmt.Sprintf("👉 ▶️ **\"%s\"** ◄\n\n", line.Text))
+				}
+			} else {
+				sb.WriteString(fmt.Sprintf("♪ *%s*\n\n", line.Text))
+			}
 		}
 	}
 
@@ -271,6 +306,43 @@ func CreateLyricsEmbed(song *music.Song, res interface{}, currentDur time.Durati
 		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: song.Thumbnail}
 	}
 
+	return embed
+}
+
+func CreateAddedToQueueEmbed(song *music.Song, queue *music.GuildQueue) *discordgo.MessageEmbed {
+	embed := &discordgo.MessageEmbed{
+		Title:       "➕ LAGU DITAMBAHKAN KE ANTREAN",
+		Description: fmt.Sprintf("**[%s](%s)**", song.Title, song.URL),
+		Color:       0x5865F2,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "👤 Requested By",
+				Value:  fmt.Sprintf("<@%s>", song.RequestedBy),
+				Inline: true,
+			},
+			{
+				Name:   "📻 Artist / Channel",
+				Value:  song.Author,
+				Inline: true,
+			},
+			{
+				Name:   "⏱️ Duration",
+				Value:  music.FormatDuration(song.Duration),
+				Inline: true,
+			},
+			{
+				Name:   "📊 Position in Queue",
+				Value:  fmt.Sprintf("#%d", len(queue.Songs)),
+				Inline: true,
+			},
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("aetrna-music v2.0 • Total Queue: %d tracks", len(queue.Songs)),
+		},
+	}
+	if song.Thumbnail != "" {
+		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: song.Thumbnail}
+	}
 	return embed
 }
 

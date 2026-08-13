@@ -62,13 +62,75 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 		}
 	}
 
-	// 3. Fallback search with full cleaned trackName
+	// 3. Fallback search with Netease Cloud Music API (Over 10M Synced LRC Lyrics)
+	if title != "" {
+		if resp, err := queryNeteaseLyrics(title, artist); err == nil && resp != nil && resp.SyncedLyrics != "" {
+			log.Printf("✅ [Lyrics] Synced lyrics found on Netease Cloud Music fallback!")
+			return parseResponse(resp), nil
+		}
+	}
+
+	// 4. Fallback search with full cleaned trackName on LRCLIB
 	cleanFull := cleanQuery(trackName)
 	if resp, err := queryLRCLIBSubSearch(cleanFull); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
 		return parseResponse(resp), nil
 	}
 
 	return nil, fmt.Errorf("lyrics not found for '%s'", trackName)
+}
+
+func queryNeteaseLyrics(title, artist string) (*lrclibResponse, error) {
+	queryStr := title
+	if artist != "" {
+		queryStr += " " + artist
+	}
+	searchURL := fmt.Sprintf("https://music.163.com/api/search/get/web?csrf_token=&type=1&offset=0&limit=1&s=%s", url.QueryEscape(queryStr))
+	req, err := http.NewRequest("GET", searchURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	var searchResp struct {
+		Result struct {
+			Songs []struct {
+				ID int64 `json:"id"`
+			} `json:"songs"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&searchResp); err != nil || len(searchResp.Result.Songs) == 0 {
+		return nil, fmt.Errorf("netease search empty")
+	}
+
+	songID := searchResp.Result.Songs[0].ID
+	lyricURL := fmt.Sprintf("https://music.163.com/api/song/lyric?id=%d&lv=-1&kv=-1&tv=-1", songID)
+	req2, _ := http.NewRequest("GET", lyricURL, nil)
+	req2.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+	res2, err := httpClient.Do(req2)
+	if err != nil {
+		return nil, err
+	}
+	defer res2.Body.Close()
+
+	var lyricResp struct {
+		Lrc struct {
+			Lyric string `json:"lyric"`
+		} `json:"lrc"`
+	}
+	if err := json.NewDecoder(res2.Body).Decode(&lyricResp); err != nil || lyricResp.Lrc.Lyric == "" {
+		return nil, fmt.Errorf("netease lyric empty")
+	}
+
+	return &lrclibResponse{
+		TrackName:    title,
+		ArtistName:   artist,
+		SyncedLyrics: lyricResp.Lrc.Lyric,
+	}, nil
 }
 
 func extractTitleAndArtist(rawQuery string) (string, string) {

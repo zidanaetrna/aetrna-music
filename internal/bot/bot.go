@@ -322,6 +322,8 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 	song.RequestedBy = p.UserID
 	song.ChannelID = p.MemberVoiceChannelID
 
+	isAlreadyPlaying := queue.IsPlaying && queue.NowPlaying != nil
+
 	queue.AddSong(song)
 	queue.VoiceChannelID = p.MemberVoiceChannelID
 
@@ -329,10 +331,16 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 		go queue.PlayNext()
 	}
 
-	followup(&discordgo.WebhookParams{
-		Embeds:     []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(&song, queue)},
-		Components: commands.CreateControlButtons(queue.IsPaused),
-	})
+	if isAlreadyPlaying {
+		followup(&discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{commands.CreateAddedToQueueEmbed(&song, queue)},
+		})
+	} else {
+		followup(&discordgo.WebhookParams{
+			Embeds:     []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(&song, queue)},
+			Components: commands.CreateControlButtons(queue.IsPaused),
+		})
+	}
 }
 
 // handleProxiedCommand handles all other commands and buttons using FollowupMessageCreate.
@@ -638,7 +646,8 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 				return
 			}
 			np := q.NowPlaying
-			dur := q.CurrentDuration()
+			// Add +300ms predictive latency compensation offset to cancel out Discord API RTT & audio buffering
+			dur := q.CurrentDuration() + 300*time.Millisecond
 
 			updEmbed := commands.CreateLyricsEmbed(np, lResult, dur)
 			_, _ = b.session.FollowupMessageEdit(i.Interaction, targetMsgID, &discordgo.WebhookEdit{
@@ -646,12 +655,12 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 				Components: &comps,
 			})
 
-			// Calculate adaptive sleep duration until the next lyric line begins
+			// Predictive lookahead scheduling: wake up 300ms early to trigger edit ahead of network latency
 			sleepDuration := 2500 * time.Millisecond
 			if lResult != nil && lResult.IsSynced && len(lResult.Synced) > 0 {
 				for _, line := range lResult.Synced {
 					if line.Timestamp > dur {
-						diff := line.Timestamp - dur
+						diff := line.Timestamp - dur - 300*time.Millisecond
 						if diff < 1500*time.Millisecond {
 							sleepDuration = 1500 * time.Millisecond
 						} else if diff > 5*time.Second {
