@@ -69,7 +69,19 @@ func (b *Bot) Start() error {
 		} else {
 			log.Printf("⚡ [Bot] Using pre-fetched stream URL for '%s' (0ms transition!)", song.Title)
 		}
-		return b.voice.PlayStream(guildID, song.ChannelID, streamURL, 1.0)
+		err := b.voice.PlayStream(guildID, song.ChannelID, streamURL, 1.0)
+		if err == nil && song.TextChannelID != "" {
+			go func() {
+				q := b.store.Get(guildID)
+				embed := commands.CreateNowPlayingEmbed(&song, q)
+				comps := commands.CreateControlButtons(q.IsPaused)
+				_, _ = b.session.ChannelMessageSendComplex(song.TextChannelID, &discordgo.MessageSend{
+					Embeds:     []*discordgo.MessageEmbed{embed},
+					Components: comps,
+				})
+			}()
+		}
+		return err
 	}
 	stopCb := func(guildID string) error { return b.voice.Stop(guildID) }
 	preFetchCb := func(songURL string) (string, error) {
@@ -326,6 +338,7 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 	song := songs[0]
 	song.RequestedBy = p.UserID
 	song.ChannelID = p.MemberVoiceChannelID
+	song.TextChannelID = p.ChannelID
 
 	isAlreadyPlaying := queue.IsPlaying && queue.NowPlaying != nil
 
