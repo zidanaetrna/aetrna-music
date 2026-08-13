@@ -3,11 +3,12 @@ package i18n
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
+
+	"aetrna-music/locales"
 )
 
 type Manager struct {
@@ -16,24 +17,24 @@ type Manager struct {
 	mu          sync.RWMutex
 }
 
-var Globali18n = NewManager("./locales", "en")
+var Globali18n = NewManager("en")
 
-func NewManager(localesDir, defaultLang string) *Manager {
+func NewManager(defaultLang string) *Manager {
 	m := &Manager{
 		locales:     make(map[string]map[string]string),
 		defaultLang: defaultLang,
 	}
-	_ = m.LoadLocales(localesDir)
+	_ = m.LoadEmbeddedLocales()
 	return m
 }
 
-func (m *Manager) LoadLocales(dir string) error {
+func (m *Manager) LoadEmbeddedLocales() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	entries, err := os.ReadDir(dir)
+	entries, err := fs.ReadDir(locales.FS, ".")
 	if err != nil {
-		log.Printf("⚠️ [i18n] Warning reading locales dir %q: %v", dir, err)
+		log.Printf("⚠️ [i18n] Error reading embedded locales: %v", err)
 		return err
 	}
 
@@ -43,21 +44,20 @@ func (m *Manager) LoadLocales(dir string) error {
 		}
 
 		lang := strings.TrimSuffix(entry.Name(), ".json")
-		filePath := filepath.Join(dir, entry.Name())
-		data, err := os.ReadFile(filePath)
+		data, err := locales.FS.ReadFile(entry.Name())
 		if err != nil {
-			log.Printf("⚠️ [i18n] Failed to read locale file %s: %v", filePath, err)
+			log.Printf("⚠️ [i18n] Failed to read embedded locale %s: %v", entry.Name(), err)
 			continue
 		}
 
 		var translations map[string]string
 		if err := json.Unmarshal(data, &translations); err != nil {
-			log.Printf("⚠️ [i18n] Failed to parse JSON in %s: %v", filePath, err)
+			log.Printf("⚠️ [i18n] Failed to parse JSON in embedded locale %s: %v", entry.Name(), err)
 			continue
 		}
 
 		m.locales[lang] = translations
-		log.Printf("🌐 [i18n] Loaded locale '%s' (%d keys)", lang, len(translations))
+		log.Printf("🌐 [i18n] Loaded embedded locale '%s' (%d keys)", lang, len(translations))
 	}
 	return nil
 }
