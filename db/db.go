@@ -56,6 +56,19 @@ func Init(dbPath string) (*DB, error) {
 	}
 
 	database := &DB{DB: sqliteDB}
+
+	// High-performance SQLite PRAGMA tuning for concurrent multi-guild access
+	pragmas := []string{
+		"PRAGMA journal_mode=WAL;",
+		"PRAGMA synchronous=NORMAL;",
+		"PRAGMA temp_store=MEMORY;",
+		"PRAGMA cache_size=-64000;", // 64MB Cache
+		"PRAGMA busy_timeout=5000;",
+	}
+	for _, p := range pragmas {
+		_, _ = sqliteDB.Exec(p)
+	}
+
 	if err := database.migrate(); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}

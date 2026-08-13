@@ -2,6 +2,7 @@ package music
 
 import (
 	"sync"
+	"time"
 )
 
 type QueueStore struct {
@@ -13,11 +14,33 @@ type QueueStore struct {
 }
 
 func NewQueueStore(playCb PlayCallback, stopCb StopCallback, preFetchCb PreFetchCallback) *QueueStore {
-	return &QueueStore{
+	s := &QueueStore{
 		queues:     make(map[string]*GuildQueue),
 		playCb:     playCb,
 		stopCb:     stopCb,
 		preFetchCb: preFetchCb,
+	}
+	go s.startGARoutine()
+	return s
+}
+
+func (s *QueueStore) startGARoutine() {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.mu.Lock()
+		for guildID, q := range s.queues {
+			q.mu.RLock()
+			isPlaying := q.IsPlaying
+			hasSongs := len(q.Songs) > 0
+			q.mu.RUnlock()
+
+			if !isPlaying && !hasSongs {
+				delete(s.queues, guildID)
+			}
+		}
+		s.mu.Unlock()
 	}
 }
 

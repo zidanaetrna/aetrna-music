@@ -33,6 +33,14 @@ type YtdlpSearchResult struct {
 	Uploader   string  `json:"uploader"`
 }
 
+var ytdlpSemaphore = make(chan struct{}, 12)
+
+func execYtdlpCmd(cmd *exec.Cmd) ([]byte, error) {
+	ytdlpSemaphore <- struct{}{}
+	defer func() { <-ytdlpSemaphore }()
+	return cmd.Output()
+}
+
 func prepareYtdlpCmd(args ...string) *exec.Cmd {
 	cmd := exec.Command("yt-dlp", args...)
 	pathEnv := os.Getenv("PATH")
@@ -78,7 +86,7 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 	args = append(args, targetQuery)
 
 	cmd := prepareYtdlpCmd(args...)
-	out, err := cmd.Output()
+	out, err := execYtdlpCmd(cmd)
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			log.Printf("❌ [SearchYouTube] primary yt-dlp error: %v | Stderr: %s", err, string(exitErr.Stderr))
@@ -166,7 +174,7 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 	args = append(args, targetQuery)
 
 	cmd := prepareYtdlpCmd(args...)
-	out, err := cmd.Output()
+	out, err := execYtdlpCmd(cmd)
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			log.Printf("❌ [SearchYouTubeFallback] error: %v | Stderr: %s", err, string(exitErr.Stderr))
@@ -345,6 +353,12 @@ func getVoiceState(s *discordgo.Session, guildID, userID string) (*discordgo.Voi
 
 func GetStreamURL(query string, cookiesPath string) (string, error) {
 	query = sanitizeQuery(query)
+
+	if cachedURL, ok := music.GlobalStreamCache.Get(query); ok && cachedURL != "" {
+		log.Printf("⚡ [GetStreamURL] Cache HIT for '%s' (0ms instant stream ready!)", query)
+		return cachedURL, nil
+	}
+
 	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 	args := []string{
 		"-f", "bestaudio/best",
@@ -364,7 +378,7 @@ func GetStreamURL(query string, cookiesPath string) (string, error) {
 
 	cmd := prepareYtdlpCmd(args...)
 
-	out, err := cmd.Output()
+	out, err := execYtdlpCmd(cmd)
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			log.Printf("❌ [GetStreamURL] yt-dlp error: %v | Stderr: %s", err, string(exitErr.Stderr))
@@ -377,5 +391,7 @@ func GetStreamURL(query string, cookiesPath string) (string, error) {
 		return "", fmt.Errorf("yt-dlp returned empty URL")
 	}
 
-	return lines[0], nil
+	streamURL := lines[0]
+	music.GlobalStreamCache.Set(query, streamURL)
+	return streamURL, nil
 }
