@@ -36,6 +36,8 @@ type GuildQueue struct {
 
 	IsPlaying bool
 	IsPaused  bool
+	StartedAt time.Time
+	PausedAt  time.Time
 	Volume    float64
 	Loop      LoopMode
 	Filter    string
@@ -49,7 +51,9 @@ type GuildQueue struct {
 	// TrackEndCh is signalled by the bot when track finishes.
 	TrackEndCh chan struct{}
 
-	idleTimer *time.Timer
+	idleTimer    *time.Timer
+	lyricsCancel func()
+	SkipVotes    map[string]bool
 
 	mu sync.RWMutex
 }
@@ -131,16 +135,71 @@ func (q *GuildQueue) InsertNext(song Song) {
 	q.PreFetchNext()
 }
 
+func (q *GuildQueue) SetLyricsCancel(cancel func()) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.lyricsCancel != nil {
+		q.lyricsCancel()
+	}
+	q.lyricsCancel = cancel
+}
+
+func (q *GuildQueue) CancelLyrics() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.lyricsCancel != nil {
+		q.lyricsCancel()
+		q.lyricsCancel = nil
+	}
+}
+
+func (q *GuildQueue) CurrentDuration() time.Duration {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if !q.IsPlaying || q.NowPlaying == nil || q.StartedAt.IsZero() {
+		return 0
+	}
+	if q.IsPaused && !q.PausedAt.IsZero() {
+		return q.PausedAt.Sub(q.StartedAt)
+	}
+	elapsed := time.Since(q.StartedAt)
+	maxDur := time.Duration(q.NowPlaying.Duration) * time.Second
+	if maxDur > 0 && elapsed > maxDur {
+		return maxDur
+	}
+	return elapsed
+}
+
+func (q *GuildQueue) CurrentPosition() int {
+	return int(q.CurrentDuration().Seconds())
+}
+
+func (q *GuildQueue) IsPlayingAndMatching(targetSongURL string) bool {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	return q.IsPlaying && q.NowPlaying != nil && q.NowPlaying.URL == targetSongURL
+}
+
 func (q *GuildQueue) Pause() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	q.IsPaused = true
+	if !q.IsPaused {
+		q.IsPaused = true
+		q.PausedAt = time.Now()
+	}
 }
 
 func (q *GuildQueue) Resume() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	q.IsPaused = false
+	if q.IsPaused {
+		q.IsPaused = false
+		if !q.PausedAt.IsZero() {
+			pauseDuration := time.Since(q.PausedAt)
+			q.StartedAt = q.StartedAt.Add(pauseDuration)
+			q.PausedAt = time.Time{}
+		}
+	}
 }
 
 // Skip signals TrackEndCh so PlayNext moves to the next song.
@@ -156,6 +215,10 @@ func (q *GuildQueue) Stop() {
 	if q.idleTimer != nil {
 		q.idleTimer.Stop()
 		q.idleTimer = nil
+	}
+	if q.lyricsCancel != nil {
+		q.lyricsCancel()
+		q.lyricsCancel = nil
 	}
 	q.Songs = make([]Song, 0)
 	q.NowPlaying = nil
@@ -215,14 +278,59 @@ func (q *GuildQueue) SetFilter(filter string) {
 	q.Filter = filter
 }
 
+func (q *GuildQueue) EvaluateSkip(userID string, listenerCount int, isAdmin bool) (skipped bool, votes int, required int) {
+	q.mu.Lock()
+
+	if q.NowPlaying == nil || !q.IsPlaying {
+		q.mu.Unlock()
+		return false, 0, 0
+	}
+
+	// 1. Instant Skip if requester, admin, or solo listener (<= 1 member in voice channel)
+	if isAdmin || q.NowPlaying.RequestedBy == userID || listenerCount <= 1 {
+		q.SkipVotes = make(map[string]bool)
+		q.mu.Unlock()
+		q.Skip()
+		return true, 1, 1
+	}
+
+	// 2. Vote Skip
+	if q.SkipVotes == nil {
+		q.SkipVotes = make(map[string]bool)
+	}
+	q.SkipVotes[userID] = true
+
+	required = (listenerCount / 2) + 1
+	if required <= 0 {
+		required = 1
+	}
+
+	votes = len(q.SkipVotes)
+	if votes >= required {
+		q.SkipVotes = make(map[string]bool)
+		q.mu.Unlock()
+		q.Skip()
+		return true, votes, required
+	}
+
+	q.mu.Unlock()
+	return false, votes, required
+}
+
 // PlayNext plays the next song in the queue using the Lavalink callback.
 // It blocks until a TrackEnd signal is received, then calls itself recursively.
 func (q *GuildQueue) PlayNext() {
 	q.mu.Lock()
 
+	q.SkipVotes = make(map[string]bool)
+
 	if q.idleTimer != nil {
 		q.idleTimer.Stop()
 		q.idleTimer = nil
+	}
+	if q.lyricsCancel != nil {
+		q.lyricsCancel()
+		q.lyricsCancel = nil
 	}
 
 	if q.NowPlaying != nil {
@@ -273,6 +381,7 @@ func (q *GuildQueue) PlayNext() {
 
 	q.IsPlaying = true
 	q.IsPaused = false
+	q.StartedAt = time.Now()
 	gid := q.GuildID
 	playCb := q.PlayCb
 	q.mu.Unlock()

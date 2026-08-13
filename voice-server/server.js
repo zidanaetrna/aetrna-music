@@ -173,7 +173,9 @@ discordClient.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    const voiceChannelId = interaction.member?.voice?.channelId || null;
+    const voiceChannel = interaction.member?.voice?.channel;
+    const voiceChannelId = voiceChannel?.id || null;
+    const voiceChannelMembers = voiceChannel ? voiceChannel.members.filter(m => !m.user.bot).size : 0;
 
     const payload = {
         id: interaction.id,
@@ -185,6 +187,7 @@ discordClient.on('interactionCreate', async (interaction) => {
         user_id: interaction.user.id,
         username: interaction.user.username,
         member_voice_channel_id: voiceChannelId,
+        voice_channel_members: voiceChannelMembers,
         command_name: interaction.isChatInputCommand() ? interaction.commandName : null,
         options: interaction.isChatInputCommand() ? serializeOptions(interaction.options.data) : [],
         custom_id: (interaction.isButton() || interaction.isStringSelectMenu()) ? interaction.customId : null,

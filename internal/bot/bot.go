@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"aetrna-music/config"
 	"aetrna-music/db"
 	"aetrna-music/internal/commands"
+	"aetrna-music/internal/lyrics"
 	"aetrna-music/internal/music"
 	"aetrna-music/internal/spotify"
 	"aetrna-music/internal/voice"
@@ -99,6 +101,7 @@ type ProxiedInteraction struct {
 	UserID               string          `json:"user_id"`
 	Username             string          `json:"username"`
 	MemberVoiceChannelID string          `json:"member_voice_channel_id"`
+	VoiceChannelMembers  int             `json:"voice_channel_members"`
 	CommandName          string          `json:"command_name"`
 	Options              json.RawMessage `json:"options"`
 	CustomID             string          `json:"custom_id"`
@@ -347,10 +350,29 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 	log.Printf("⚙️ [GoBot] handleProxiedCommand: %q guild=%s", cmd, p.GuildID)
 
 	switch cmd {
-	// ── Slash Commands ────────────────────────────────────────
-	case "skip":
-		b.store.Get(p.GuildID).Skip()
-		content = "⏭️ Skipped!"
+	// ── Slash Commands & Buttons ────────────────────────────────────────
+	case "skip", "btn_skip":
+		q := b.store.Get(p.GuildID)
+		if q.NowPlaying == nil {
+			content = "❌ Tidak ada lagu yang sedang diputar!"
+			flags = discordgo.MessageFlagsEphemeral
+		} else {
+			isAdmin := b.handler.IsAdmin(p.UserID)
+			listenerCount := p.VoiceChannelMembers
+			if listenerCount <= 0 {
+				listenerCount = 1
+			}
+
+			skipped, votes, required := q.EvaluateSkip(p.UserID, listenerCount, isAdmin)
+			if skipped {
+				content = fmt.Sprintf("⏭️ **%s** di-skip!", q.NowPlaying.Title)
+			} else {
+				content = fmt.Sprintf("⏭️ Vote Skip ditambahkan oleh <@%s>! (**%d/%d** setuju)", p.UserID, votes, required)
+			}
+		}
+		if cmd == "btn_skip" {
+			flags = discordgo.MessageFlagsEphemeral
+		}
 
 	case "stop":
 		q := b.store.Get(p.GuildID)
@@ -383,6 +405,33 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			embeds = []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(q.NowPlaying, q)}
 			comps = commands.CreateControlButtons(q.IsPaused)
 		}
+
+	case "lyrics", "lirik", "btn_lyrics":
+		b.handleLiveLyrics(i, p)
+		return
+
+	case "btn_full_lyrics":
+		q := b.store.Get(p.GuildID)
+		if q.NowPlaying != nil && q.NowPlaying.Lyrics != nil {
+			if lRes, ok := q.NowPlaying.Lyrics.(*lyrics.LyricsResult); ok && lRes.Plain != "" {
+				text := lRes.Plain
+				if len(text) > 1900 {
+					text = text[:1900] + "..."
+				}
+				content = fmt.Sprintf("📜 **Full Lyrics for %s**:\n```\n%s\n```", q.NowPlaying.Title, text)
+			} else {
+				content = "❌ Lirik lengkap tidak tersedia."
+			}
+		} else {
+			content = "❌ Lirik belum dimuat. Klik `📜 Lyrics` terlebih dahulu."
+		}
+		flags = discordgo.MessageFlagsEphemeral
+
+	case "btn_close_lyrics":
+		q := b.store.Get(p.GuildID)
+		q.CancelLyrics()
+		content = "🗑️ Live Lyrics ditutup."
+		flags = discordgo.MessageFlagsEphemeral
 
 	case "favorite":
 		q := b.store.Get(p.GuildID)
@@ -506,11 +555,6 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		}
 		flags = discordgo.MessageFlagsEphemeral
 
-	case "btn_skip":
-		b.store.Get(p.GuildID).Skip()
-		content = "⏭️ Skipped!"
-		flags = discordgo.MessageFlagsEphemeral
-
 	case "btn_stop":
 		q := b.store.Get(p.GuildID)
 		q.Stop()
@@ -542,4 +586,74 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 	}); err != nil {
 		log.Printf("❌ [GoBot] FollowupMessageCreate error cmd=%q: %v", cmd, err)
 	}
+}
+
+func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteraction) {
+	q := b.store.Get(p.GuildID)
+	if q.NowPlaying == nil {
+		_, _ = b.session.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: "❌ Tidak ada lagu yang sedang diputar saat ini!",
+			Flags:   discordgo.MessageFlagsEphemeral,
+		})
+		return
+	}
+
+	song := q.NowPlaying
+	var lResult *lyrics.LyricsResult
+
+	if song.Lyrics != nil {
+		lResult, _ = song.Lyrics.(*lyrics.LyricsResult)
+	} else {
+		log.Printf("🔍 [Lyrics] Fetching lyrics for '%s' by '%s'...", song.Title, song.Author)
+		res, err := lyrics.FetchLyrics(song.Title, song.Author, song.Duration)
+		if err == nil && res != nil {
+			lResult = res
+			song.Lyrics = res
+			log.Printf("✅ [Lyrics] Lyrics fetched successfully for '%s' (Synced: %t)", song.Title, res.IsSynced)
+		} else {
+			log.Printf("⚠️ [Lyrics] Failed to fetch lyrics for '%s': %v", song.Title, err)
+		}
+	}
+
+	currentDur := q.CurrentDuration()
+	embed := commands.CreateLyricsEmbed(song, lResult, currentDur)
+	comps := commands.CreateLyricsButtons()
+
+	msg, err := b.session.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Embeds:     []*discordgo.MessageEmbed{embed},
+		Components: comps,
+	})
+
+	if err != nil || msg == nil || lResult == nil || !lResult.IsSynced || len(lResult.Synced) == 0 {
+		return
+	}
+
+	// Create cancellable context for live background updater
+	ctx, cancel := context.WithCancel(context.Background())
+	q.SetLyricsCancel(cancel)
+
+	go func(targetMsgID string, targetSongURL string) {
+		ticker := time.NewTicker(2500 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if !q.IsPlayingAndMatching(targetSongURL) {
+					return
+				}
+				np := q.NowPlaying
+
+				dur := q.CurrentDuration()
+				updEmbed := commands.CreateLyricsEmbed(np, lResult, dur)
+
+				_, _ = b.session.FollowupMessageEdit(i.Interaction, targetMsgID, &discordgo.WebhookEdit{
+					Embeds:     &[]*discordgo.MessageEmbed{updEmbed},
+					Components: &comps,
+				})
+			}
+		}
+	}(msg.ID, song.URL)
 }
