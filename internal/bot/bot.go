@@ -329,10 +329,13 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 		go queue.PlayNext()
 	}
 
-	followup(&discordgo.WebhookParams{
+	msg, err := b.session.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds:     []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(&song, queue)},
 		Components: commands.CreateControlButtons(queue.IsPaused),
 	})
+	if err == nil && msg != nil {
+		b.startLiveNowPlayingCardUpdater(i, p, msg.ID, song.URL)
+	}
 }
 
 // handleProxiedCommand handles all other commands and buttons using FollowupMessageCreate.
@@ -404,6 +407,14 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		} else {
 			embeds = []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(q.NowPlaying, q)}
 			comps = commands.CreateControlButtons(q.IsPaused)
+			msg, err := b.session.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+				Embeds:     embeds,
+				Components: comps,
+			})
+			if err == nil && msg != nil {
+				b.startLiveNowPlayingCardUpdater(i, p, msg.ID, q.NowPlaying.URL)
+			}
+			return
 		}
 
 	case "lyrics", "lirik", "btn_lyrics":
@@ -671,4 +682,36 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 			}
 		}
 	}(msg.ID, song.URL)
+}
+
+func (b *Bot) startLiveNowPlayingCardUpdater(i *discordgo.InteractionCreate, p ProxiedInteraction, msgID string, songURL string) {
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				q := b.store.Get(p.GuildID)
+				if !q.IsPlayingAndMatching(songURL) {
+					return
+				}
+				np := q.NowPlaying
+				if np == nil {
+					return
+				}
+
+				embed := commands.CreateNowPlayingEmbed(np, q)
+				comps := commands.CreateControlButtons(q.IsPaused)
+
+				_, err := b.session.FollowupMessageEdit(i.Interaction, msgID, &discordgo.WebhookEdit{
+					Embeds:     &[]*discordgo.MessageEmbed{embed},
+					Components: &comps,
+				})
+				if err != nil {
+					return
+				}
+			}
+		}
+	}()
 }

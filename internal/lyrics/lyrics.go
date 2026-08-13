@@ -43,25 +43,32 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 	trackName = cleanQuery(trackName)
 	artistName = cleanQuery(artistName)
 
-	if trackName == "" {
-		return nil, fmt.Errorf("track name is empty")
+	var title, artist string
+	if strings.Contains(trackName, " - ") {
+		parts := strings.SplitN(trackName, " - ", 2)
+		artist = strings.TrimSpace(parts[0])
+		title = strings.TrimSpace(parts[1])
+	} else {
+		title = trackName
+		artist = artistName
 	}
 
-	// 1. Try exact match /api/get
-	resp, err := queryLRCLIBGet(trackName, artistName, durationSec)
-	if err == nil && resp != nil {
-		return parseResponse(resp), nil
+	// 1. Try search with title + artist
+	if title != "" && artist != "" {
+		if resp, err := queryLRCLIBSubSearch(fmt.Sprintf("%s %s", title, artist)); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
+			return parseResponse(resp), nil
+		}
 	}
 
-	// 2. Fallback to /api/search
-	resp, err = queryLRCLIBSubSearch(trackName + " " + artistName)
-	if err == nil && resp != nil {
-		return parseResponse(resp), nil
+	// 2. Try search with title only
+	if title != "" {
+		if resp, err := queryLRCLIBSubSearch(title); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
+			return parseResponse(resp), nil
+		}
 	}
 
-	// 3. Fallback search trackName only
-	resp, err = queryLRCLIBSubSearch(trackName)
-	if err == nil && resp != nil {
+	// 3. Fallback search with full trackName
+	if resp, err := queryLRCLIBSubSearch(trackName); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
 		return parseResponse(resp), nil
 	}
 
@@ -208,8 +215,9 @@ func ParseLRC(lrcText string) []LyricLine {
 }
 
 func cleanQuery(q string) string {
-	// Strip official audio/video tags
-	re := regexp.MustCompile(`(?i)\(official.*?\)|\[official.*?\]|\(lyric.*?\)|\[lyric.*?\]|\(full.*?\)|\[full.*?\]`)
+	q = strings.ReplaceAll(q, " - Topic", "")
+	q = strings.ReplaceAll(q, "VEVO", "")
+	re := regexp.MustCompile(`(?i)\(official.*?\)|\[official.*?\]|\(lyric.*?\)|\[lyric.*?\]|\(full.*?\)|\[full.*?\]|\(audio.*?\)|\[audio.*?\]|\(mv.*?\)|\[mv.*?\]|\(video.*?\)|\[video.*?\]`)
 	q = re.ReplaceAllString(q, "")
 	return strings.TrimSpace(q)
 }
