@@ -16,8 +16,9 @@ type Song struct {
 	Author      string      `json:"author"`
 	RequestedBy string      `json:"requested_by"`
 	ChannelID   string      `json:"channel_id"`
-	TextChannelID string    `json:"text_channel_id"`
-	VideoID     string      `json:"video_id"`
+	TextChannelID    string      `json:"text_channel_id"`
+	IsAutoTransition bool        `json:"is_auto_transition"`
+	VideoID          string      `json:"video_id"`
 	Lyrics      interface{} `json:"-"`
 }
 

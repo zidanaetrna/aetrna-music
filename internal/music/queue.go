@@ -335,6 +335,8 @@ func (q *GuildQueue) PlayNext() {
 		q.lyricsCancel = nil
 	}
 
+	isAutoTransition := (q.NowPlaying != nil)
+
 	if q.NowPlaying != nil {
 		q.History = append(q.History, *q.NowPlaying)
 		if len(q.History) > 50 {
@@ -378,6 +380,9 @@ func (q *GuildQueue) PlayNext() {
 	} else {
 		song = q.Songs[0]
 		q.Songs = q.Songs[1:]
+		if isAutoTransition {
+			song.IsAutoTransition = true
+		}
 		q.NowPlaying = &song
 	}
 
