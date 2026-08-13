@@ -14,6 +14,7 @@ import (
 	"aetrna-music/config"
 	"aetrna-music/db"
 	"aetrna-music/internal/commands"
+	"aetrna-music/internal/i18n"
 	"aetrna-music/internal/lyrics"
 	"aetrna-music/internal/music"
 	"aetrna-music/internal/spotify"
@@ -73,7 +74,8 @@ func (b *Bot) Start() error {
 		if err == nil && song.TextChannelID != "" && song.IsAutoTransition {
 			go func() {
 				q := b.store.Get(guildID)
-				embed := commands.CreateNowPlayingEmbed(&song, q)
+				lang := b.db.GetGuildLanguage(guildID)
+				embed := commands.CreateNowPlayingEmbed(&song, q, lang)
 				comps := commands.CreateControlButtons(q.IsPaused)
 				_, _ = b.session.ChannelMessageSendComplex(song.TextChannelID, &discordgo.MessageSend{
 					Embeds:     []*discordgo.MessageEmbed{embed},
@@ -349,38 +351,39 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 		go queue.PlayNext()
 	}
 
+	lang := b.db.GetGuildLanguage(p.GuildID)
+
 	if isAlreadyPlaying {
 		followup(&discordgo.WebhookParams{
-			Embeds: []*discordgo.MessageEmbed{commands.CreateAddedToQueueEmbed(&song, queue)},
+			Embeds: []*discordgo.MessageEmbed{commands.CreateAddedToQueueEmbed(&song, queue, lang)},
 		})
 	} else {
 		followup(&discordgo.WebhookParams{
-			Embeds:     []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(&song, queue)},
+			Embeds:     []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(&song, queue, lang)},
 			Components: commands.CreateControlButtons(queue.IsPaused),
 		})
 	}
 }
 
-// handleProxiedCommand handles all other commands and buttons using FollowupMessageCreate.
-// Node.js always defers first so we have 15 minutes.
 func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInteraction) {
+	cmd := strings.ToLower(p.CommandName)
+	if cmd == "" && p.CustomID != "" {
+		cmd = strings.ToLower(p.CustomID)
+	}
+
+	lang := b.db.GetGuildLanguage(p.GuildID)
+
 	var content string
 	var embeds []*discordgo.MessageEmbed
 	var comps []discordgo.MessageComponent
 	var flags discordgo.MessageFlags
-
-	cmd := p.CommandName
-	if cmd == "" {
-		cmd = p.CustomID
-	}
-	log.Printf("⚙️ [GoBot] handleProxiedCommand: %q guild=%s", cmd, p.GuildID)
 
 	switch cmd {
 	// ── Slash Commands & Buttons ────────────────────────────────────────
 	case "skip", "btn_skip":
 		q := b.store.Get(p.GuildID)
 		if q.NowPlaying == nil {
-			content = "❌ Tidak ada lagu yang sedang diputar!"
+			content = i18n.Globali18n.T(lang, "no_song_playing")
 			flags = discordgo.MessageFlagsEphemeral
 		} else {
 			isAdmin := b.handler.IsAdmin(p.UserID)
@@ -391,9 +394,9 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 			skipped, votes, required := q.EvaluateSkip(p.UserID, listenerCount, isAdmin)
 			if skipped {
-				content = fmt.Sprintf("⏭️ **%s** di-skip!", q.NowPlaying.Title)
+				content = i18n.Globali18n.T(lang, "skipped", q.NowPlaying.Title)
 			} else {
-				content = fmt.Sprintf("⏭️ Vote Skip ditambahkan oleh <@%s>! (**%d/%d** setuju)", p.UserID, votes, required)
+				content = i18n.Globali18n.T(lang, "vote_skip", p.UserID, votes, required)
 			}
 		}
 		if cmd == "btn_skip" {
@@ -404,19 +407,19 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		q := b.store.Get(p.GuildID)
 		q.Stop()
 		_ = b.voice.Stop(p.GuildID)
-		content = "⏹️ Stopped & cleared queue!"
+		content = i18n.Globali18n.T(lang, "stopped")
 
 	case "pause":
 		q := b.store.Get(p.GuildID)
 		q.Pause()
 		_ = b.voice.Pause(p.GuildID)
-		content = "⏸️ Paused!"
+		content = i18n.Globali18n.T(lang, "paused")
 
 	case "resume":
 		q := b.store.Get(p.GuildID)
 		q.Resume()
 		_ = b.voice.Resume(p.GuildID)
-		content = "▶️ Resumed!"
+		content = i18n.Globali18n.T(lang, "resumed")
 
 	case "queue":
 		q := b.store.Get(p.GuildID)
@@ -425,10 +428,10 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 	case "nowplaying":
 		q := b.store.Get(p.GuildID)
 		if q.NowPlaying == nil {
-			content = "❌ Tidak ada lagu yang diputar!"
+			content = i18n.Globali18n.T(lang, "no_song_playing")
 			flags = discordgo.MessageFlagsEphemeral
 		} else {
-			embeds = []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(q.NowPlaying, q)}
+			embeds = []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(q.NowPlaying, q, lang)}
 			comps = commands.CreateControlButtons(q.IsPaused)
 		}
 
@@ -522,6 +525,31 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 				Description: desc,
 				Color:       0xFFFF00,
 			}}
+		}
+
+	case "language":
+		isAdmin := b.handler.IsAdmin(p.UserID)
+		currentLang := b.db.GetGuildLanguage(p.GuildID)
+
+		var selectedLang string
+		var opts []*discordgo.ApplicationCommandInteractionDataOption
+		if len(p.Options) > 0 {
+			_ = json.Unmarshal(p.Options, &opts)
+		}
+		for _, opt := range opts {
+			if opt.Name == "lang" {
+				selectedLang = fmt.Sprintf("%v", opt.Value)
+			}
+		}
+
+		if !isAdmin {
+			content = i18n.Globali18n.T(currentLang, "permission_denied")
+			flags = discordgo.MessageFlagsEphemeral
+		} else if selectedLang != "" {
+			_ = b.db.SetGuildLanguage(p.GuildID, selectedLang)
+			content = i18n.Globali18n.T(selectedLang, "language_changed")
+		} else {
+			content = fmt.Sprintf("🌐 Current language: **%s**", currentLang)
 		}
 
 	case "filter":

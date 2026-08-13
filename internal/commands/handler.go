@@ -8,6 +8,7 @@ import (
 
 	"aetrna-music/config"
 	"aetrna-music/db"
+	"aetrna-music/internal/i18n"
 	"aetrna-music/internal/lyrics"
 	"aetrna-music/internal/music"
 	"aetrna-music/internal/spotify"
@@ -32,7 +33,7 @@ func NewHandler(cfg *config.Config, database *db.DB, store *music.QueueStore, sp
 }
 
 // CreateNowPlayingEmbed constructs the custom Now Playing UI card with full-width album cover banner
-func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue) *discordgo.MessageEmbed {
+func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue, lang string) *discordgo.MessageEmbed {
 	volPct := int(queue.Volume * 100)
 	if queue.Volume > 1.0 {
 		volPct = int(queue.Volume)
@@ -42,37 +43,37 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue) *discordgo
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "🎵 NOW PLAYING",
+		Title:       i18n.Globali18n.T(lang, "now_playing"),
 		Description: fmt.Sprintf("**[%s](%s)**", song.Title, song.URL),
 		Color:       0x5865F2, // Discord Blurple / Aesthetic HSL
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "👤 Requested By",
+				Name:   i18n.Globali18n.T(lang, "requested_by"),
 				Value:  fmt.Sprintf("<@%s>", song.RequestedBy),
 				Inline: true,
 			},
 			{
-				Name:   "📻 Artist / Channel",
+				Name:   i18n.Globali18n.T(lang, "artist_channel"),
 				Value:  song.Author,
 				Inline: true,
 			},
 			{
-				Name:   "🔊 Volume",
+				Name:   i18n.Globali18n.T(lang, "volume"),
 				Value:  fmt.Sprintf("%d%%", volPct),
 				Inline: true,
 			},
 			{
-				Name:   "🔁 Loop",
+				Name:   i18n.Globali18n.T(lang, "loop"),
 				Value:  string(queue.Loop),
 				Inline: true,
 			},
 			{
-				Name:   "🔀 Shuffle",
+				Name:   i18n.Globali18n.T(lang, "shuffle"),
 				Value:  fmt.Sprintf("%t", len(queue.Songs) > 1),
 				Inline: true,
 			},
 			{
-				Name:   "🎛️ Filter",
+				Name:   i18n.Globali18n.T(lang, "filter"),
 				Value:  queue.Filter,
 				Inline: true,
 			},
@@ -102,12 +103,12 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue) *discordgo
 
 	progressValue := progressBar
 	if hasLyrics {
-		progressValue = "💡 *Klik tombol `📜 Lyrics` untuk melihat lirik & progress real-time!*"
+		progressValue = i18n.Globali18n.T(lang, "lyrics_hint")
 	}
 
 	embed.Fields = append([]*discordgo.MessageEmbedField{
 		{
-			Name:   "⏱️ Progress",
+			Name:   i18n.Globali18n.T(lang, "progress"),
 			Value:  progressValue,
 			Inline: false,
 		},
@@ -329,19 +330,19 @@ func CreateLyricsEmbed(song *music.Song, res interface{}, currentDur time.Durati
 	return embed
 }
 
-func CreateAddedToQueueEmbed(song *music.Song, queue *music.GuildQueue) *discordgo.MessageEmbed {
+func CreateAddedToQueueEmbed(song *music.Song, queue *music.GuildQueue, lang string) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{
-		Title:       "➕ LAGU DITAMBAHKAN KE ANTREAN",
+		Title:       i18n.Globali18n.T(lang, "added_to_queue"),
 		Description: fmt.Sprintf("**[%s](%s)**", song.Title, song.URL),
 		Color:       0x5865F2,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "👤 Requested By",
+				Name:   i18n.Globali18n.T(lang, "requested_by"),
 				Value:  fmt.Sprintf("<@%s>", song.RequestedBy),
 				Inline: true,
 			},
 			{
-				Name:   "📻 Artist / Channel",
+				Name:   i18n.Globali18n.T(lang, "artist_channel"),
 				Value:  song.Author,
 				Inline: true,
 			},
@@ -351,7 +352,7 @@ func CreateAddedToQueueEmbed(song *music.Song, queue *music.GuildQueue) *discord
 				Inline: true,
 			},
 			{
-				Name:   "📊 Position in Queue",
+				Name:   i18n.Globali18n.T(lang, "position_in_queue"),
 				Value:  fmt.Sprintf("#%d", len(queue.Songs)),
 				Inline: true,
 			},

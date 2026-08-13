@@ -276,7 +276,8 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 		go queue.PlayNext()
 	}
 
-	embed := CreateNowPlayingEmbed(&song, queue)
+	lang := h.database.GetGuildLanguage(i.GuildID)
+	embed := CreateNowPlayingEmbed(&song, queue, lang)
 	components := CreateControlButtons(queue.IsPaused)
 
 	_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{

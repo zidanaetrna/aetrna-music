@@ -10,7 +10,7 @@ try {
 }
 
 const express = require('express');
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const {
     joinVoiceChannel, createAudioPlayer, createAudioResource,
     AudioPlayerStatus, VoiceConnectionStatus, entersState, StreamType,
@@ -57,6 +57,20 @@ const commands = [
     new SlashCommandBuilder().setName('help').setDescription('Show help and command guide'),
     new SlashCommandBuilder().setName('stats').setDescription('Show bot system statistics'),
     new SlashCommandBuilder().setName('ping').setDescription('Check bot latency'),
+    new SlashCommandBuilder()
+        .setName('language')
+        .setDescription('Set bot language for this server (Admin only)')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .addStringOption(opt =>
+            opt.setName('lang')
+                .setDescription('Select server language')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'English 🇬🇧', value: 'en' },
+                    { name: 'Bahasa Indonesia 🇮🇩', value: 'id' },
+                    { name: 'Japanese 🇯🇵', value: 'jp' }
+                )
+        ),
 ].map(cmd => cmd.toJSON());
 
 const connections = new Map();

@@ -115,6 +115,7 @@ func (db *DB) migrate() error {
 		);`,
 		`CREATE TABLE IF NOT EXISTS guild_settings (
 			guild_id TEXT PRIMARY KEY,
+			language TEXT DEFAULT 'en',
 			prefix TEXT DEFAULT '!',
 			default_volume INTEGER DEFAULT 100
 		);`,
@@ -275,4 +276,28 @@ func (db *DB) GetSearchCache(query string) (string, bool) {
 		return "", false
 	}
 	return jsonData, true
+}
+
+func (db *DB) SetGuildLanguage(guildID, lang string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	_, err := db.Exec(
+		`INSERT INTO guild_settings (guild_id, language) VALUES (?, ?) 
+		 ON CONFLICT(guild_id) DO UPDATE SET language=excluded.language`,
+		guildID, lang,
+	)
+	return err
+}
+
+func (db *DB) GetGuildLanguage(guildID string) string {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var lang string
+	err := db.QueryRow(`SELECT language FROM guild_settings WHERE guild_id = ?`, guildID).Scan(&lang)
+	if err != nil || lang == "" {
+		return "en"
+	}
+	return lang
 }

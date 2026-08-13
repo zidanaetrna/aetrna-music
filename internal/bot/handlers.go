@@ -67,7 +67,8 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 				})
 				return
 			}
-			embed := commands.CreateNowPlayingEmbed(q.NowPlaying, q)
+			lang := b.db.GetGuildLanguage(i.GuildID)
+			embed := commands.CreateNowPlayingEmbed(q.NowPlaying, q, lang)
 			comps := commands.CreateControlButtons(q.IsPaused)
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
