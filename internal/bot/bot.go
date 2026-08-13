@@ -435,6 +435,24 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		}
 		flags = discordgo.MessageFlagsEphemeral
 
+	case "btn_lyrics_minus2":
+		q := b.store.Get(p.GuildID)
+		q.LyricsOffset -= 2 * time.Second
+		content = fmt.Sprintf("⏪ Offset sinkronisasi lirik diubah: **%v**", q.LyricsOffset)
+		flags = discordgo.MessageFlagsEphemeral
+
+	case "btn_lyrics_plus2":
+		q := b.store.Get(p.GuildID)
+		q.LyricsOffset += 2 * time.Second
+		content = fmt.Sprintf("⏩ Offset sinkronisasi lirik diubah: **%v**", q.LyricsOffset)
+		flags = discordgo.MessageFlagsEphemeral
+
+	case "btn_lyrics_reset":
+		q := b.store.Get(p.GuildID)
+		q.LyricsOffset = 0
+		content = "🔄 Offset sinkronisasi lirik di-reset ke 0s!"
+		flags = discordgo.MessageFlagsEphemeral
+
 	case "btn_close_lyrics":
 		q := b.store.Get(p.GuildID)
 		q.CancelLyrics()
@@ -646,8 +664,8 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 				return
 			}
 			np := q.NowPlaying
-			// Add +300ms predictive latency compensation offset to cancel out Discord API RTT & audio buffering
-			dur := q.CurrentDuration() + 300*time.Millisecond
+			// Add +300ms predictive latency compensation offset & user custom LyricsOffset
+			dur := q.CurrentDuration() + 300*time.Millisecond + q.LyricsOffset
 
 			updEmbed := commands.CreateLyricsEmbed(np, lResult, dur)
 			_, _ = b.session.FollowupMessageEdit(i.Interaction, targetMsgID, &discordgo.WebhookEdit{

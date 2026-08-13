@@ -351,6 +351,28 @@ func CreateLyricsButtons() []discordgo.MessageComponent {
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
+					Label:    "-2s Sync",
+					Style:    discordgo.SecondaryButton,
+					CustomID: "btn_lyrics_minus2",
+					Emoji:    &discordgo.ComponentEmoji{Name: "⏪"},
+				},
+				discordgo.Button{
+					Label:    "+2s Sync",
+					Style:    discordgo.SecondaryButton,
+					CustomID: "btn_lyrics_plus2",
+					Emoji:    &discordgo.ComponentEmoji{Name: "⏩"},
+				},
+				discordgo.Button{
+					Label:    "Reset Sync",
+					Style:    discordgo.SecondaryButton,
+					CustomID: "btn_lyrics_reset",
+					Emoji:    &discordgo.ComponentEmoji{Name: "🔄"},
+				},
+			},
+		},
+		discordgo.ActionsRow{
+			Components: []discordgo.MessageComponent{
+				discordgo.Button{
 					Label:    "Full Lyrics",
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_full_lyrics",

@@ -54,6 +54,7 @@ type GuildQueue struct {
 	idleTimer    *time.Timer
 	lyricsCancel func()
 	SkipVotes    map[string]bool
+	LyricsOffset time.Duration
 
 	mu sync.RWMutex
 }
@@ -323,6 +324,7 @@ func (q *GuildQueue) PlayNext() {
 	q.mu.Lock()
 
 	q.SkipVotes = make(map[string]bool)
+	q.LyricsOffset = 0
 
 	if q.idleTimer != nil {
 		q.idleTimer.Stop()
