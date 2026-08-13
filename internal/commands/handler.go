@@ -85,10 +85,30 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue) *discordgo
 	// Add progress bar based on current playback elapsed position
 	currentSec := queue.CurrentPosition()
 	progressBar := music.BuildProgressBar(currentSec, song.Duration, 18)
+
+	hasLyrics := false
+	if song.Lyrics != nil {
+		if lRes, ok := song.Lyrics.(*lyrics.LyricsResult); ok && (lRes.IsSynced || lRes.Plain != "") {
+			hasLyrics = true
+		}
+	} else {
+		if res, err := lyrics.FetchLyrics(song.Title, song.Author, song.Duration); err == nil && res != nil {
+			song.Lyrics = res
+			if res.IsSynced || res.Plain != "" {
+				hasLyrics = true
+			}
+		}
+	}
+
+	progressValue := progressBar
+	if hasLyrics {
+		progressValue = fmt.Sprintf("%s\n💡 *Klik tombol `📜 Lyrics` untuk melihat lirik & progress real-time!*", progressBar)
+	}
+
 	embed.Fields = append([]*discordgo.MessageEmbedField{
 		{
 			Name:   "⏱️ Progress",
-			Value:  progressBar,
+			Value:  progressValue,
 			Inline: false,
 		},
 	}, embed.Fields...)
