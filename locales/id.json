@@ -22,5 +22,18 @@
   "loop": "🔁 Loop",
   "shuffle": "🔀 Acak",
   "filter": "🎛️ Filter",
-  "position_in_queue": "📊 Posisi di Antrean"
+  "position_in_queue": "📊 Posisi di Antrean",
+  "sync_offset_changed": "⏱️ Offset Sync diubah: `%+.1fs`",
+  "filter_changed": "🎛️ Filter Audio DSP diubah ke **%s**! Aktif di lagu berikutnya.",
+  "invalid_filter": "❌ Filter tidak valid! Pilihan: `off`, `bassboost`, `nightcore`, `vaporwave`, `8d`, `pop`",
+  "song_not_found": "❌ Tidak dapat menemukan lagu yang dicari!",
+  "search_no_results": "❌ Tidak ada hasil pencarian ditemukan!",
+  "query_empty": "❌ Query pencarian tidak boleh kosong!",
+  "full_lyrics_not_available": "❌ Lirik lengkap tidak tersedia.",
+  "lyrics_not_loaded": "❌ Lirik belum dimuat. Klik `📜 Lyrics` terlebih dahulu.",
+  "no_favorites": "❌ Kamu belum punya lagu favorit! Gunakan `/favorite` saat memutar lagu.",
+  "favorite_error": "❌ Gagal menambahkan ke favorit: %v",
+  "queue_empty_collection": "❌ Antrean kosong! Tidak ada lagu untuk disimpan ke koleksi.",
+  "collection_not_found": "❌ Koleksi '%s' tidak ditemukan!",
+  "full_lyrics_title": "📜 **Lirik Lengkap untuk %s**:\n```\n%s\n```"
 }

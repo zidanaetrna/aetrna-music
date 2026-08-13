@@ -447,12 +447,12 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 				if len(text) > 1900 {
 					text = text[:1900] + "..."
 				}
-				content = fmt.Sprintf("📜 **Full Lyrics for %s**:\n```\n%s\n```", q.NowPlaying.Title, text)
+				content = i18n.Globali18n.T(lang, "full_lyrics_title", q.NowPlaying.Title, text)
 			} else {
-				content = "❌ Lirik lengkap tidak tersedia."
+				content = i18n.Globali18n.T(lang, "full_lyrics_not_available")
 			}
 		} else {
-			content = "❌ Lirik belum dimuat. Klik `📜 Lyrics` terlebih dahulu."
+			content = i18n.Globali18n.T(lang, "lyrics_not_loaded")
 		}
 		flags = discordgo.MessageFlagsEphemeral
 
@@ -484,33 +484,33 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		}
 
 		offsetSec := float64(q.LyricsOffset.Milliseconds()) / 1000.0
-		content = fmt.Sprintf("⏱️ Sync Offset diubah: `%+.1fs`", offsetSec)
+		content = i18n.Globali18n.T(lang, "sync_offset_changed", offsetSec)
 		flags = discordgo.MessageFlagsEphemeral
 
 	case "btn_close_lyrics":
 		q := b.store.Get(p.GuildID)
 		q.CancelLyrics()
-		content = "🗑️ Live Lyrics ditutup."
+		content = i18n.Globali18n.T(lang, "live_lyrics_closed")
 		flags = discordgo.MessageFlagsEphemeral
 
 	case "favorite":
 		q := b.store.Get(p.GuildID)
 		if q.NowPlaying == nil {
-			content = "❌ Ga ada lagu yang diputar sekarang!"
+			content = i18n.Globali18n.T(lang, "no_song_playing")
 			flags = discordgo.MessageFlagsEphemeral
 		} else {
 			song := q.NowPlaying
 			if err := b.db.AddFavorite(p.UserID, song.Title, song.URL, song.Duration, song.Thumbnail, song.Author); err != nil {
-				content = fmt.Sprintf("❌ Gagal nambah ke favorites: %v", err)
+				content = i18n.Globali18n.T(lang, "favorite_error", err)
 			} else {
-				content = fmt.Sprintf("⭐ **%s** ditambahkan ke favorites!", song.Title)
+				content = i18n.Globali18n.T(lang, "added_favorite", song.Title)
 			}
 		}
 
 	case "favorites":
 		favs, err := b.db.GetFavorites(p.UserID)
 		if err != nil || len(favs) == 0 {
-			content = "❌ Lu belum punya favorite songs! Pake `/favorite` saat mutar lagu."
+			content = i18n.Globali18n.T(lang, "no_favorites")
 			flags = discordgo.MessageFlagsEphemeral
 		} else {
 			desc := ""
@@ -568,7 +568,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			"off": true, "bassboost": true, "nightcore": true, "vaporwave": true, "8d": true, "pop": true,
 		}
 		if !validFilters[filterName] {
-			content = "❌ Filter tidak valid! Pilihan: `off`, `bassboost`, `nightcore`, `vaporwave`, `8d`, `pop`"
+			content = i18n.Globali18n.T(lang, "invalid_filter")
 			flags = discordgo.MessageFlagsEphemeral
 		} else {
 			q := b.store.Get(p.GuildID)
@@ -577,7 +577,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			} else {
 				q.SetFilter(filterName)
 			}
-			content = fmt.Sprintf("🎛️ Audio DSP Filter diubah ke **%s**! Filter akan aktif di lagu berikutnya.", filterName)
+			content = i18n.Globali18n.T(lang, "filter_changed", filterName)
 		}
 
 	case "help":

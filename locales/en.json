@@ -22,5 +22,18 @@
   "loop": "🔁 Loop",
   "shuffle": "🔀 Shuffle",
   "filter": "🎛️ Filter",
-  "position_in_queue": "📊 Position in Queue"
+  "position_in_queue": "📊 Position in Queue",
+  "sync_offset_changed": "⏱️ Sync Offset changed: `%+.1fs`",
+  "filter_changed": "🎛️ Audio DSP Filter set to **%s**! Will apply to next track.",
+  "invalid_filter": "❌ Invalid filter! Options: `off`, `bassboost`, `nightcore`, `vaporwave`, `8d`, `pop`",
+  "song_not_found": "❌ Could not find the requested song!",
+  "search_no_results": "❌ No search results found!",
+  "query_empty": "❌ Search query cannot be empty!",
+  "full_lyrics_not_available": "❌ Full lyrics not available.",
+  "lyrics_not_loaded": "❌ Lyrics not loaded yet. Click `📜 Lyrics` first.",
+  "no_favorites": "❌ You don't have any favorite songs yet! Use `/favorite` while playing.",
+  "favorite_error": "❌ Error adding to favorites: %v",
+  "queue_empty_collection": "❌ Queue is empty! No songs to save to collection.",
+  "collection_not_found": "❌ Collection '%s' not found!",
+  "full_lyrics_title": "📜 **Full Lyrics for %s**:\n```\n%s\n```"
 }

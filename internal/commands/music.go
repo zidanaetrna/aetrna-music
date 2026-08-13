@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"aetrna-music/internal/i18n"
 	"aetrna-music/internal/music"
 
 	"github.com/bwmarrin/discordgo"
@@ -255,11 +256,13 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 	queue := h.store.Get(i.GuildID)
 
 	// Search songs with cookies support
+	lang := h.database.GetGuildLanguage(i.GuildID)
+
 	songs, err := SearchYouTube(query, 1, h.cfg.CookiesPath, h.cfg.YtdlpClients)
 	if err != nil || len(songs) == 0 {
 		log.Printf("⚠️ [HandlePlay] Search returned 0 songs for query '%s'. Err: %v", query, err)
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: "❌ Ga nemu lagu yang lu cari!",
+			Content: i18n.Globali18n.T(lang, "song_not_found"),
 		})
 		return
 	}
@@ -276,7 +279,6 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 		go queue.PlayNext()
 	}
 
-	lang := h.database.GetGuildLanguage(i.GuildID)
 	embed := CreateNowPlayingEmbed(&song, queue, lang)
 	components := CreateControlButtons(queue.IsPaused)
 
@@ -288,6 +290,8 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 
 
 func (h *Handler) HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate, query string) {
+	lang := h.database.GetGuildLanguage(i.GuildID)
+
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
@@ -295,7 +299,7 @@ func (h *Handler) HandleSearch(s *discordgo.Session, i *discordgo.InteractionCre
 	songs, err := SearchYouTube(query, 5, h.cfg.CookiesPath, h.cfg.YtdlpClients)
 	if err != nil || len(songs) == 0 {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: "❌ Ga nemu hasil pencarian!",
+			Content: i18n.Globali18n.T(lang, "search_no_results"),
 		})
 		return
 	}

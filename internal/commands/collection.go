@@ -3,18 +3,20 @@ package commands
 import (
 	"fmt"
 
+	"aetrna-music/internal/i18n"
 	"aetrna-music/internal/music"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 func (h *Handler) HandleCollectionSave(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
+	lang := h.database.GetGuildLanguage(i.GuildID)
 	queue := h.store.Get(i.GuildID)
 	if len(queue.Songs) == 0 && queue.NowPlaying == nil {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Queue kosong! Tidak ada lagu untuk disimpan ke collection.",
+				Content: i18n.Globali18n.T(lang, "queue_empty_collection"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -85,10 +87,11 @@ func (h *Handler) HandleCollectionLoad(s *discordgo.Session, i *discordgo.Intera
 	}
 
 	if targetCollID == -1 {
+		lang := h.database.GetGuildLanguage(i.GuildID)
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: fmt.Sprintf("❌ Collection '%s' tidak ditemukan!", name),
+				Content: i18n.Globali18n.T(lang, "collection_not_found", name),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})

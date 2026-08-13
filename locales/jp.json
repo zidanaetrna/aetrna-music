@@ -22,5 +22,18 @@
   "loop": "🔁 ループ",
   "shuffle": "🔀 シャッフル",
   "filter": "🎛️ フィルター",
-  "position_in_queue": "📊 キューの位置"
+  "position_in_queue": "📊 キューの位置",
+  "sync_offset_changed": "⏱️ 同期オフセットが変更されました: `%+.1fs`",
+  "filter_changed": "🎛️ オーディオフィルターが **%s** に変更されました！次の曲から適用されます。",
+  "invalid_filter": "❌ 無効なフィルターです！選択肢: `off`, `bassboost`, `nightcore`, `vaporwave`, `8d`, `pop`",
+  "song_not_found": "❌ 曲が見つかりませんでした！",
+  "search_no_results": "❌ 検索結果が見つかりませんでした！",
+  "query_empty": "❌ 検索クエリを入力してください！",
+  "full_lyrics_not_available": "❌ 全文歌詞は利用できません。",
+  "lyrics_not_loaded": "❌ 歌詞が読み込まれていません。先に「📜 Lyrics」をクリックしてください。",
+  "no_favorites": "❌ お気に入りの曲がまだありません！再生中に `/favorite` を使用してください。",
+  "favorite_error": "❌ お気に入りへの追加に失敗しました: %v",
+  "queue_empty_collection": "❌ キューが空です！コレクションに保存する曲がありません。",
+  "collection_not_found": "❌ コレクション '%s' が見つかりません！",
+  "full_lyrics_title": "📜 **%s の全文歌詞**:\n```\n%s\n```"
 }
