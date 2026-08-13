@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -73,11 +74,6 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue) *discordgo
 		},
 	}
 
-	// Set full-width banner image if thumbnail is available
-	if song.Thumbnail != "" {
-		embed.Image = &discordgo.MessageEmbedImage{URL: song.Thumbnail}
-	}
-
 	// Add progress bar based on current playback elapsed position
 	currentSec := queue.CurrentPosition()
 	progressBar := music.BuildProgressBar(currentSec, song.Duration, 18)
@@ -89,7 +85,24 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue) *discordgo
 		},
 	}, embed.Fields...)
 
+	if song.Thumbnail != "" {
+		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: song.Thumbnail}
+	}
+	embed.Image = &discordgo.MessageEmbedImage{URL: BuildProgressBarImageURL(currentSec, song.Duration)}
+
 	return embed
+}
+
+func BuildProgressBarImageURL(currentSec, totalSec int) string {
+	if totalSec <= 0 {
+		totalSec = 100
+	}
+	progressPct := (float64(currentSec) / float64(totalSec)) * 100
+	if progressPct > 100 {
+		progressPct = 100
+	}
+	chartJSON := fmt.Sprintf(`{type:'horizontalBar',data:{labels:[''],datasets:[{data:[%.1f],backgroundColor:'#5865F2'},{data:[%.1f],backgroundColor:'#2F3136'}]},options:{legend:{display:false},scales:{xAxes:[{display:false,stacked:true,max:100}],yAxes:[{display:false,stacked:true}]}}}`, progressPct, 100-progressPct)
+	return fmt.Sprintf("https://quickchart.io/chart?c=%s&w=500&h=30&bkg=transparent", url.QueryEscape(chartJSON))
 }
 
 // CreateControlButtons returns the 2-row interactive control buttons below Now Playing
