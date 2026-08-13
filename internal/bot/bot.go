@@ -475,7 +475,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			if lRes, ok := q.NowPlaying.Lyrics.(*lyrics.LyricsResult); ok {
 				dur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
 				updEmbed := commands.CreateLyricsEmbed(q.NowPlaying, lRes, dur)
-				comps := commands.CreateLyricsButtons()
+				comps := commands.CreateLyricsButtons(lRes.IsSynced)
 				_, _ = b.session.FollowupMessageEdit(i.Interaction, p.MessageID, &discordgo.WebhookEdit{
 					Embeds:     &[]*discordgo.MessageEmbed{updEmbed},
 					Components: &comps,
@@ -702,7 +702,8 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 
 	currentDur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
 	embed := commands.CreateLyricsEmbed(song, lResult, currentDur)
-	comps := commands.CreateLyricsButtons()
+	isSynced := lResult != nil && lResult.IsSynced
+	comps := commands.CreateLyricsButtons(isSynced)
 
 	msg, err := b.session.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds:     []*discordgo.MessageEmbed{embed},

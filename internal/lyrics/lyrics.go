@@ -210,9 +210,14 @@ func queryLRCLIBSubSearch(query string) (*lrclibResponse, error) {
 		return nil, fmt.Errorf("no search results")
 	}
 
-	// Pick first result that has synced or plain lyrics
+	// Always prefer synced lyrics over plain text lyrics
 	for _, item := range items {
-		if item.SyncedLyrics != "" || item.PlainLyrics != "" {
+		if item.SyncedLyrics != "" {
+			return &item, nil
+		}
+	}
+	for _, item := range items {
+		if item.PlainLyrics != "" {
 			return &item, nil
 		}
 	}
@@ -297,7 +302,7 @@ func ParseLRC(lrcText string) []LyricLine {
 func cleanQuery(q string) string {
 	q = strings.ReplaceAll(q, " - Topic", "")
 	q = strings.ReplaceAll(q, "VEVO", "")
-	re := regexp.MustCompile(`(?i)\(official.*?\)|\[official.*?\]|\(lyric.*?\)|\[lyric.*?\]|\(full.*?\)|\[full.*?\]|\(audio.*?\)|\[audio.*?\]|\(mv.*?\)|\[mv.*?\]|\(video.*?\)|\[video.*?\]`)
+	re := regexp.MustCompile(`(?i)\(.*?(remaster|official|lyric|full|audio|mv|video|ver|version|edition).*?\)|\[.*?(remaster|official|lyric|full|audio|mv|video|ver|version|edition).*?\]`)
 	q = re.ReplaceAllString(q, "")
 	return strings.TrimSpace(q)
 }

@@ -367,7 +367,28 @@ func CreateAddedToQueueEmbed(song *music.Song, queue *music.GuildQueue, lang str
 	return embed
 }
 
-func CreateLyricsButtons() []discordgo.MessageComponent {
+func CreateLyricsButtons(isSynced bool) []discordgo.MessageComponent {
+	if !isSynced {
+		return []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						Label:    "Full Lyrics",
+						Style:    discordgo.SecondaryButton,
+						CustomID: "btn_full_lyrics",
+						Emoji:    &discordgo.ComponentEmoji{Name: "📄"},
+					},
+					discordgo.Button{
+						Label:    "Close",
+						Style:    discordgo.DangerButton,
+						CustomID: "btn_close_lyrics",
+						Emoji:    &discordgo.ComponentEmoji{Name: "🗑️"},
+					},
+				},
+			},
+		}
+	}
+
 	return []discordgo.MessageComponent{
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
