@@ -4,7 +4,7 @@
   "permission_denied": "❌ サーバー管理者のみがボットの言語を変更できます！",
   "now_playing": "🎵 再生中",
   "progress": "⏱️ 再生状況",
-  "lyrics_hint": "💡 *「📜 Lyrics」ボタンをクリックしてリアルタイム歌詞を表示！*",
+  "lyrics_hint": "💡 「📜 Lyrics」ボタンをクリックしてリアルタイム歌詞を表示！",
   "added_to_queue": "➕ キューに追加されました",
   "queue_empty": "❌ 現在再生中の曲はありません！",
   "skipped": "⏭️ **%s** をスキップしました！",

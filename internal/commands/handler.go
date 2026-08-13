@@ -103,7 +103,7 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue, lang strin
 
 	progressValue := progressBar
 	if hasLyrics {
-		progressValue = i18n.Globali18n.T(lang, "lyrics_hint")
+		progressValue = fmt.Sprintf("%s\n```\n%s\n```", progressBar, i18n.Globali18n.T(lang, "lyrics_hint"))
 	}
 
 	embed.Fields = append([]*discordgo.MessageEmbedField{

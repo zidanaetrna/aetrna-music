@@ -4,7 +4,7 @@
   "permission_denied": "❌ Only Server Administrators can change the bot language!",
   "now_playing": "🎵 NOW PLAYING",
   "progress": "⏱️ Progress",
-  "lyrics_hint": "💡 *Click `📜 Lyrics` button to see real-time lyrics & progress!*",
+  "lyrics_hint": "💡 Click 📜 Lyrics button to see real-time lyrics & progress!",
   "added_to_queue": "➕ ADDED TO QUEUE",
   "queue_empty": "❌ Queue is currently empty!",
   "skipped": "⏭️ **%s** skipped!",

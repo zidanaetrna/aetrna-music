@@ -4,7 +4,7 @@
   "permission_denied": "❌ Hanya Administrator Server yang dapat mengubah bahasa bot!",
   "now_playing": "🎵 SEDANG DIPUTAR",
   "progress": "⏱️ Progress",
-  "lyrics_hint": "💡 *Klik tombol `📜 Lyrics` untuk melihat lirik & progress real-time!*",
+  "lyrics_hint": "💡 Klik tombol 📜 Lyrics untuk melihat lirik & progress real-time!",
   "added_to_queue": "➕ LAGU DITAMBAHKAN KE ANTREAN",
   "queue_empty": "❌ Antrean lagu sedang kosong!",
   "skipped": "⏭️ **%s** berhasil di-skip!",
