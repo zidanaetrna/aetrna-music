@@ -440,13 +440,18 @@ app.post('/join-and-play', async (req, res) => {
                     '-user_agent', userAgent,
                     '-headers', 'Referer: https://www.youtube.com/\r\n',
                     '-i', streamUrl,
-                    '-analyzeduration', '0', '-loglevel', 'error',
+                    '-loglevel', 'warning',
                     '-af', audioFilter,
                     '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
                 ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
                 activeStreams.set(guildId, { ffmpeg });
-                ffmpeg.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.log(`[ffmpeg] ${msg}`); });
+                ffmpeg.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ffmpeg ${guildId}] ${msg}`); });
+                ffmpeg.on('exit', (code, signal) => {
+                    if (code !== 0 && code !== null && signal !== 'SIGKILL') {
+                        console.error(`[WARN] [VoiceServer] FFmpeg process exited with code ${code} (signal: ${signal}) for guild ${guildId}`);
+                    }
+                });
 
                 const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.Raw, inlineVolume: true });
                 resource.volume.setVolume(volume);
