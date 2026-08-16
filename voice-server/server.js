@@ -76,6 +76,26 @@ const commands = [
 const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
+const playSessions = new Map(); // guildId -> sessionId (integer)
+
+function getFFmpegAudioFilter(filterName) {
+    const baseLoudnorm = 'loudnorm=I=-16:TP=-1.5:LRA=11';
+    switch ((filterName || 'none').toLowerCase()) {
+        case 'bassboost':
+            return `equalizer=f=60:width_type=h:width=50:g=10,${baseLoudnorm}`;
+        case 'nightcore':
+            return `asetrate=48000*1.25,aresample=48000,${baseLoudnorm}`;
+        case 'vaporwave':
+            return `asetrate=48000*0.8,aresample=48000,${baseLoudnorm}`;
+        case '8d':
+            return `apulsator=hz=0.125,${baseLoudnorm}`;
+        case 'pop':
+            return `equalizer=f=1000:width_type=h:width=200:g=4,${baseLoudnorm}`;
+        case 'none':
+        default:
+            return baseLoudnorm;
+    }
+}
 
 const discordClient = new Client({
     intents: [
@@ -304,10 +324,13 @@ app.use(express.json());
 const PORT = process.env.PORT || 3005;
 
 app.post('/join-and-play', async (req, res) => {
-    const { guildId, channelId, streamUrl, volume = 1.0 } = req.body;
+    const { guildId, channelId, streamUrl, volume = 1.0, filter = 'none' } = req.body;
     if (!guildId || !channelId || !streamUrl) {
         return res.status(400).json({ error: 'Missing guildId, channelId, or streamUrl' });
     }
+
+    const currentSessionId = (playSessions.get(guildId) || 0) + 1;
+    playSessions.set(guildId, currentSessionId);
 
     try {
         cleanupStreams(guildId);
@@ -354,27 +377,41 @@ app.post('/join-and-play', async (req, res) => {
                     }
                 }
 
+                if (playSessions.get(guildId) !== currentSessionId) {
+                    console.log(`ℹ️ [VoiceServer] Session superceded during connection phase for guild ${guildId}`);
+                    return;
+                }
+
                 console.log(`✅ [VoiceServer] Voice connection Ready for guild ${guildId}!`);
 
                 let player = players.get(guildId);
-                if (!player) {
-                    player = createAudioPlayer();
-                    players.set(guildId, player);
-
-                    player.on(AudioPlayerStatus.Idle, () => {
-                        console.log(`🎵 [VoiceServer] Track finished for guild ${guildId}`);
-                        cleanupStreams(guildId);
-                        notifyBotTrackEnd(guildId, 'finished');
-                    });
-
-                    player.on('error', (err) => {
-                        console.error(`❌ [VoiceServer] Player error in ${guildId}:`, err.message);
-                        cleanupStreams(guildId);
-                        notifyBotTrackEnd(guildId, 'error');
-                    });
+                if (player) {
+                    player.removeAllListeners();
+                    try { player.stop(); } catch (e) {}
                 }
 
-                console.log(`▶️ [VoiceServer] Starting FFmpeg audio stream for guild ${guildId}...`);
+                player = createAudioPlayer();
+                players.set(guildId, player);
+
+                player.on(AudioPlayerStatus.Idle, () => {
+                    if (playSessions.get(guildId) !== currentSessionId) {
+                        console.log(`ℹ️ [VoiceServer] Stale Idle ignored for guild ${guildId} (session ${currentSessionId})`);
+                        return;
+                    }
+                    console.log(`🎵 [VoiceServer] Track finished for guild ${guildId} (session ${currentSessionId})`);
+                    cleanupStreams(guildId);
+                    notifyBotTrackEnd(guildId, 'finished');
+                });
+
+                player.on('error', (err) => {
+                    if (playSessions.get(guildId) !== currentSessionId) return;
+                    console.error(`❌ [VoiceServer] Player error in ${guildId}:`, err.message);
+                    cleanupStreams(guildId);
+                    notifyBotTrackEnd(guildId, 'error');
+                });
+
+                const audioFilter = getFFmpegAudioFilter(filter);
+                console.log(`▶️ [VoiceServer] Starting FFmpeg audio stream for guild ${guildId} [Filter: ${filter}]...`);
                 const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
                 const ffmpeg = spawn('ffmpeg', [
                     '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
@@ -382,7 +419,7 @@ app.post('/join-and-play', async (req, res) => {
                     '-headers', `User-Agent: ${userAgent}\r\n`,
                     '-i', streamUrl,
                     '-analyzeduration', '0', '-loglevel', 'error',
-                    '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
+                    '-af', audioFilter,
                     '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
                 ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
@@ -395,6 +432,7 @@ app.post('/join-and-play', async (req, res) => {
                 player.play(resource);
                 connection.subscribe(player);
             } catch (asyncErr) {
+                if (playSessions.get(guildId) !== currentSessionId) return;
                 console.error(`❌ [VoiceServer] Async voice connection/playback failed for guild ${guildId}:`, asyncErr.message);
                 cleanupStreams(guildId);
                 notifyBotTrackEnd(guildId, 'connection_failed');

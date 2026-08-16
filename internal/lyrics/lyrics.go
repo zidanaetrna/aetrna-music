@@ -136,15 +136,26 @@ func queryNeteaseLyrics(title, artist string) (*lrclibResponse, error) {
 func extractTitleAndArtist(rawQuery string) (string, string) {
 	cleaned := cleanQuery(rawQuery)
 
+	// Clean Japanese / Anime / Vocaloid / Cover tags: 【Sang It】, 【歌ってみた】, 【Cover】, 【MV】, 【Official Video】
+	reTags := regexp.MustCompile(`(?i)【.*?(sang it|歌ってみた|cover|mv|official|pv|anime|アニメ).*?】|\[.*?(sang it|歌ってみた|cover|mv|official|pv|anime|アニメ).*?\]`)
+	cleaned = reTags.ReplaceAllString(cleaned, "")
+	cleaned = strings.TrimSpace(cleaned)
+
 	// Check Japanese quote brackets 「Title」 or 『Title』
-	reBracket := regexp.MustCompile(`^(.*?)[「『\(\[](.*?)[」』\)\]](.*)$`)
+	reBracket := regexp.MustCompile(`^(.*?)[「『](.*?)[」』](.*)$`)
 	matches := reBracket.FindStringSubmatch(cleaned)
-	if len(matches) >= 4 {
+	if len(matches) >= 3 {
 		artistCandidate := strings.TrimSpace(matches[1])
 		titleCandidate := strings.TrimSpace(matches[2])
 		if artistCandidate != "" && titleCandidate != "" {
 			return titleCandidate, artistCandidate
 		}
+	}
+
+	// Check "Title / Artist" format (e.g. Life hates us now. / Mafumafu)
+	if strings.Contains(cleaned, " / ") {
+		parts := strings.SplitN(cleaned, " / ", 2)
+		return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
 	}
 
 	if strings.Contains(cleaned, " - ") {

@@ -35,11 +35,12 @@ func (c *Client) Play(guildID, channelID, url string, volume float64) error {
 	return c.post("/join-and-play", payload)
 }
 
-func (c *Client) PlayStream(guildID, channelID, streamURL string, volume float64) error {
+func (c *Client) PlayStream(guildID, channelID, streamURL, filter string, volume float64) error {
 	payload := map[string]interface{}{
 		"guildId":   guildID,
 		"channelId": channelID,
 		"streamUrl": streamURL,
+		"filter":    filter,
 		"volume":    volume,
 	}
 	return c.post("/join-and-play", payload)

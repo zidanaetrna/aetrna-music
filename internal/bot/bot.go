@@ -70,10 +70,10 @@ func (b *Bot) Start() error {
 		} else {
 			log.Printf("⚡ [Bot] Using pre-fetched stream URL for '%s' (0ms transition!)", song.Title)
 		}
-		err := b.voice.PlayStream(guildID, song.ChannelID, streamURL, 1.0)
+		q := b.store.Get(guildID)
+		err := b.voice.PlayStream(guildID, song.ChannelID, streamURL, q.Filter, 1.0)
 		if err == nil && song.TextChannelID != "" && song.IsAutoTransition {
 			go func() {
-				q := b.store.Get(guildID)
 				lang := b.db.GetGuildLanguage(guildID)
 				embed := commands.CreateNowPlayingEmbed(&song, q, lang)
 				comps := commands.CreateControlButtons(q.IsPaused)
