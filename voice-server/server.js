@@ -292,6 +292,7 @@ discordClient.on('interactionCreate', async (interaction) => {
 function cleanupStreams(guildId) {
     if (activeStreams.has(guildId)) {
         const stream = activeStreams.get(guildId);
+        try { if (stream.ytdlp) stream.ytdlp.kill('SIGKILL'); } catch (e) {}
         try { if (stream.ffmpeg) stream.ffmpeg.kill('SIGKILL'); } catch (e) {}
         activeStreams.delete(guildId);
     }
@@ -497,22 +498,59 @@ app.post('/join-and-play', async (req, res) => {
                     headerStr += `Cookie: ${cookieHeader}\r\n`;
                 }
 
-                try {
-                    const u = new URL(streamUrl);
-                    console.log(`[DEBUG] [VoiceServer] Spawning FFmpeg | Guild: ${guildId} | Client(c): ${u.searchParams.get('c')} | IP: ${u.searchParams.get('ip')} | iTag: ${u.searchParams.get('itag')} | CookieHeaderLength: ${cookieHeader ? cookieHeader.length : 0} bytes | HeaderStrLength: ${headerStr.length} bytes`);
-                } catch (_) {}
+                let ffmpeg;
+                let ytdlp;
 
-                const ffmpeg = spawn('ffmpeg', [
-                    '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
-                    '-user_agent', userAgent,
-                    '-headers', headerStr,
-                    '-i', streamUrl,
-                    '-loglevel', 'warning',
-                    '-af', audioFilter,
-                    '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
-                ], { stdio: ['ignore', 'pipe', 'pipe'] });
+                if (streamUrl.includes('googlevideo.com') || streamUrl.includes('youtube.com') || streamUrl.includes('youtu.be')) {
+                    const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
+                    const cookiesPath = process.env.COOKIES_PATH || path.join(__dirname, '../cookies.txt');
+                    const ytdlpArgs = [
+                        '-4',
+                        '--no-cache-dir',
+                        '--js-runtimes', 'node',
+                        '--extractor-args', `youtube:player_client=${ytdlpClients}`,
+                        '-f', 'ba[ext=m4a]/ba[ext=webm]/ba/bestaudio/best',
+                        '--no-playlist',
+                        '--geo-bypass',
+                        '--no-check-certificates',
+                        '--no-warnings',
+                        '--user-agent', userAgent,
+                        '-o', '-',
+                        streamUrl
+                    ];
+                    if (fs.existsSync(cookiesPath)) {
+                        ytdlpArgs.unshift('--cookies', cookiesPath);
+                    }
 
-                activeStreams.set(guildId, { ffmpeg });
+                    console.log(`[INFO] [VoiceServer] Spawning yt-dlp pipe for YouTube stream in guild ${guildId}`);
+                    ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+                    ffmpeg = spawn('ffmpeg', [
+                        '-i', 'pipe:0',
+                        '-loglevel', 'warning',
+                        '-af', audioFilter,
+                        '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
+                    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+                    ytdlp.stdout.pipe(ffmpeg.stdin);
+                    ytdlp.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ytdlp ${guildId}] ${msg}`); });
+                } else {
+                    try {
+                        const u = new URL(streamUrl);
+                        console.log(`[DEBUG] [VoiceServer] Spawning direct FFmpeg | Guild: ${guildId} | Host: ${u.hostname}`);
+                    } catch (_) {}
+
+                    ffmpeg = spawn('ffmpeg', [
+                        '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+                        '-user_agent', userAgent,
+                        '-headers', headerStr,
+                        '-i', streamUrl,
+                        '-loglevel', 'warning',
+                        '-af', audioFilter,
+                        '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
+                    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+                }
+
+                activeStreams.set(guildId, { ffmpeg, ytdlp });
                 ffmpeg.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ffmpeg ${guildId}] ${msg}`); });
                 ffmpeg.on('exit', (code, signal) => {
                     if (code !== 0 && code !== null && signal !== 'SIGKILL') {
