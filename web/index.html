@@ -49,6 +49,7 @@
                     </div>
 
                     <button type="submit" class="btn btn-split-submit">Sign In</button>
+                    <button type="button" id="demoBypassBtn" class="btn btn-split-demo">Explore Demo Mode (Preview Dashboard)</button>
                 </form>
 
                 <div id="loginError" class="auth-error-alert hidden">
@@ -154,9 +155,18 @@
                 <img src="artwork.png" alt="Aetrna Logo" class="brand-img">
                 <div class="brand-text">
                     <h1>Aetrna's Music</h1>
-                    <span class="badge">v2.0 Hybrid Engine</span>
+                    <span class="badge">v2.1 Hybrid Engine</span>
+                    <span id="demoBadge" class="demo-badge hidden">Demo Mode</span>
                     <span class="sidebar-artist-credit">Art by @br_lie</span>
                 </div>
+            </div>
+
+            <div class="language-selector-wrapper">
+                <select id="langSelect" class="form-select lang-select" title="Select UI Language">
+                    <option value="en">English (US)</option>
+                    <option value="id">Bahasa Indonesia</option>
+                    <option value="jp">日本語 (Japanese)</option>
+                </select>
             </div>
 
             <nav class="nav-menu">

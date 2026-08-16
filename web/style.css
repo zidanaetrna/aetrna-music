@@ -405,6 +405,58 @@ body {
     color: #000000;
 }
 
+.btn-split-demo {
+    margin-top: 0.6rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px dashed rgba(0, 242, 254, 0.5);
+    color: var(--accent-cyan);
+    font-size: 0.85rem;
+    font-weight: 600;
+    width: 100%;
+    padding: 0.8rem;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-split-demo:hover {
+    background: rgba(0, 242, 254, 0.15);
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
+}
+
+.demo-badge {
+    font-size: 0.65rem;
+    background: linear-gradient(135deg, rgba(255, 0, 128, 0.25), rgba(79, 172, 254, 0.25));
+    color: #FF0080;
+    border: 1px solid rgba(255, 0, 128, 0.5);
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    font-weight: 700;
+    display: inline-block;
+    margin-top: 0.2rem;
+}
+
+.language-selector-wrapper {
+    margin-bottom: 1.2rem;
+}
+
+.lang-select {
+    width: 100%;
+    padding: 0.5rem 0.8rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    outline: none;
+    cursor: pointer;
+}
+
+.lang-select:focus {
+    border-color: var(--accent-cyan);
+}
+
 /* Dashboard App Glassmorphism Styles */
 .glass-card {
     background: var(--card-bg);

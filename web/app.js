@@ -6,12 +6,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const passwordInput = document.getElementById('passwordInput');
     const togglePasswordBtn = document.getElementById('togglePasswordBtn');
     const loginErrorText = document.getElementById('loginErrorText');
+    const loginError = document.getElementById('loginError');
     const dashboardApp = document.getElementById('dashboardApp');
     const logoutBtn = document.getElementById('logoutBtn');
     const navItems = document.querySelectorAll('.nav-item');
     const tabPages = document.querySelectorAll('.tab-page');
+    const demoBypassBtn = document.getElementById('demoBypassBtn');
+    const demoBadge = document.getElementById('demoBadge');
+    const langSelect = document.getElementById('langSelect');
 
     let sessionToken = localStorage.getItem('aetrna_token') || '';
+    const urlParams = new URLSearchParams(window.location.search);
+    let isDemoMode = urlParams.get('demo') === 'true';
 
     // Password Visibility Toggle Handler
     if (togglePasswordBtn) {
@@ -56,55 +62,112 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Login Form Handler
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        loginError.classList.add('hidden');
-        const password = passwordInput.value;
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (loginError) loginError.classList.add('hidden');
+            const password = passwordInput.value;
 
-        try {
-            const res = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password })
-            });
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
 
-            if (!res.ok) {
-                loginErrorText.textContent = 'Invalid password. Please check your .env configuration.';
-                loginError.classList.remove('hidden');
-                return;
+                if (!res.ok) {
+                    if (loginErrorText) loginErrorText.textContent = 'Invalid password. Please check your .env configuration.';
+                    if (loginError) loginError.classList.remove('hidden');
+                    return;
+                }
+
+                const data = await res.json();
+                sessionToken = data.token;
+                localStorage.setItem('aetrna_token', sessionToken);
+                isDemoMode = false;
+                showDashboard();
+            } catch (err) {
+                if (loginErrorText) loginErrorText.textContent = 'Connection error to Aetrna Bot API server.';
+                if (loginError) loginError.classList.remove('hidden');
             }
+        });
+    }
 
-            const data = await res.json();
-            sessionToken = data.token;
-            localStorage.setItem('aetrna_token', sessionToken);
+    // Demo Mode Bypass Button Handler
+    if (demoBypassBtn) {
+        demoBypassBtn.addEventListener('click', () => {
+            isDemoMode = true;
             showDashboard();
-        } catch (err) {
-            loginErrorText.textContent = 'Connection error to Aetrna Bot API server.';
-            loginError.classList.remove('hidden');
-        }
-    });
+        });
+    }
 
     // Logout Handler
-    logoutBtn.addEventListener('click', () => {
-        sessionToken = '';
-        localStorage.removeItem('aetrna_token');
-        showLogin();
-    });
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            sessionToken = '';
+            isDemoMode = false;
+            localStorage.removeItem('aetrna_token');
+            showLogin();
+        });
+    }
 
     function showLogin() {
-        loginModal.classList.remove('hidden');
-        dashboardApp.classList.add('hidden');
+        if (loginModal) loginModal.classList.remove('hidden');
+        if (dashboardApp) dashboardApp.classList.add('hidden');
     }
 
     function showDashboard() {
-        loginModal.classList.add('hidden');
-        dashboardApp.classList.remove('hidden');
-        fetchDashboardStatus();
-        startPolling();
+        if (loginModal) loginModal.classList.add('hidden');
+        if (dashboardApp) dashboardApp.classList.remove('hidden');
+
+        if (isDemoMode) {
+            if (demoBadge) demoBadge.classList.remove('hidden');
+            loadMockData();
+        } else {
+            if (demoBadge) demoBadge.classList.add('hidden');
+            fetchDashboardStatus();
+            initSSE();
+        }
+    }
+
+    // Load Mock Data for Demo Mode Preview
+    function loadMockData() {
+        document.getElementById('statGuilds').textContent = '14';
+        document.getElementById('statRam').textContent = '142 MB';
+        document.getElementById('statUptime').textContent = '48h 12m';
+        document.getElementById('statCookies').textContent = 'Loaded';
+
+        document.getElementById('heroTitle').textContent = 'Aetrna — Echoes of Eternity (Official Audio)';
+        document.getElementById('heroAuthor').textContent = 'Aetrna Project • Requested by @zidanaetrna';
+        document.getElementById('heroThumbnail').src = 'artwork.png';
+        document.getElementById('heroCurrentTime').textContent = '02:45';
+        document.getElementById('heroDuration').textContent = '04:12';
+        document.getElementById('heroProgressBar').style.width = '65%';
+
+        const queueContainer = document.getElementById('queueItems');
+        if (queueContainer) {
+            queueContainer.innerHTML = `
+                <div class="queue-item" style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; margin-bottom:0.5rem; background:rgba(255,255,255,0.04); border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
+                    <div>
+                        <strong style="color:var(--text-primary); font-size:0.9rem;">1. Continuous — Celestial Resonance</strong>
+                        <div style="font-size:0.78rem; color:var(--text-secondary);">Requested by @br_lie • 03:50</div>
+                    </div>
+                    <span class="badge" style="background:rgba(0,242,254,0.15); color:var(--accent-cyan);">Up Next</span>
+                </div>
+                <div class="queue-item" style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; margin-bottom:0.5rem; background:rgba(255,255,255,0.04); border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
+                    <div>
+                        <strong style="color:var(--text-primary); font-size:0.9rem;">2. Synthwave Horizon — Midnight Drift</strong>
+                        <div style="font-size:0.78rem; color:var(--text-secondary);">Requested by @alex_dev • 05:14</div>
+                    </div>
+                    <span class="badge" style="background:rgba(255,255,255,0.1); color:var(--text-secondary);">Queued</span>
+                </div>
+            `;
+        }
     }
 
     // API Helper with Auth Header
     async function apiFetch(endpoint, options = {}) {
+        if (isDemoMode) return { status: 'ok' };
         options.headers = options.headers || {};
         options.headers['Authorization'] = `Bearer ${sessionToken}`;
         const res = await fetch(endpoint, options);
@@ -115,8 +178,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return res.json();
     }
 
-    // Fetch System Status Metrics
+    // Fetch Live Dashboard Status Metrics
     async function fetchDashboardStatus() {
+        if (isDemoMode) return;
         try {
             const data = await apiFetch('/api/status');
             document.getElementById('statGuilds').textContent = data.guildCount || 0;
@@ -131,21 +195,93 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('heroThumbnail').src = data.nowPlaying.thumbnail;
                 }
             }
+
+            if (data.queue && data.queue.length > 0) {
+                const queueContainer = document.getElementById('queueItems');
+                if (queueContainer) {
+                    queueContainer.innerHTML = data.queue.map((track, idx) => `
+                        <div class="queue-item" style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; margin-bottom:0.5rem; background:rgba(255,255,255,0.04); border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
+                            <div>
+                                <strong style="color:var(--text-primary); font-size:0.9rem;">${idx + 1}. ${track.title}</strong>
+                                <div style="font-size:0.78rem; color:var(--text-secondary);">${track.author || ''} • ${track.duration || ''}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
         } catch (err) {
             console.error('Failed to fetch dashboard status:', err);
         }
     }
 
-    function startPolling() {
-        setInterval(() => {
-            if (!dashboardApp.classList.contains('hidden')) {
-                fetchDashboardStatus();
-            }
-        }, 5000);
+    // Server-Sent Events (SSE) Stream Listener
+    function initSSE() {
+        if (isDemoMode || !window.EventSource) return;
+        try {
+            const evtSource = new EventSource('/api/events');
+            evtSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.ramMB) document.getElementById('statRam').textContent = `${data.ramMB} MB`;
+                    if (data.uptime) document.getElementById('statUptime').textContent = data.uptime;
+                } catch (e) {}
+            };
+        } catch (e) {
+            console.warn('SSE EventSource fallback to HTTP polling');
+        }
+    }
+
+    // Interactive Player Controls Handlers
+    const btnPause = document.getElementById('btnPause');
+    const btnSkip = document.getElementById('btnSkip');
+    const btnStop = document.getElementById('btnStop');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const volumeVal = document.getElementById('volumeVal');
+
+    if (btnPause) {
+        btnPause.addEventListener('click', async () => {
+            if (isDemoMode) return alert('Demo Mode: Control action simulated!');
+            await apiFetch('/api/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'pause' })
+            });
+        });
+    }
+
+    if (btnSkip) {
+        btnSkip.addEventListener('click', async () => {
+            if (isDemoMode) return alert('Demo Mode: Track skip simulated!');
+            await apiFetch('/api/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'skip' })
+            });
+        });
+    }
+
+    if (btnStop) {
+        btnStop.addEventListener('click', async () => {
+            if (isDemoMode) return alert('Demo Mode: Playback stop simulated!');
+            await apiFetch('/api/control', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'stop' })
+            });
+        });
+    }
+
+    if (volumeSlider && volumeVal) {
+        volumeSlider.addEventListener('input', (e) => {
+            const pct = Math.round(e.target.value * 100);
+            volumeVal.textContent = `${pct}%`;
+        });
     }
 
     // Initial Auth Check
-    if (sessionToken) {
+    if (isDemoMode) {
+        showDashboard();
+    } else if (sessionToken) {
         showDashboard();
     } else {
         showLogin();
