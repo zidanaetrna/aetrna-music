@@ -254,10 +254,15 @@ function notifyBotTrackEnd(guildId, reason) {
 
 function createVoiceConnection(guildId, channelId) {
     let connection = connections.get(guildId);
-    if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
+    if (connection && connection.state.status === VoiceConnectionStatus.Ready) {
         if (connection.joinConfig.channelId === String(channelId)) {
             return connection;
         }
+    }
+
+    if (connection) {
+        try { connection.destroy(); } catch (e) {}
+        connections.delete(guildId);
     }
 
     let guild = discordClient.guilds.cache.get(guildId);
@@ -265,7 +270,7 @@ function createVoiceConnection(guildId, channelId) {
         throw new Error(`Guild ${guildId} missing or invalid voiceAdapterCreator`);
     }
 
-    console.log(`🎙️ [VoiceServer] Joining voice channel ${channelId} in guild ${guild.name}...`);
+    console.log(`🎙️ [VoiceServer] Creating fresh voice connection for channel ${channelId} in guild ${guild.name}...`);
     connection = joinVoiceChannel({
         channelId: String(channelId),
         guildId: String(guildId),
