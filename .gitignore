@@ -11,8 +11,12 @@ bot.exe
 
 # Environment & Config
 .env
-cookies.txt
+*cookies*.txt
+youtube_cookies.txt
 .play-dl/
+
+# Dependencies
+node_modules/
 
 # Data & Caches
 data/
