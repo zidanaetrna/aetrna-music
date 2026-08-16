@@ -87,8 +87,10 @@ func (b *Bot) Start() error {
 		return err
 	}
 	stopCb := func(guildID string) error { return b.voice.Stop(guildID) }
-	preFetchCb := func(songURL string) (string, error) {
-		return commands.GetStreamURL(songURL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+	preFetchCb := func(guildID, songURL string) (string, error) {
+		log.Printf("[INFO] [Bot] Triggering voice-server background prefetch for '%s' in guild %s", songURL, guildID)
+		_ = b.voice.Prefetch(guildID, songURL)
+		return songURL, nil
 	}
 
 	spotifyCl := spotify.NewClient(b.cfg.SpotifyClientID, b.cfg.SpotifyClientSecret)

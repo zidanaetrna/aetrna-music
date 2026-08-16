@@ -48,6 +48,14 @@ func (c *Client) PlayStream(guildID, channelID, streamURL, songURL, nextSongURL,
 	return c.post("/join-and-play", payload)
 }
 
+func (c *Client) Prefetch(guildID, nextSongURL string) error {
+	payload := map[string]interface{}{
+		"guildId":     guildID,
+		"nextSongUrl": nextSongURL,
+	}
+	return c.post("/prefetch", payload)
+}
+
 func (c *Client) SendVoiceState(guildID, channelID, token, endpoint, sessionID, userID string) error {
 	payload := map[string]interface{}{
 		"guildId":   guildID,

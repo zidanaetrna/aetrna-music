@@ -448,6 +448,16 @@ const app = express();
 app.use(express.json());
 const PORT = process.env.PORT || 3005;
 
+app.post('/prefetch', (req, res) => {
+    const { guildId, nextSongUrl } = req.body;
+    if (guildId && nextSongUrl && (nextSongUrl.includes('youtube.com') || nextSongUrl.includes('youtu.be'))) {
+        console.log(`[INFO] [VoiceServer] Received prefetch request for '${nextSongUrl}' in guild ${guildId}`);
+        startPrefetch(guildId, nextSongUrl);
+        return res.json({ status: 'ok', message: 'Prefetch initiated' });
+    }
+    return res.status(400).json({ error: 'Missing guildId or valid nextSongUrl' });
+});
+
 app.post('/join-and-play', async (req, res) => {
     const { guildId, channelId, streamUrl, songUrl, nextSongUrl, volume = 1.0, filter = 'none' } = req.body;
     if (!guildId || !channelId || !streamUrl) {

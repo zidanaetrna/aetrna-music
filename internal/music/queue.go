@@ -25,7 +25,7 @@ type PlayCallback func(guildID string, song Song) error
 type StopCallback func(guildID string) error
 
 // PreFetchCallback is called in background to pre-resolve stream URLs before song starts.
-type PreFetchCallback func(songURL string) (string, error)
+type PreFetchCallback func(guildID, songURL string) (string, error)
 
 type GuildQueue struct {
 	GuildID        string
@@ -97,30 +97,17 @@ func (q *GuildQueue) PreFetchNext() {
 	}
 
 	song := q.Songs[0]
-	if song.StreamURL != "" && time.Since(song.ResolvedAt) < 15*time.Minute {
-		q.mu.Unlock()
-		return
-	}
-
 	targetSongURL := song.URL
 	targetSongTitle := song.Title
+	guildID := q.GuildID
 	preFetchCb := q.PreFetchCb
 	q.mu.Unlock()
 
 	go func() {
-		fmt.Printf("[INFO] [GuildQueue %s] Pre-fetching StreamURL in background for next track: '%s'...\n", q.GuildID, targetSongTitle)
-		streamURL, err := preFetchCb(targetSongURL)
+		fmt.Printf("[INFO] [GuildQueue %s] Pre-fetching in background for next track: '%s'...\n", guildID, targetSongTitle)
+		_, err := preFetchCb(guildID, targetSongURL)
 		if err != nil {
-			fmt.Printf("[WARN] [GuildQueue %s] Pre-fetch failed for '%s': %v\n", q.GuildID, targetSongTitle, err)
-			return
-		}
-
-		q.mu.Lock()
-		defer q.mu.Unlock()
-		if len(q.Songs) > 0 && q.Songs[0].URL == targetSongURL {
-			q.Songs[0].StreamURL = streamURL
-			q.Songs[0].ResolvedAt = time.Now()
-			fmt.Printf("[INFO] [GuildQueue %s] Successfully pre-fetched StreamURL for '%s' (ready for 0ms transition!)\n", q.GuildID, targetSongTitle)
+			fmt.Printf("[WARN] [GuildQueue %s] Pre-fetch failed for '%s': %v\n", guildID, targetSongTitle, err)
 		}
 	}()
 }
