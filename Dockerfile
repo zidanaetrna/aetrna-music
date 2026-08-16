@@ -29,7 +29,7 @@ COPY --from=go-builder /build/aetrna-bot /app/aetrna-bot
 
 # Copy Voice Server JS codebase & package files
 COPY voice-server/package*.json /app/voice-server/
-RUN cd /app/voice-server && npm install --omit=dev --no-audit --no-fund
+RUN cd /app/voice-server && npm install --legacy-peer-deps --omit=dev --no-audit --no-fund
 
 COPY voice-server/ /app/voice-server/
 COPY bin/ /app/bin/
