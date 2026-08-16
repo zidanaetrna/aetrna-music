@@ -415,7 +415,6 @@ func (q *GuildQueue) PlayNext() {
 			q.NowPlaying = nil
 			q.isLooping = false
 
-			/*
 			// Start 3-minute (180s) idle disconnect timer when queue finishes
 			gid := q.GuildID
 			stopCb := q.StopCb
@@ -432,7 +431,6 @@ func (q *GuildQueue) PlayNext() {
 					q.idleTimer = nil
 				}
 			})
-			*/
 
 			q.mu.Unlock()
 			return
