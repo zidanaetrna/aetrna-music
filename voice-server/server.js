@@ -405,24 +405,19 @@ app.post('/join-and-play', async (req, res) => {
     try {
         cleanupStreams(guildId);
 
-        let connection = connections.get(guildId);
-        const isReady = connection && connection.state.status === VoiceConnectionStatus.Ready;
-        const isSameChannel = connection && connection.joinConfig.channelId === String(channelId);
-
-        if (!isReady || !isSameChannel) {
-            let guild = discordClient.guilds.cache.get(guildId);
-            if (!guild) {
-                try {
-                    await discordClient.guilds.fetch(guildId);
-                    guild = discordClient.guilds.cache.get(guildId);
-                } catch (e) {}
-            }
-            if (!guild || !guild.voiceAdapterCreator) {
-                return res.status(500).json({ error: `Missing voiceAdapterCreator for guild ${guildId}` });
-            }
-
-            connection = createVoiceConnection(guildId, channelId);
+        let guild = discordClient.guilds.cache.get(guildId);
+        if (!guild) {
+            try {
+                await discordClient.guilds.fetch(guildId);
+                guild = discordClient.guilds.cache.get(guildId);
+            } catch (e) {}
         }
+        if (!guild || !guild.voiceAdapterCreator) {
+            return res.status(500).json({ error: `Missing voiceAdapterCreator for guild ${guildId}` });
+        }
+
+        // Always create a fresh voice connection negotiation so Request #2 executes the identical Discord Voice Gateway handshake as Request #1
+        let connection = createVoiceConnection(guildId, channelId);
 
         // Return HTTP 200 immediately to Go Bot
         res.json({ status: 'ok', message: 'Voice connection initiated' });
