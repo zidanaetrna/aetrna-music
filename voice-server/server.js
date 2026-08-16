@@ -254,9 +254,10 @@ function notifyBotTrackEnd(guildId, reason) {
 
 function createVoiceConnection(guildId, channelId) {
     let connection = connections.get(guildId);
-    if (connection) {
-        try { connection.destroy(); } catch (e) {}
-        connections.delete(guildId);
+    if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
+        if (connection.joinConfig.channelId === String(channelId)) {
+            return connection;
+        }
     }
 
     let guild = discordClient.guilds.cache.get(guildId);
@@ -437,7 +438,7 @@ app.post('/join-and-play', async (req, res) => {
                 const ffmpeg = spawn('ffmpeg', [
                     '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
                     '-user_agent', userAgent,
-                    '-headers', `User-Agent: ${userAgent}\r\nReferer: https://www.youtube.com/\r\n`,
+                    '-headers', 'Referer: https://www.youtube.com/\r\n',
                     '-i', streamUrl,
                     '-analyzeduration', '0', '-loglevel', 'error',
                     '-af', audioFilter,

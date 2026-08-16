@@ -743,14 +743,15 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 				Components: &comps,
 			})
 
-			// Predictive lookahead scheduling: wake up 300ms early to trigger edit ahead of network latency
+			// Predictive lookahead scheduling: wake up 300ms early to trigger edit ahead of network latency (scaled by audio filter speed)
+			mult := music.FilterSpeedMultiplier(q.Filter)
 			sleepDuration := 2500 * time.Millisecond
 			if lResult != nil && lResult.IsSynced && len(lResult.Synced) > 0 {
 				for _, line := range lResult.Synced {
 					if line.Timestamp > dur {
-						diff := line.Timestamp - dur - 300*time.Millisecond
-						if diff < 1500*time.Millisecond {
-							sleepDuration = 1500 * time.Millisecond
+						diff := time.Duration(float64(line.Timestamp-dur-300*time.Millisecond) / mult)
+						if diff < 1000*time.Millisecond {
+							sleepDuration = 1000 * time.Millisecond
 						} else if diff > 5*time.Second {
 							sleepDuration = 5 * time.Second
 						} else {

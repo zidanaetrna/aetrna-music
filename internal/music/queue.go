@@ -155,16 +155,30 @@ func (q *GuildQueue) CancelLyrics() {
 	}
 }
 
+func FilterSpeedMultiplier(filter string) float64 {
+	switch strings.ToLower(filter) {
+	case "nightcore":
+		return 1.25
+	case "vaporwave":
+		return 0.80
+	default:
+		return 1.0
+	}
+}
+
 func (q *GuildQueue) CurrentDuration() time.Duration {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 	if !q.IsPlaying || q.NowPlaying == nil || q.StartedAt.IsZero() {
 		return 0
 	}
+	mult := FilterSpeedMultiplier(q.Filter)
+	var elapsed time.Duration
 	if q.IsPaused && !q.PausedAt.IsZero() {
-		return q.PausedAt.Sub(q.StartedAt)
+		elapsed = time.Duration(float64(q.PausedAt.Sub(q.StartedAt)) * mult)
+	} else {
+		elapsed = time.Duration(float64(time.Since(q.StartedAt)) * mult)
 	}
-	elapsed := time.Since(q.StartedAt)
 	maxDur := time.Duration(q.NowPlaying.Duration) * time.Second
 	if maxDur > 0 && elapsed > maxDur {
 		return maxDur
@@ -277,6 +291,26 @@ func (q *GuildQueue) SetLoop(mode string) error {
 func (q *GuildQueue) SetFilter(filter string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+
+	if q.IsPlaying && !q.StartedAt.IsZero() {
+		oldMult := FilterSpeedMultiplier(q.Filter)
+		var currentDur time.Duration
+		if q.IsPaused && !q.PausedAt.IsZero() {
+			currentDur = time.Duration(float64(q.PausedAt.Sub(q.StartedAt)) * oldMult)
+		} else {
+			currentDur = time.Duration(float64(time.Since(q.StartedAt)) * oldMult)
+		}
+
+		newMult := FilterSpeedMultiplier(filter)
+		if newMult > 0 {
+			now := time.Now()
+			q.StartedAt = now.Add(-time.Duration(float64(currentDur) / newMult))
+			if q.IsPaused {
+				q.PausedAt = now
+			}
+		}
+	}
+
 	q.Filter = filter
 }
 
