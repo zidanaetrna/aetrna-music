@@ -1,7 +1,7 @@
 # Multi-Stage Dockerfile for Aetrna's Music Platform
 
 # Stage 1: Build Go Bot Microservice
-FROM golang:1.22-alpine AS go-builder
+FROM golang:1.23-alpine AS go-builder
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
