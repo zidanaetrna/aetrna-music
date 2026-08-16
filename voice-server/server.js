@@ -6,11 +6,15 @@ dns.setDefaultResultOrder('ipv4first');
 function getCookieHeaderString() {
     try {
         const possiblePaths = [
+            process.env.COOKIES_PATH,
             path.join(__dirname, '../cookies.txt'),
             path.join(__dirname, 'cookies.txt'),
             './cookies.txt',
+            '/opt/aetrna-music/prod/cookies.txt',
+            '/opt/aetrna-music/cookies.txt',
             '/app/cookies.txt'
-        ];
+        ].filter(Boolean);
+
         let content = '';
         for (const p of possiblePaths) {
             if (fs.existsSync(p)) {
@@ -19,14 +23,9 @@ function getCookieHeaderString() {
             }
         }
         if (!content) return '';
+
         const lines = content.split('\n');
         const cookiePairs = [];
-        const essentialKeys = new Set([
-            'YSC', 'VISITOR_INFO1_LIVE', 'LOGIN_INFO', 'PREF', 'GPS',
-            'SID', 'HSID', 'SSID', 'APISID', 'SAPISID', 'SIDCC',
-            '__Secure-1PAPISID', '__Secure-3PAPISID', '__Secure-1PSID', '__Secure-3PSID',
-            '__Secure-1PSIDTS', '__Secure-3PSIDTS'
-        ]);
 
         for (const line of lines) {
             const trimmed = line.trim();
@@ -38,7 +37,7 @@ function getCookieHeaderString() {
                 const domain = parts[0].trim();
                 const name = parts[5].trim();
                 const value = parts[6].trim();
-                if ((domain.includes('youtube') || domain.includes('googlevideo')) && essentialKeys.has(name) && value) {
+                if ((domain.includes('youtube') || domain.includes('googlevideo') || domain.includes('.com')) && name && value) {
                     cookiePairs.push(`${name}=${value}`);
                 }
             }
