@@ -7,7 +7,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@discordjs/voice": "^0.19.4",
+    "@discordjs/voice": "^0.19.2",
     "@snazzah/davey": "^0.1.6",
     "@stablelib/xchacha20poly1305": "^1.0.1",
     "@noble/ciphers": "^0.4.1",
