@@ -1,5 +1,43 @@
 const dns = require('dns');
+const fs = require('fs');
+const path = require('path');
 dns.setDefaultResultOrder('ipv4first');
+
+function getCookieHeaderString() {
+    try {
+        const possiblePaths = [
+            path.join(__dirname, '../cookies.txt'),
+            path.join(__dirname, 'cookies.txt'),
+            './cookies.txt',
+            '/app/cookies.txt'
+        ];
+        let content = '';
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                content = fs.readFileSync(p, 'utf8');
+                break;
+            }
+        }
+        if (!content) return '';
+        const lines = content.split('\n');
+        const cookiePairs = [];
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            const parts = trimmed.split('\t');
+            if (parts.length >= 7) {
+                const name = parts[5].trim();
+                const value = parts[6].trim();
+                if (name && value) {
+                    cookiePairs.push(`${name}=${value}`);
+                }
+            }
+        }
+        return cookiePairs.join('; ');
+    } catch (e) {
+        return '';
+    }
+}
 
 // Load DAVE E2EE protocol module before @discordjs/voice initializes
 try {
@@ -440,10 +478,16 @@ app.post('/join-and-play', async (req, res) => {
                 const audioFilter = getFFmpegAudioFilter(filter);
                 console.log(`[INFO] [VoiceServer] Starting FFmpeg audio stream for guild ${guildId} [Filter: ${filter}]`);
                 const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+                let headerStr = `Referer: https://www.youtube.com/\r\n`;
+                const cookieHeader = getCookieHeaderString();
+                if (cookieHeader) {
+                    headerStr += `Cookie: ${cookieHeader}\r\n`;
+                }
+
                 const ffmpeg = spawn('ffmpeg', [
                     '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
                     '-user_agent', userAgent,
-                    '-headers', 'Referer: https://www.youtube.com/\r\n',
+                    '-headers', headerStr,
                     '-i', streamUrl,
                     '-loglevel', 'warning',
                     '-af', audioFilter,
