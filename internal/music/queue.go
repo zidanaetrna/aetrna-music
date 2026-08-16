@@ -2,6 +2,7 @@ package music
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -15,11 +16,11 @@ const (
 	LoopQueue LoopMode = "queue"
 )
 
-// PlayCallback is called by PlayNext to start actual audio playback via Lavalink.
+// PlayCallback is called by PlayNext to start actual audio playback via Voice Engine.
 // Returns an error if playback could not be started.
 type PlayCallback func(guildID string, song Song) error
 
-// StopCallback is called when the queue wants to stop/disconnect Lavalink.
+// StopCallback is called when the queue wants to stop/disconnect Voice Engine.
 type StopCallback func(guildID string) error
 
 // PreFetchCallback is called in background to pre-resolve stream URLs before song starts.
@@ -318,7 +319,7 @@ func (q *GuildQueue) EvaluateSkip(userID string, listenerCount int, isAdmin bool
 	return false, votes, required
 }
 
-// PlayNext plays the next song in the queue using the Lavalink callback.
+// PlayNext plays the next song in the queue using the Voice Engine callback.
 // It blocks until a TrackEnd signal is received, then calls itself recursively.
 func (q *GuildQueue) PlayNext() {
 	q.mu.Lock()
@@ -355,12 +356,12 @@ func (q *GuildQueue) PlayNext() {
 			// Start 3-minute (180s) idle disconnect timer when queue finishes
 			gid := q.GuildID
 			stopCb := q.StopCb
-			fmt.Printf("⏳ [GuildQueue %s] Queue empty. Starting 3-minute idle disconnect timer...\n", gid)
+			log.Printf("[INFO] [GuildQueue %s] Queue empty. Starting 3-minute idle disconnect timer...", gid)
 			q.idleTimer = time.AfterFunc(3*time.Minute, func() {
 				q.mu.Lock()
 				defer q.mu.Unlock()
 				if !q.IsPlaying && len(q.Songs) == 0 {
-					fmt.Printf("🧹 [GuildQueue %s] 3-minute idle timer expired. Auto-disconnecting from voice channel...\n", gid)
+					log.Printf("[INFO] [GuildQueue %s] 3-minute idle timer expired. Auto-disconnecting...", gid)
 					if stopCb != nil {
 						_ = stopCb(gid)
 					}
@@ -395,7 +396,7 @@ func (q *GuildQueue) PlayNext() {
 
 	if playCb != nil {
 		if err := playCb(gid, song); err != nil {
-			fmt.Printf("❌ [PlayNext] Lavalink play error for %s: %v\n", song.Title, err)
+			log.Printf("[ERROR] [PlayNext] Playback error for %s: %v", song.Title, err)
 			q.mu.Lock()
 			q.NowPlaying = nil
 			q.mu.Unlock()
@@ -407,7 +408,7 @@ func (q *GuildQueue) PlayNext() {
 	// Trigger background pre-fetch for the next song in queue while current song plays
 	q.PreFetchNext()
 
-	// Wait for TrackEnd event (signalled by bot from Lavalink WS event)
+	// Wait for TrackEnd event (signalled by bot from Voice Engine WS event)
 	<-q.TrackEndCh
 
 	q.mu.RLock()

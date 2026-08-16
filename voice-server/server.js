@@ -4,9 +4,9 @@ dns.setDefaultResultOrder('ipv4first');
 // Load DAVE E2EE protocol module before @discordjs/voice initializes
 try {
     require('@snazzah/davey');
-    console.log('✅ [VoiceServer] DAVE E2EE protocol (@snazzah/davey) loaded successfully!');
+    console.log('[INFO] [VoiceServer] DAVE E2EE protocol (@snazzah/davey) loaded successfully');
 } catch (e) {
-    console.error('⚠️ [VoiceServer] DAVE E2EE protocol module failed to load:', e.message);
+    console.error('[WARN] [VoiceServer] DAVE E2EE protocol module failed to load:', e.message);
 }
 
 const express = require('express');
@@ -21,15 +21,15 @@ const http = require('http');
 const sodium = require('libsodium-wrappers');
 require('dotenv').config();
 
-console.log('📋 [VoiceServer] Voice dependency report:');
+console.log('[INFO] [VoiceServer] Voice dependency report:');
 console.log(generateDependencyReport());
 
 (async () => {
     try {
         await sodium.ready;
-        console.log('✅ [VoiceServer] libsodium-wrappers initialized!');
+        console.log('[INFO] [VoiceServer] libsodium-wrappers initialized');
     } catch (e) {
-        console.error('⚠️ [VoiceServer] libsodium-wrappers warning:', e.message);
+        console.error('[WARN] [VoiceServer] libsodium-wrappers warning:', e.message);
     }
 })();
 
@@ -110,40 +110,38 @@ const BOT_TOKEN = process.env.DISCORD_TOKEN;
 const GO_BACKEND = 'http://127.0.0.1:47392/internal/interaction';
 
 if (!BOT_TOKEN) {
-    console.error('❌ [VoiceServer] DISCORD_TOKEN is missing!');
+    console.error('[ERROR] [VoiceServer] DISCORD_TOKEN is missing!');
     process.exit(1);
 }
 
 discordClient.on('raw', (packet) => {
     if (packet.t === 'VOICE_SERVER_UPDATE' || packet.t === 'VOICE_STATE_UPDATE') {
-        console.log(`📡 [Gateway Event ${packet.t}] guild=${packet.d?.guild_id || packet.d?.guildId} session=${packet.d?.session_id} channel=${packet.d?.channel_id} endpoint=${packet.d?.endpoint}`);
+        console.log(`[DEBUG] [VoiceServer] Gateway event ${packet.t} for guild=${packet.d?.guild_id || packet.d?.guildId}`);
     }
 });
 
 discordClient.login(BOT_TOKEN).then(async () => {
-    console.log(`✅ [VoiceServer] discord.js Client logged in as ${discordClient.user.tag} (Single Gateway Session)`);
+    console.log(`[INFO] [VoiceServer] discord.js Client logged in as ${discordClient.user.tag}`);
     try {
         const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
         
-        // Clear ALL global commands to prevent duplicates from old Go Bot registrations
         await rest.put(Routes.applicationCommands(discordClient.user.id), { body: [] });
-        console.log('🗑️ Cleared global slash commands');
+        console.log('[INFO] [VoiceServer] Cleared global slash commands');
         
-        // Register ONLY guild-specific commands (instant, no propagation delay, no duplicates)
         for (const [gId] of discordClient.guilds.cache) {
             try {
                 await rest.put(Routes.applicationGuildCommands(discordClient.user.id, gId), { body: commands });
-                console.log(`⚡ Guild commands registered for guild ${gId}`);
+                console.log(`[INFO] [VoiceServer] Registered guild commands for ${gId}`);
             } catch (e) {
-                console.error(`⚠️ Failed for guild ${gId}:`, e.message);
+                console.error(`[WARN] [VoiceServer] Failed to register commands for guild ${gId}:`, e.message);
             }
         }
-        console.log('✅ Slash commands registered!');
+        console.log('[INFO] [VoiceServer] Slash commands registered successfully');
     } catch (e) {
-        console.error('⚠️ Failed to register slash commands:', e.message);
+        console.error('[WARN] [VoiceServer] Failed to register slash commands:', e.message);
     }
 }).catch(err => {
-    console.error('❌ [VoiceServer] Login failed:', err.message);
+    console.error('[ERROR] [VoiceServer] Login failed:', err.message);
     process.exit(1);
 });
 
@@ -162,23 +160,23 @@ function serializeOptions(options) {
 function sendToGoBot(payload) {
     return new Promise((resolve) => {
         const body = JSON.stringify(payload);
-        console.log(`📬 [VoiceServer] Sending ${payload.command_name || payload.custom_id || 'interaction'} to Go Bot...`);
+        console.log(`[INFO] [VoiceServer] Forwarding ${payload.command_name || payload.custom_id || 'interaction'} to Go Bot`);
         const req = http.request(GO_BACKEND, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
             timeout: 12000,
         }, (res) => {
-            console.log(`✅ [VoiceServer] Go Bot responded HTTP ${res.statusCode} for ${payload.command_name || payload.custom_id}`);
+            console.log(`[INFO] [VoiceServer] Go Bot responded HTTP ${res.statusCode} for ${payload.command_name || payload.custom_id}`);
             res.resume();
             resolve();
         });
         req.on('timeout', () => {
-            console.error(`⏰ [VoiceServer] Go Bot timeout for ${payload.command_name || payload.custom_id}`);
+            console.error(`[ERROR] [VoiceServer] Go Bot request timeout for ${payload.command_name || payload.custom_id}`);
             req.destroy();
             resolve();
         });
         req.on('error', (err) => {
-            console.error(`❌ [VoiceServer] Go Bot request error: ${err.message} (is bot.service running on :47392?)`);
+            console.error(`[ERROR] [VoiceServer] Go Bot request error: ${err.message}`);
             resolve();
         });
         req.write(body);
@@ -364,10 +362,10 @@ app.post('/join-and-play', async (req, res) => {
                 while (connection.state.status !== VoiceConnectionStatus.Ready && attempts < 3) {
                     attempts++;
                     try {
-                        console.log(`⏳ [VoiceServer] Waiting async for voice connection Ready in guild ${guildId} (attempt ${attempts}/3)...`);
+                        console.log(`[INFO] [VoiceServer] Waiting for voice connection in guild ${guildId} (attempt ${attempts}/3)...`);
                         await entersState(connection, VoiceConnectionStatus.Ready, 8_000);
                     } catch (e) {
-                        console.log(`⚠️ [VoiceServer] Voice connection attempt ${attempts} timed out/stuck in ${connection.state.status}. Retrying...`);
+                        console.log(`[WARN] [VoiceServer] Voice connection attempt ${attempts} timed out in ${connection.state.status}. Retrying...`);
                         if (attempts < 3) {
                             await new Promise(r => setTimeout(r, 1000));
                             connection = createVoiceConnection(guildId, channelId);
@@ -378,11 +376,11 @@ app.post('/join-and-play', async (req, res) => {
                 }
 
                 if (playSessions.get(guildId) !== currentSessionId) {
-                    console.log(`ℹ️ [VoiceServer] Session superceded during connection phase for guild ${guildId}`);
+                    console.log(`[DEBUG] [VoiceServer] Session superceded during connection phase for guild ${guildId}`);
                     return;
                 }
 
-                console.log(`✅ [VoiceServer] Voice connection Ready for guild ${guildId}!`);
+                console.log(`[INFO] [VoiceServer] Voice connection Ready for guild ${guildId}`);
 
                 let player = players.get(guildId);
                 if (player) {
@@ -395,23 +393,23 @@ app.post('/join-and-play', async (req, res) => {
 
                 player.on(AudioPlayerStatus.Idle, () => {
                     if (playSessions.get(guildId) !== currentSessionId) {
-                        console.log(`ℹ️ [VoiceServer] Stale Idle ignored for guild ${guildId} (session ${currentSessionId})`);
+                        console.log(`[DEBUG] [VoiceServer] Stale Idle ignored for guild ${guildId} (session ${currentSessionId})`);
                         return;
                     }
-                    console.log(`🎵 [VoiceServer] Track finished for guild ${guildId} (session ${currentSessionId})`);
+                    console.log(`[INFO] [VoiceServer] Track finished for guild ${guildId} (session ${currentSessionId})`);
                     cleanupStreams(guildId);
                     notifyBotTrackEnd(guildId, 'finished');
                 });
 
                 player.on('error', (err) => {
                     if (playSessions.get(guildId) !== currentSessionId) return;
-                    console.error(`❌ [VoiceServer] Player error in ${guildId}:`, err.message);
+                    console.error(`[ERROR] [VoiceServer] Player error in guild ${guildId}:`, err.message);
                     cleanupStreams(guildId);
                     notifyBotTrackEnd(guildId, 'error');
                 });
 
                 const audioFilter = getFFmpegAudioFilter(filter);
-                console.log(`▶️ [VoiceServer] Starting FFmpeg audio stream for guild ${guildId} [Filter: ${filter}]...`);
+                console.log(`[INFO] [VoiceServer] Starting FFmpeg audio stream for guild ${guildId} [Filter: ${filter}]`);
                 const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
                 const ffmpeg = spawn('ffmpeg', [
                     '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
@@ -433,13 +431,13 @@ app.post('/join-and-play', async (req, res) => {
                 connection.subscribe(player);
             } catch (asyncErr) {
                 if (playSessions.get(guildId) !== currentSessionId) return;
-                console.error(`❌ [VoiceServer] Async voice connection/playback failed for guild ${guildId}:`, asyncErr.message);
+                console.error(`[ERROR] [VoiceServer] Async voice connection/playback failed for guild ${guildId}:`, asyncErr.message);
                 cleanupStreams(guildId);
                 notifyBotTrackEnd(guildId, 'connection_failed');
             }
         })();
     } catch (err) {
-        console.error('❌ [VoiceServer] Playback initiation error:', err.message);
+        console.error('[ERROR] [VoiceServer] Playback initiation error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });

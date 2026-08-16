@@ -22,8 +22,6 @@ type Config struct {
 	MaxCacheSizeMB      int64
 	YtdlpClients        string
 	CookiesPath         string
-	LavalinkHost        string
-	LavalinkPassword    string
 }
 
 func Load() *Config {
@@ -44,8 +42,6 @@ func Load() *Config {
 		MaxCacheSizeMB:      int64(getEnvAsInt("MAX_CACHE_SIZE_MB", 5120)), // Default 5GB
 		YtdlpClients:        getEnv("YTDLP_CLIENTS", "ios,web,android,tv"),
 		CookiesPath:         getEnv("COOKIES_PATH", "./cookies.txt"),
-		LavalinkHost:        getEnv("LAVALINK_HOST", "localhost:2333"),
-		LavalinkPassword:    getEnv("LAVALINK_PASSWORD", "youshallnotpass"),
 	}
 }
 

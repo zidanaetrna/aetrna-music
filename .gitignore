@@ -24,3 +24,6 @@ cache/
 Thumbs.db
 .vscode/
 .idea/
+
+# Test
+test_*.js

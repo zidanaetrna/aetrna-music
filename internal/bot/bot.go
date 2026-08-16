@@ -55,20 +55,20 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 func (b *Bot) Start() error {
 	// Node.js (voice-server) is the SINGLE Discord Gateway client.
 	// Go Bot is a pure HTTP backend microservice — no session.Open() needed.
-	log.Printf("✅ Go Bot Backend Microservice starting on :47392")
+	log.Printf("[INFO] [GoBot] Backend Microservice starting on :47392")
 
 	playCb := func(guildID string, song music.Song) error {
 		streamURL := song.StreamURL
 		if streamURL == "" || time.Since(song.ResolvedAt) > 15*time.Minute {
-			log.Printf("⏳ [Bot] Extracting stream URL for '%s'...", song.Title)
+			log.Printf("[INFO] [Bot] Extracting stream URL for '%s'...", song.Title)
 			var err error
 			streamURL, err = commands.GetStreamURL(song.URL, b.cfg.CookiesPath)
 			if err != nil {
 				return err
 			}
-			log.Printf("🔗 [Bot] yt-dlp stream URL resolved!")
+			log.Printf("[INFO] [Bot] yt-dlp stream URL resolved for '%s'", song.Title)
 		} else {
-			log.Printf("⚡ [Bot] Using pre-fetched stream URL for '%s' (0ms transition!)", song.Title)
+			log.Printf("[INFO] [Bot] Using pre-fetched stream URL for '%s'", song.Title)
 		}
 		q := b.store.Get(guildID)
 		err := b.voice.PlayStream(guildID, song.ChannelID, streamURL, q.Filter, 1.0)
@@ -173,7 +173,7 @@ func (b *Bot) startInternalWebhookServer() {
 			Reason  string `json:"reason"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.GuildID != "" {
-			log.Printf("🎵 [GoBot] Track end for guild %s (%s)", body.GuildID, body.Reason)
+			log.Printf("[INFO] [GoBot] Track end event for guild %s (%s)", body.GuildID, body.Reason)
 			go b.store.Get(body.GuildID).PlayNext()
 		}
 		w.WriteHeader(http.StatusOK)
@@ -185,10 +185,10 @@ func (b *Bot) startInternalWebhookServer() {
 
 		var p ProxiedInteraction
 		if err := json.NewDecoder(r.Body).Decode(&p); err != nil || p.GuildID == "" || p.Token == "" {
-			log.Printf("❌ [GoBot] Bad interaction payload: %v", err)
+			log.Printf("[ERROR] [GoBot] Bad interaction payload: %v", err)
 			return
 		}
-		log.Printf("📨 [GoBot] Interaction: type=%d cmd=%q btn=%q guild=%s", p.Type, p.CommandName, p.CustomID, p.GuildID)
+		log.Printf("[INFO] [GoBot] Interaction: type=%d cmd=%q btn=%q guild=%s", p.Type, p.CommandName, p.CustomID, p.GuildID)
 
 		go func() {
 			i := buildInteractionCreate(p)
@@ -216,9 +216,9 @@ func (b *Bot) startInternalWebhookServer() {
 		}()
 	})
 
-	log.Printf("✅ [GoBot] Starting HTTP webhook server on 127.0.0.1:47392...")
+	log.Printf("[INFO] [GoBot] Starting HTTP webhook server on 127.0.0.1:47392...")
 	if err := (&http.Server{Addr: "127.0.0.1:47392", Handler: mux}).ListenAndServe(); err != nil {
-		log.Fatalf("💥 [GoBot] FATAL: HTTP webhook server failed on :47392 — %v", err)
+		log.Fatalf("[FATAL] [GoBot] HTTP webhook server failed on :47392: %v", err)
 	}
 }
 
@@ -275,19 +275,19 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 		}
 
 		if isSpotifyPlaylist {
-			log.Printf("🟢 [Bot] Resolving Spotify playlist: %s", query)
+			log.Printf("[INFO] [Bot] Resolving Spotify playlist: %s", query)
 			tracks, err := b.spotify.GetPlaylistTracks(query, 50)
 			if err != nil || len(tracks) == 0 {
-				log.Printf("⚠️ [Bot] Failed to resolve Spotify playlist: %v", err)
+				log.Printf("[WARN] [Bot] Failed to resolve Spotify playlist: %v", err)
 				followup(&discordgo.WebhookParams{Content: fmt.Sprintf("❌ Gagal mengambil playlist Spotify: %v", err)})
 				return
 			}
 
-			log.Printf("✅ [Bot] Found %d tracks in Spotify playlist", len(tracks))
+			log.Printf("[INFO] [Bot] Found %d tracks in Spotify playlist", len(tracks))
 
 			// Resolve first track synchronously for immediate playback
 			firstQuery := fmt.Sprintf("%s - %s", tracks[0].Artist, tracks[0].Name)
-			log.Printf("🔍 [Bot] Searching YouTube for first Spotify track: %s", firstQuery)
+			log.Printf("[INFO] [Bot] Searching YouTube for first Spotify track: %s", firstQuery)
 			firstSongs, err := commands.SearchYouTube(firstQuery, 1, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 			if err == nil && len(firstSongs) > 0 {
 				songs = append(songs, firstSongs[0])
@@ -310,27 +310,27 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 						queue.AddSong(sSong)
 					}
 				}
-				log.Printf("🎉 [Bot] Spotify playlist fully loaded (%d tracks) for guild %s", len(tracks), p.GuildID)
+				log.Printf("[INFO] [Bot] Spotify playlist loaded (%d tracks) for guild %s", len(tracks), p.GuildID)
 			}()
 
 		} else if isSpotifyTrack {
-			log.Printf("🟢 [Bot] Resolving Spotify track: %s", query)
+			log.Printf("[INFO] [Bot] Resolving Spotify track: %s", query)
 			track, err := b.spotify.GetTrack(query)
 			if err != nil || track == nil {
-				log.Printf("⚠️ [Bot] Failed to resolve Spotify track: %v", err)
+				log.Printf("[WARN] [Bot] Failed to resolve Spotify track: %v", err)
 				followup(&discordgo.WebhookParams{Content: fmt.Sprintf("❌ Gagal mengambil lagu Spotify: %v", err)})
 				return
 			}
 			query = fmt.Sprintf("%s - %s", track.Artist, track.Name)
-			log.Printf("✅ [Bot] Spotify track resolved to YouTube query: '%s'", query)
+			log.Printf("[INFO] [Bot] Spotify track resolved to query: '%s'", query)
 		}
 	}
 
 	if len(songs) == 0 {
-		log.Printf("🔍 [Bot] Searching YouTube: %s", query)
+		log.Printf("[INFO] [Bot] Searching YouTube: %s", query)
 		ytSongs, err := commands.SearchYouTube(query, 1, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 		if err != nil || len(ytSongs) == 0 {
-			log.Printf("⚠️ [Bot] No songs for '%s': %v", query, err)
+			log.Printf("[WARN] [Bot] Search returned 0 results for '%s': %v", query, err)
 			followup(&discordgo.WebhookParams{Content: "❌ Ga nemu lagu yang lu cari!"})
 			return
 		}
@@ -659,7 +659,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		flags = discordgo.MessageFlagsEphemeral
 
 	default:
-		log.Printf("⚠️ [GoBot] Unhandled cmd/button: %q", cmd)
+		log.Printf("[WARN] [GoBot] Unhandled command or button interaction: %q", cmd)
 		return
 	}
 
@@ -669,7 +669,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		Components: comps,
 		Flags:      flags,
 	}); err != nil {
-		log.Printf("❌ [GoBot] FollowupMessageCreate error cmd=%q: %v", cmd, err)
+		log.Printf("[ERROR] [GoBot] FollowupMessageCreate error for cmd=%q: %v", cmd, err)
 	}
 }
 
@@ -689,14 +689,14 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 	if song.Lyrics != nil {
 		lResult, _ = song.Lyrics.(*lyrics.LyricsResult)
 	} else {
-		log.Printf("🔍 [Lyrics] Fetching lyrics for '%s' by '%s'...", song.Title, song.Author)
+		log.Printf("[INFO] [Lyrics] Fetching lyrics for '%s' by '%s'...", song.Title, song.Author)
 		res, err := lyrics.FetchLyrics(song.Title, song.Author, song.Duration)
 		if err == nil && res != nil {
 			lResult = res
 			song.Lyrics = res
-			log.Printf("✅ [Lyrics] Lyrics fetched successfully for '%s' (Synced: %t)", song.Title, res.IsSynced)
+			log.Printf("[INFO] [Lyrics] Lyrics fetched successfully for '%s' (Synced: %t)", song.Title, res.IsSynced)
 		} else {
-			log.Printf("⚠️ [Lyrics] Failed to fetch lyrics for '%s': %v", song.Title, err)
+			log.Printf("[WARN] [Lyrics] Failed to fetch lyrics for '%s': %v", song.Title, err)
 		}
 	}
 
