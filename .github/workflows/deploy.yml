@@ -5,6 +5,12 @@ on:
     branches:
       - main
       - staging
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.trivyignore'
 
 jobs:
   deploy:
@@ -38,13 +44,13 @@ jobs:
           fi
 
       - name: Setup SSH Key Agent
-        if: ${{ secrets.VPS_HOST != '' && secrets.VPS_SSH_KEY != '' }}
+        if: ${{ env.VPS_HOST != '' }}
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
 
       - name: Deploy Binary & Voice Server Service
-        if: ${{ secrets.VPS_HOST != '' && secrets.VPS_SSH_KEY != '' }}
+        if: ${{ env.VPS_HOST != '' }}
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
