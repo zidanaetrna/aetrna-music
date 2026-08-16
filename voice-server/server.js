@@ -508,7 +508,6 @@ app.post('/join-and-play', async (req, res) => {
 
                 const ffmpeg = spawn('ffmpeg', [
                     '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
-                    '-user_agent', userAgent,
                     '-headers', headerStr,
                     '-i', streamUrl,
                     '-loglevel', 'warning',
