@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"aetrna-music/internal/i18n"
 	"aetrna-music/internal/music"
@@ -387,12 +389,15 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 		args = append([]string{"--cookies", cookiesPath}, args...)
 	}
 
+	start := time.Now()
 	cmd := prepareYtdlpCmd(args...)
+	log.Printf("[DEBUG] [GetStreamURL] Executing yt-dlp with args: %v", args)
 
 	out, err := execYtdlpCmd(cmd)
+	elapsed := time.Since(start)
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			log.Printf("[ERROR] [GetStreamURL] yt-dlp error: %v | Stderr: %s", err, string(exitErr.Stderr))
+			log.Printf("[ERROR] [GetStreamURL] yt-dlp failed after %v: %v | Stderr: %s", elapsed, err, string(exitErr.Stderr))
 		}
 		return "", err
 	}
@@ -416,6 +421,13 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 			streamURL = l
 			break
 		}
+	}
+
+	// Deep parameter analysis for diagnostic logging
+	if parsedURL, err := url.Parse(streamURL); err == nil {
+		qp := parsedURL.Query()
+		log.Printf("[DEBUG] [GetStreamURL] Resolved in %v | Client(c)=%s | IP=%s | iTag=%s | Mime=%s | Expire=%s | Host=%s",
+			elapsed, qp.Get("c"), qp.Get("ip"), qp.Get("itag"), qp.Get("mime"), qp.Get("expire"), parsedURL.Host)
 	}
 
 	music.GlobalStreamCache.Set(query, streamURL)

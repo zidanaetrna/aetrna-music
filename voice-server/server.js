@@ -494,13 +494,17 @@ app.post('/join-and-play', async (req, res) => {
                 });
 
                 const audioFilter = getFFmpegAudioFilter(filter);
-                console.log(`[INFO] [VoiceServer] Starting FFmpeg audio stream for guild ${guildId} [Filter: ${filter}]`);
                 const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
                 let headerStr = `User-Agent: ${userAgent}\r\nReferer: https://www.youtube.com/\r\n`;
                 const cookieHeader = getCookieHeaderString();
                 if (cookieHeader) {
                     headerStr += `Cookie: ${cookieHeader}\r\n`;
                 }
+
+                try {
+                    const u = new URL(streamUrl);
+                    console.log(`[DEBUG] [VoiceServer] Spawning FFmpeg | Guild: ${guildId} | Client(c): ${u.searchParams.get('c')} | IP: ${u.searchParams.get('ip')} | iTag: ${u.searchParams.get('itag')} | CookieHeaderLength: ${cookieHeader ? cookieHeader.length : 0} bytes | HeaderStrLength: ${headerStr.length} bytes`);
+                } catch (_) {}
 
                 const ffmpeg = spawn('ffmpeg', [
                     '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
