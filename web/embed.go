@@ -2,7 +2,7 @@ package web
 
 import "embed"
 
-// FS embeds all static web dashboard files (index.html, style.css, app.js) into the binary.
+// FS embeds the Vite + React production build output into the Go binary.
 //
-//go:embed *
+//go:embed all:dist
 var FS embed.FS

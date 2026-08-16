@@ -17,6 +17,8 @@ youtube_cookies.txt
 
 # Dependencies
 node_modules/
+web/node_modules/
+web/dist/
 
 # Data & Caches
 data/

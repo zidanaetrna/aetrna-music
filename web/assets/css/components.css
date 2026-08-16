@@ -1,0 +1,338 @@
+/* Aetrna's Music — Split-Screen Auth, Toast & Components CSS */
+
+/* Split Screen Login Page */
+.auth-split-screen {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+}
+
+.auth-form-column {
+    width: 45%;
+    background: #FFFFFF;
+    color: #111827;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 4rem;
+}
+
+.auth-form-inner {
+    width: 100%;
+    max-width: 400px;
+}
+
+.auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 2.5rem;
+}
+
+.auth-brand-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+.auth-brand-name {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    font-size: 1.25rem;
+    color: #0F172A;
+}
+
+.artist-credit {
+    display: block;
+    font-size: 0.72rem;
+    color: #64748B;
+}
+
+.auth-header h2 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #0F172A;
+    margin-bottom: 0.5rem;
+}
+
+.auth-header p {
+    font-size: 0.88rem;
+    color: #64748B;
+    margin-bottom: 2rem;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 0.4rem;
+}
+
+.input-with-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-icon {
+    position: absolute;
+    left: 1rem;
+    color: #94A3B8;
+    display: flex;
+}
+
+.input-with-icon input {
+    width: 100%;
+    padding: 0.85rem 2.8rem;
+    border: 1.5px solid #E2E8F0;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.input-with-icon input:focus {
+    border-color: var(--brand-green);
+}
+
+.toggle-eye {
+    position: absolute;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    color: #94A3B8;
+    cursor: pointer;
+}
+
+.btn-split-submit {
+    width: 100%;
+    padding: 0.9rem;
+    background: var(--brand-teal);
+    color: #FFFFFF;
+    font-weight: 700;
+    font-size: 0.95rem;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.btn-split-submit:hover {
+    background: #042D2A;
+}
+
+.auth-hero-column {
+    width: 55%;
+    background: linear-gradient(135deg, var(--brand-teal-dark) 0%, var(--brand-teal) 100%);
+    color: #FFFFFF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+}
+
+.auth-hero-content {
+    max-width: 520px;
+}
+
+.auth-hero-content h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 2.5rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 2rem;
+}
+
+.testimonial-card {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-lg);
+    padding: 1.75rem;
+    margin-bottom: 2.5rem;
+}
+
+.quote-mark {
+    font-size: 2rem;
+    color: var(--brand-green-bright);
+    line-height: 1;
+}
+
+.testimonial-text {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 1.25rem;
+}
+
+.author-profile {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.author-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid var(--brand-green-bright);
+}
+
+.author-name {
+    display: block;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.author-role {
+    display: block;
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+.tech-ecosystem-section {
+    margin-bottom: 2rem;
+}
+
+.tech-section-title {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--brand-green-bright);
+    margin-bottom: 0.85rem;
+    display: block;
+}
+
+.tech-logo-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.tech-logo-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.45rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.donation-box {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    padding: 1.1rem;
+}
+
+.donation-title {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--brand-green-bright);
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.donation-input-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.donation-wallet-text {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius-sm);
+    padding: 0.45rem 0.65rem;
+    color: #FFFFFF;
+    font-size: 0.75rem;
+    font-family: monospace;
+}
+
+.btn-copy-wallet {
+    padding: 0.45rem 0.85rem;
+    background: var(--brand-green);
+    color: #000;
+    font-weight: 700;
+    font-size: 0.75rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+/* Toast Notifications */
+.toast-container {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast {
+    pointer-events: auto;
+    min-width: 280px;
+    max-width: 420px;
+    background: #14151B;
+    border: 1px solid var(--cf-card-border);
+    border-left: 4px solid var(--brand-green-bright);
+    border-radius: var(--radius-md);
+    padding: 0.85rem 1.1rem;
+    color: var(--cf-text-white);
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    animation: toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast.toast-error { border-left-color: #F43F5E; }
+.toast.toast-info { border-left-color: #00F2FE; }
+.toast.toast-fade-out { opacity: 0; transform: translateX(30px); }
+
+@keyframes toastSlideIn {
+    from { opacity: 0; transform: translateX(60px) scale(0.95); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.btn-ctrl {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1rem;
+    background: var(--brand-green);
+    color: #000;
+    font-weight: 700;
+    font-size: 0.82rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.btn-ctrl:hover { opacity: 0.9; }
+.btn-ctrl.danger { background: #991B1B; color: #FFF; }
+.btn-ghost {
+    padding: 0.5rem;
+    background: transparent;
+    border: 1px solid var(--cf-card-border);
+    color: var(--cf-text-subtle);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.8rem;
+}

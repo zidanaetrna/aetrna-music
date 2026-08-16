@@ -1,0 +1,272 @@
+/* Aetrna's Music — Dashboard Content, Controls & Spectrum CSS */
+
+.cf-topbar {
+    height: 52px;
+    background: var(--cf-sidebar-bg);
+    border-bottom: 1px solid var(--cf-sidebar-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+}
+
+.cf-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    color: var(--cf-text-subtle);
+}
+
+.cf-breadcrumb strong {
+    color: var(--cf-text-white);
+}
+
+.cf-guild-selector-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.cf-guild-dropdown {
+    padding: 0.4rem 0.8rem;
+    background: #14151B;
+    border: 1px solid var(--cf-card-border);
+    border-radius: var(--radius-sm);
+    color: var(--brand-green-bright);
+    font-weight: 600;
+    font-size: 0.82rem;
+    outline: none;
+    cursor: pointer;
+}
+
+.glass-card {
+    background: var(--cf-card-bg);
+    border: 1px solid var(--cf-card-border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.stat-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--cf-text-subtle);
+    letter-spacing: 0.05em;
+}
+
+.stat-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+}
+
+.stat-badge.green { background: rgba(16, 185, 129, 0.15); color: var(--brand-green-bright); }
+.stat-badge.blue { background: rgba(59, 130, 246, 0.15); color: #60A5FA; }
+
+.stat-value {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--cf-text-white);
+}
+
+.stat-value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.65rem;
+    margin-top: 0.35rem;
+}
+
+.middle-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.now-playing-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.live-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--brand-green-bright);
+}
+
+.now-playing-body {
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
+    margin-bottom: 1.25rem;
+}
+
+.track-thumb {
+    width: 72px;
+    height: 72px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+}
+
+.track-meta h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.track-meta p {
+    font-size: 0.8rem;
+    color: var(--cf-text-subtle);
+    margin-bottom: 0.35rem;
+}
+
+.requested-badge {
+    font-size: 0.7rem;
+    color: var(--brand-green-bright);
+    background: rgba(16, 185, 129, 0.1);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+}
+
+.spectrum-bars-container {
+    display: flex;
+    gap: 6px;
+    height: 40px;
+    align-items: flex-end;
+    margin-bottom: 1.25rem;
+}
+
+.spectrum-column {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;
+    flex: 1;
+}
+
+.spectrum-block {
+    height: 6px;
+    border-radius: 2px;
+    background: var(--brand-green);
+}
+
+.player-controls-dock {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--cf-card-border);
+}
+
+.volume-control-box {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.8rem;
+    color: var(--cf-text-subtle);
+}
+
+.cache-gauge-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.gauge-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.donut-chart-arc {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    border: 8px solid var(--brand-teal);
+    border-top-color: var(--brand-green-bright);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.donut-inner-val {
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.queue-table-card {
+    padding: 1.25rem;
+}
+
+.table-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.queue-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.83rem;
+}
+
+.queue-table th, .queue-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--cf-card-border);
+}
+
+.queue-table th {
+    color: var(--cf-text-subtle);
+    font-weight: 600;
+
+}
+
+.track-row-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.row-thumb {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+}
+
+.status-pill {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+}
+
+.status-pill.playing { background: rgba(16, 185, 129, 0.2); color: var(--brand-green-bright); }
+.status-pill.queued { background: rgba(255, 255, 255, 0.08); color: var(--cf-text-subtle); }
+
+.tab-page { display: none; }
+.tab-page.active { display: block; }

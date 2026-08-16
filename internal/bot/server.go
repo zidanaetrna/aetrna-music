@@ -194,8 +194,12 @@ func (b *Bot) StartDashboardServer(port string) {
 				q.Resume()
 			case "skip":
 				q.Skip()
-			case "stop":
+			case "stop", "disconnect":
 				q.Stop()
+			case "clear":
+				q.Stop()
+			case "shuffle":
+				q.Shuffle()
 			case "set_filter":
 				q.SetFilter(body.Value)
 			}
@@ -205,7 +209,7 @@ func (b *Bot) StartDashboardServer(port string) {
 	}))
 
 	// 5. Static Files Web Dashboard Server
-	subFS, err := fs.Sub(web.FS, ".")
+	subFS, err := fs.Sub(web.FS, "dist")
 	if err == nil {
 		fileServer := http.FileServer(http.FS(subFS))
 		mux.Handle("/", fileServer)
