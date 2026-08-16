@@ -185,7 +185,7 @@ func (b *Bot) startInternalWebhookServer() {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.GuildID != "" {
 			log.Printf("[INFO] [GoBot] Track end event for guild %s (%s)", body.GuildID, body.Reason)
-			go b.store.Get(body.GuildID).PlayNext()
+			b.store.Get(body.GuildID).SignalTrackEnd()
 		}
 		w.WriteHeader(http.StatusOK)
 	})

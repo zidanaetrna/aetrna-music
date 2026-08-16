@@ -222,9 +222,21 @@ func (q *GuildQueue) Resume() {
 
 // Skip signals TrackEndCh so PlayNext moves to the next song.
 func (q *GuildQueue) Skip() {
-	select {
-	case q.TrackEndCh <- struct{}{}:
-	default:
+	q.SignalTrackEnd()
+}
+
+func (q *GuildQueue) SignalTrackEnd() {
+	q.mu.Lock()
+	isLooping := q.isLooping
+	q.mu.Unlock()
+
+	if isLooping {
+		select {
+		case q.TrackEndCh <- struct{}{}:
+		default:
+		}
+	} else {
+		go q.PlayNext()
 	}
 }
 
