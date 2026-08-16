@@ -27,7 +27,7 @@
 
 ## Why aetrna-music?
 
-- **Lavalink-Free**: No separate Lavalink server or Java runtime required. Consumes only **15–30 MB RAM** per instance (compared to **~500 MB+** for typical Java/Lavalink setups).
+- **Lavalink-Free**: No separate Lavalink server or Java runtime required. Lightweight native Go + Node.js architecture.
 - **Self-Hosted**: Run everything on your own server with full control.
 - **Web Dashboard**: React 18 + TypeScript control panel to manage playback directly from your browser.
 - **Audio Filters**: On-the-fly FFmpeg DSP filters (`bassboost`, `nightcore`, `vaporwave`, `8d`, `pop`).
