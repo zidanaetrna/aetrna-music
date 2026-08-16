@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="web/artwork.png" alt="aetrna-music Official Artwork" width="120" height="120" style="border-radius: 50%; object-fit: cover; border: 3px solid #00F2FE; box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);" /><br />
+<img src="web/public/artwork.png" alt="aetrna-music Official Artwork" width="120" height="120" style="border-radius: 50%; object-fit: cover; border: 3px solid #10B981; box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);" /><br />
 <sub><i>Official Bot Artwork by <b>@br_lie</b></i></sub>
 
 # aetrna-music
@@ -10,7 +10,7 @@
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![NodeJS](https://img.shields.io/badge/Node.js-22+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Web Dashboard](https://img.shields.io/badge/Web_Dashboard-v2.0-8A2BE2?style=for-the-badge&logo=fastapi&logoColor=white)](#web-control-panel--dashboard)
+[![Web Dashboard](https://img.shields.io/badge/Web_Dashboard-v2.1.0_React_TS-10B981?style=for-the-badge&logo=react&logoColor=white)](#web-control-panel--dashboard)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
 
