@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="web/artwork.png" alt="aetrna-music Official Artwork" width="380" style="border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
+<img src="web/artwork.png" alt="aetrna-music Official Artwork" width="140" height="140" style="border-radius: 50%; object-fit: cover; border: 3px solid #00F2FE; box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);" />
 
 <sub><i>Official Bot Artwork by <b>@br_lie</b></i></sub>
 
@@ -223,7 +223,7 @@ If `aetrna-music` helped you run a fast, ad-free Discord music bot without expen
 
 - **License**: Released under the **[Apache License 2.0](LICENSE)**.
 - **Creator**: **[zidanaetrna](https://github.com/zidanaetrna)** *(Professional AI Prompter)*
-- **Official Bot Artwork**: **[@br_lie](https://github.com/zidanaetrna)** (`web/artwork.png`)
+- **Official Bot Artwork**: **[@br_lie](https://github.com/TheBarli)** (`web/artwork.png`)
 
 <div align="center">
   <sub>Built by <b>zidanaetrna</b> using Go & Node.js</sub>
