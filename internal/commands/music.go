@@ -363,12 +363,7 @@ func getVoiceState(s *discordgo.Session, guildID, userID string) (*discordgo.Voi
 func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string, error) {
 	query = sanitizeQuery(query)
 
-	if cachedURL, ok := music.GlobalStreamCache.Get(query); ok && cachedURL != "" {
-		log.Printf("[INFO] [GetStreamURL] Cache HIT for '%s' (0ms instant stream ready!)", query)
-		return cachedURL, nil
-	}
-
-	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 	if ytdlpClients == "" {
 		ytdlpClients = "ios,android"
 	} else {
