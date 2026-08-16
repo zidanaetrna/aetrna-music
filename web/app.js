@@ -11,13 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logoutBtn');
     const navItems = document.querySelectorAll('.nav-item');
     const tabPages = document.querySelectorAll('.tab-page');
-    const demoBypassBtn = document.getElementById('demoBypassBtn');
-    const demoBadge = document.getElementById('demoBadge');
-    const langSelect = document.getElementById('langSelect');
 
     let sessionToken = localStorage.getItem('aetrna_token') || '';
-    const urlParams = new URLSearchParams(window.location.search);
-    let isDemoMode = urlParams.get('demo') === 'true';
 
     // Password Visibility Toggle Handler
     if (togglePasswordBtn) {
@@ -84,7 +79,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await res.json();
                 sessionToken = data.token;
                 localStorage.setItem('aetrna_token', sessionToken);
-                isDemoMode = false;
                 showDashboard();
             } catch (err) {
                 if (loginErrorText) loginErrorText.textContent = 'Connection error to Aetrna Bot API server.';
@@ -93,19 +87,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Demo Mode Bypass Button Handler
-    if (demoBypassBtn) {
-        demoBypassBtn.addEventListener('click', () => {
-            isDemoMode = true;
-            showDashboard();
-        });
-    }
-
     // Logout Handler
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
             sessionToken = '';
-            isDemoMode = false;
             localStorage.removeItem('aetrna_token');
             showLogin();
         });
@@ -119,55 +104,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function showDashboard() {
         if (loginModal) loginModal.classList.add('hidden');
         if (dashboardApp) dashboardApp.classList.remove('hidden');
-
-        if (isDemoMode) {
-            if (demoBadge) demoBadge.classList.remove('hidden');
-            loadMockData();
-        } else {
-            if (demoBadge) demoBadge.classList.add('hidden');
-            fetchDashboardStatus();
-            initSSE();
-        }
-    }
-
-    // Load Mock Data for Demo Mode Preview
-    function loadMockData() {
-        document.getElementById('statGuilds').textContent = '14';
-        document.getElementById('statRam').textContent = '142 MB';
-        document.getElementById('statUptime').textContent = '48h 12m';
-        document.getElementById('statCookies').textContent = 'Loaded';
-
-        document.getElementById('heroTitle').textContent = 'Aetrna — Echoes of Eternity (Official Audio)';
-        document.getElementById('heroAuthor').textContent = 'Aetrna Project • Requested by @zidanaetrna';
-        document.getElementById('heroThumbnail').src = 'artwork.png';
-        document.getElementById('heroCurrentTime').textContent = '02:45';
-        document.getElementById('heroDuration').textContent = '04:12';
-        document.getElementById('heroProgressBar').style.width = '65%';
-
-        const queueContainer = document.getElementById('queueItems');
-        if (queueContainer) {
-            queueContainer.innerHTML = `
-                <div class="queue-item" style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; margin-bottom:0.5rem; background:rgba(255,255,255,0.04); border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
-                    <div>
-                        <strong style="color:var(--text-primary); font-size:0.9rem;">1. Continuous — Celestial Resonance</strong>
-                        <div style="font-size:0.78rem; color:var(--text-secondary);">Requested by @br_lie • 03:50</div>
-                    </div>
-                    <span class="badge" style="background:rgba(0,242,254,0.15); color:var(--accent-cyan);">Up Next</span>
-                </div>
-                <div class="queue-item" style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem; margin-bottom:0.5rem; background:rgba(255,255,255,0.04); border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
-                    <div>
-                        <strong style="color:var(--text-primary); font-size:0.9rem;">2. Synthwave Horizon — Midnight Drift</strong>
-                        <div style="font-size:0.78rem; color:var(--text-secondary);">Requested by @alex_dev • 05:14</div>
-                    </div>
-                    <span class="badge" style="background:rgba(255,255,255,0.1); color:var(--text-secondary);">Queued</span>
-                </div>
-            `;
-        }
+        fetchDashboardStatus();
+        initSSE();
     }
 
     // API Helper with Auth Header
     async function apiFetch(endpoint, options = {}) {
-        if (isDemoMode) return { status: 'ok' };
         options.headers = options.headers || {};
         options.headers['Authorization'] = `Bearer ${sessionToken}`;
         const res = await fetch(endpoint, options);
@@ -180,7 +122,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fetch Live Dashboard Status Metrics
     async function fetchDashboardStatus() {
-        if (isDemoMode) return;
         try {
             const data = await apiFetch('/api/status');
             document.getElementById('statGuilds').textContent = data.guildCount || 0;
@@ -216,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Server-Sent Events (SSE) Stream Listener
     function initSSE() {
-        if (isDemoMode || !window.EventSource) return;
+        if (!window.EventSource) return;
         try {
             const evtSource = new EventSource('/api/events');
             evtSource.onmessage = (event) => {
@@ -240,7 +181,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnPause) {
         btnPause.addEventListener('click', async () => {
-            if (isDemoMode) return alert('Demo Mode: Control action simulated!');
             await apiFetch('/api/control', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -251,7 +191,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnSkip) {
         btnSkip.addEventListener('click', async () => {
-            if (isDemoMode) return alert('Demo Mode: Track skip simulated!');
             await apiFetch('/api/control', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -262,7 +201,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnStop) {
         btnStop.addEventListener('click', async () => {
-            if (isDemoMode) return alert('Demo Mode: Playback stop simulated!');
             await apiFetch('/api/control', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -279,9 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Initial Auth Check
-    if (isDemoMode) {
-        showDashboard();
-    } else if (sessionToken) {
+    if (sessionToken) {
         showDashboard();
     } else {
         showLogin();
