@@ -319,14 +319,14 @@ function cleanupPrefetch(guildId) {
 // Spawn yt-dlp in background for a YouTube URL to warm up player JS cache
 function startPrefetch(guildId, youtubeUrl) {
     cleanupPrefetch(guildId);
-    const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
+    const ytdlpClients = process.env.YTDLP_CLIENTS || 'ios,tv';
     const cookiesPath = getAbsoluteCookiesPath();
     const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
     const ytdlpArgs = [
         '-4',
         '--js-runtimes', 'node',
         '--extractor-args', `youtube:player_client=${ytdlpClients}`,
-        '-f', 'ba[ext=m4a]/ba[ext=webm]/ba/bestaudio/best',
+        '-f', '251/140/249/250/139/ba[ext=m4a]/ba[ext=webm]/ba/bestaudio/best',
         '--no-playlist',
         '--geo-bypass',
         '--no-check-certificates',
@@ -558,7 +558,7 @@ app.post('/join-and-play', async (req, res) => {
                     : null;
 
                 if (videoInputUrl) {
-                    const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
+                    const ytdlpClients = process.env.YTDLP_CLIENTS || 'ios,tv';
                     const cookiesPath = getAbsoluteCookiesPath();
 
                     // Check if we have a prefetched yt-dlp process for this URL
@@ -573,7 +573,7 @@ app.post('/join-and-play', async (req, res) => {
                             '-4',
                             '--js-runtimes', 'node',
                             '--extractor-args', `youtube:player_client=${ytdlpClients}`,
-                            '-f', 'ba[ext=m4a]/ba[ext=webm]/ba/bestaudio/best',
+                            '-f', '251/140/249/250/139/ba[ext=m4a]/ba[ext=webm]/ba/bestaudio/best',
                             '--no-playlist',
                             '--geo-bypass',
                             '--no-check-certificates',
