@@ -3,6 +3,10 @@ name: Publish to NPM Registry
 on:
   release:
     types: [published]
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*'
   workflow_dispatch:
 
 jobs:
