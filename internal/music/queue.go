@@ -95,10 +95,10 @@ func (q *GuildQueue) PreFetchNext() {
 	q.mu.Unlock()
 
 	go func() {
-		fmt.Printf("⚡ [GuildQueue %s] Pre-fetching StreamURL in background for next track: '%s'...\n", q.GuildID, targetSongTitle)
+		fmt.Printf("[INFO] [GuildQueue %s] Pre-fetching StreamURL in background for next track: '%s'...\n", q.GuildID, targetSongTitle)
 		streamURL, err := preFetchCb(targetSongURL)
 		if err != nil {
-			fmt.Printf("⚠️ [GuildQueue %s] Pre-fetch failed for '%s': %v\n", q.GuildID, targetSongTitle, err)
+			fmt.Printf("[WARN] [GuildQueue %s] Pre-fetch failed for '%s': %v\n", q.GuildID, targetSongTitle, err)
 			return
 		}
 
@@ -107,7 +107,7 @@ func (q *GuildQueue) PreFetchNext() {
 		if len(q.Songs) > 0 && q.Songs[0].URL == targetSongURL {
 			q.Songs[0].StreamURL = streamURL
 			q.Songs[0].ResolvedAt = time.Now()
-			fmt.Printf("✅ [GuildQueue %s] Successfully pre-fetched StreamURL for '%s' (ready for 0ms transition!)\n", q.GuildID, targetSongTitle)
+			fmt.Printf("[INFO] [GuildQueue %s] Successfully pre-fetched StreamURL for '%s' (ready for 0ms transition!)\n", q.GuildID, targetSongTitle)
 		}
 	}()
 }
@@ -117,7 +117,7 @@ func (q *GuildQueue) AddSong(song Song) {
 	if q.idleTimer != nil {
 		q.idleTimer.Stop()
 		q.idleTimer = nil
-		fmt.Printf("⏱️ [GuildQueue %s] Cancelled idle disconnect timer (new song added)\n", q.GuildID)
+		fmt.Printf("[INFO] [GuildQueue %s] Cancelled idle disconnect timer (new song added)\n", q.GuildID)
 	}
 	q.Songs = append(q.Songs, song)
 	q.mu.Unlock()
@@ -130,7 +130,7 @@ func (q *GuildQueue) InsertNext(song Song) {
 	if q.idleTimer != nil {
 		q.idleTimer.Stop()
 		q.idleTimer = nil
-		fmt.Printf("⏱️ [GuildQueue %s] Cancelled idle disconnect timer (song inserted next)\n", q.GuildID)
+		fmt.Printf("[INFO] [GuildQueue %s] Cancelled idle disconnect timer (song inserted next)\n", q.GuildID)
 	}
 	q.Songs = append([]Song{song}, q.Songs...)
 	q.mu.Unlock()

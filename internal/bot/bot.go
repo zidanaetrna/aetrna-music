@@ -238,7 +238,7 @@ func (b *Bot) startInternalWebhookServer() {
 func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInteraction) {
 	followup := func(params *discordgo.WebhookParams) {
 		if _, err := b.session.FollowupMessageCreate(i.Interaction, true, params); err != nil {
-			log.Printf("❌ [GoBot] FollowupMessageCreate (play) error: %v", err)
+			log.Printf("[ERROR] [GoBot] FollowupMessageCreate (play) error: %v", err)
 		}
 	}
 

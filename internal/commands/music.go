@@ -62,7 +62,7 @@ func sanitizeQuery(query string) string {
 
 func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients string) ([]music.Song, error) {
 	query = sanitizeQuery(query)
-	log.Printf("🔍 [SearchYouTube] Searching query: %s (limit: %d)", query, limit)
+	log.Printf("[INFO] [SearchYouTube] Searching query: %s (limit: %d)", query, limit)
 
 	targetQuery := query
 	if !strings.HasPrefix(query, "http://") && !strings.HasPrefix(query, "https://") {
@@ -80,7 +80,7 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 	}
 
 	if _, err := os.Stat(cookiesPath); err == nil {
-		log.Printf("🔑 [SearchYouTube] Found cookies file at: %s", cookiesPath)
+		log.Printf("[INFO] [SearchYouTube] Found cookies file at: %s", cookiesPath)
 		args = append([]string{"--cookies", cookiesPath}, args...)
 	}
 
@@ -90,16 +90,16 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 	out, err := execYtdlpCmd(cmd)
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			log.Printf("❌ [SearchYouTube] primary yt-dlp error: %v | Stderr: %s", err, string(exitErr.Stderr))
+			log.Printf("[ERROR] [SearchYouTube] primary yt-dlp error: %v | Stderr: %s", err, string(exitErr.Stderr))
 		} else {
-			log.Printf("❌ [SearchYouTube] primary yt-dlp error: %v", err)
+			log.Printf("[ERROR] [SearchYouTube] primary yt-dlp error: %v", err)
 		}
 		return searchYouTubeFallback(query, limit, cookiesPath, ytdlpClients)
 	}
 
 	var res YtdlpSearchResult
 	if err := json.Unmarshal(out, &res); err != nil {
-		log.Printf("❌ [SearchYouTube] json unmarshal error: %v | Raw Output: %s", err, string(out))
+		log.Printf("[ERROR] [SearchYouTube] json unmarshal error: %v | Raw Output: %s", err, string(out))
 		return searchYouTubeFallback(query, limit, cookiesPath, ytdlpClients)
 	}
 
@@ -143,17 +143,17 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 	}
 
 	if len(songs) == 0 {
-		log.Printf("⚠️ [SearchYouTube] Primary search returned 0 songs, trying fallback...")
+		log.Printf("[WARN] [SearchYouTube] Primary search returned 0 songs, trying fallback...")
 		return searchYouTubeFallback(query, limit, cookiesPath, ytdlpClients)
 	}
 
-	log.Printf("✅ [SearchYouTube] Primary search succeeded. Found %d songs for query '%s'", len(songs), query)
+	log.Printf("[INFO] [SearchYouTube] Primary search succeeded. Found %d songs for query '%s'", len(songs), query)
 	return songs, nil
 }
 
 func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpClients string) ([]music.Song, error) {
 	query = sanitizeQuery(query)
-	log.Printf("🔄 [SearchYouTubeFallback] Running fallback search for query: %s", query)
+	log.Printf("[INFO] [SearchYouTubeFallback] Running fallback search for query: %s", query)
 	targetQuery := query
 	if !strings.HasPrefix(query, "http://") && !strings.HasPrefix(query, "https://") {
 		targetQuery = fmt.Sprintf("ytsearch%d:%s", limit, query)
@@ -168,7 +168,7 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 	}
 
 	if _, err := os.Stat(cookiesPath); err == nil {
-		log.Printf("🔑 [SearchYouTubeFallback] Found cookies file at: %s", cookiesPath)
+		log.Printf("[INFO] [SearchYouTubeFallback] Found cookies file at: %s", cookiesPath)
 		args = append([]string{"--cookies", cookiesPath}, args...)
 	}
 
@@ -178,9 +178,9 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 	out, err := execYtdlpCmd(cmd)
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			log.Printf("❌ [SearchYouTubeFallback] error: %v | Stderr: %s", err, string(exitErr.Stderr))
+			log.Printf("[ERROR] [SearchYouTubeFallback] error: %v | Stderr: %s", err, string(exitErr.Stderr))
 		} else {
-			log.Printf("❌ [SearchYouTubeFallback] error: %v", err)
+			log.Printf("[ERROR] [SearchYouTubeFallback] error: %v", err)
 		}
 		return nil, err
 	}
@@ -221,7 +221,7 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 		}
 	}
 
-	log.Printf("✅ [SearchYouTubeFallback] Fallback search finished. Found %d songs.", len(songs))
+	log.Printf("[INFO] [SearchYouTubeFallback] Fallback search finished. Found %d songs.", len(songs))
 	return songs, nil
 }
 
@@ -260,7 +260,7 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	songs, err := SearchYouTube(query, 1, h.cfg.CookiesPath, h.cfg.YtdlpClients)
 	if err != nil || len(songs) == 0 {
-		log.Printf("⚠️ [HandlePlay] Search returned 0 songs for query '%s'. Err: %v", query, err)
+		log.Printf("[WARN] [HandlePlay] Search returned 0 songs for query '%s'. Err: %v", query, err)
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: i18n.Globali18n.T(lang, "song_not_found"),
 		})
@@ -360,7 +360,7 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 	query = sanitizeQuery(query)
 
 	if cachedURL, ok := music.GlobalStreamCache.Get(query); ok && cachedURL != "" {
-		log.Printf("⚡ [GetStreamURL] Cache HIT for '%s' (0ms instant stream ready!)", query)
+		log.Printf("[INFO] [GetStreamURL] Cache HIT for '%s' (0ms instant stream ready!)", query)
 		return cachedURL, nil
 	}
 
@@ -389,7 +389,7 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 	out, err := execYtdlpCmd(cmd)
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			log.Printf("❌ [GetStreamURL] yt-dlp error: %v | Stderr: %s", err, string(exitErr.Stderr))
+			log.Printf("[ERROR] [GetStreamURL] yt-dlp error: %v | Stderr: %s", err, string(exitErr.Stderr))
 		}
 		return "", err
 	}

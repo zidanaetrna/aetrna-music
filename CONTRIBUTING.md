@@ -1,65 +1,193 @@
 # Contributing to aetrna-music
 
-Thank you for your interest in contributing to **aetrna-music**! We welcome bug fixes, performance improvements, feature enhancements, and documentation updates.
+Thanks for wanting to contribute to **aetrna-music**!
+
+Bug fixes, performance improvements, new features, documentation updates, random ideas that somehow turn into features - all welcome.
+
+The project is still evolving, so if something looks weird, feel free to open an issue or pull request.
 
 ---
 
-## Clean Code Culture & Rules
+## Development Guidelines
 
-To keep the repository clean, reliable, and enterprise-grade:
+### Keep It Clean
 
-1. **Zero Emojis in Code, Logs & Documentation**:
-   - Do not use informal unicode emojis in code comments, commit messages, documentation, or server log outputs.
-   - Standardize all server logs to use enterprise bracketed log tags: `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`.
-   - Keep log messages clean, structured, and informative.
-2. **Architecture Decoupling**:
-   - The Go core service manages Discord bot commands, state, queue, and SQLite persistence.
-   - The Node.js voice server handles opus audio encoding/decoding via `prism-media` & `dgram`.
-   - Keep communication between services decoupled via IPC/WS.
-3. **No Lavalink Dependencies**:
-   - Do not re-introduce Lavalink or Java dependencies. The engine is strictly self-hosted native Go + Node.js.
+We're not trying to build enterprise software for a bank, but please don't make future us hate ourselves.
 
----
+- Keep the code readable
+- Use clear names
+- Avoid unnecessary complexity
+- Follow the existing style
+- Keep comments useful
+- Keep logs structured with `[INFO]`, `[WARN]`, `[ERROR]`, and `[DEBUG]`
+- Avoid emojis in source code, logs, and technical documentation
 
-## Local Development Setup
+The project can be casual. The code doesn't have to be cursed.
 
-1. **Prerequisites**:
-   - **Go**: `1.22+`
-   - **Node.js**: `22+`
-   - **FFmpeg**: Installed and available in your system `PATH`.
-   - **yt-dlp**: Installed and available in your system `PATH`.
+### Architecture
 
-2. **Setup Instructions**:
-   ```bash
-   # Clone repository
-   git clone https://github.com/zidanaetrna/aetrna-music.git
-   cd aetrna-music
+aetrna-music currently has two main parts:
 
-   # Install Node dependencies
-   npm install
+- **Go Core** - Discord bot commands, queue/state management, Web API, authentication, and SQLite persistence.
+- **Node.js Voice Worker** - Audio streaming, Discord voice handling, Opus processing, and the FFmpeg audio pipeline.
 
-   # Copy environment file
-   cp .env.example .env
-   # Edit DISCORD_TOKEN in .env
-   ```
+Try to keep their responsibilities separated.
 
-3. **Running Services Locally**:
-   - Terminal 1 (Voice Server): `node voice-server/server.js`
-   - Terminal 2 (Go Core & Web Dashboard): `go run ./cmd/bot`
+If you need to change how they communicate, make sure the existing IPC/HTTP boundaries still make sense.
+
+### No Lavalink
+
+Please don't add Lavalink or Java dependencies.
+
+The whole point is that aetrna-music is **Lavalink-free**.
+
+We've already chosen the harder way.
 
 ---
 
-## Pull Request Workflow
+## Local Development
 
-1. Fork the repository and create your feature branch:
-   ```bash
-   git checkout -b feature/my-amazing-feature
-   ```
-2. Commit your changes with clear, descriptive commit messages:
-   ```bash
-   git commit -m "feat(voice): enhance opus buffer flow control"
-   ```
-3. Push to your branch and open a Pull Request against `main`.
-4. Ensure code builds without errors (`go build ./...` and `node --check voice-server/server.js`).
+### Prerequisites
 
-Thank you for contributing to aetrna-music.
+- **Go:** `1.23+`
+- **Node.js:** `22+`
+- **FFmpeg:** Installed and available in `PATH`
+- **yt-dlp:** Installed and available in `PATH`
+
+### Setup
+
+```bash
+git clone https://github.com/zidanaetrna/aetrna-music.git
+cd aetrna-music
+npm install
+cp .env.example .env
+```
+
+Edit `.env` and add your required configuration, including your Discord bot token.
+
+**Do not commit `.env`, Discord tokens, YouTube cookies, passwords, or other secrets.**
+
+### Run Locally
+
+Terminal 1:
+
+```bash
+node voice-server/server.js
+```
+
+Terminal 2:
+
+```bash
+go run ./cmd/bot
+```
+
+---
+
+## Making Changes
+
+For small fixes, documentation changes, and obvious improvements, just open a pull request.
+
+For larger features, opening an issue first is recommended so we can talk about it before someone spends three days implementing something nobody asked for.
+
+When making changes:
+
+- Keep the PR focused
+- Avoid unrelated refactors
+- Follow the existing architecture
+- Test your changes
+- Update the docs if necessary
+
+---
+
+## Pull Requests
+
+### 1. Create a Branch
+
+```bash
+git checkout -b feature/my-feature
+```
+
+or:
+
+```bash
+git checkout -b fix/queue-playback-bug
+```
+
+### 2. Make Your Changes
+
+Keep commits reasonably focused.
+
+Example:
+
+```bash
+git commit -m "feat(voice): improve opus buffer flow control"
+```
+
+### 3. Run the Checks
+
+```bash
+go build ./...
+```
+
+```bash
+node --check voice-server/server.js
+```
+
+Also test anything else affected by your changes.
+
+### 4. Open a Pull Request
+
+Open your PR against `main`.
+
+Please include:
+
+- What changed
+- Why
+- How you tested it
+- Anything we should know
+
+---
+
+## Bug Reports
+
+If you found something broken, please include:
+
+- What happened
+- What you expected
+- How to reproduce it
+- Relevant logs
+- Go/Node.js versions
+- Docker or manual deployment
+- Anything else that might help
+
+Please don't post your tokens, passwords, cookies, or other secrets.
+
+---
+
+## Feature Requests
+
+Got an idea?
+
+Go for it.
+
+Just keep the project's main goals in mind:
+
+- Self-hosted
+- Lavalink-free
+- Lightweight
+- Easy to deploy
+- Actually useful
+
+Not every idea will make it in, but we're happy to hear them.
+
+---
+
+## One Last Thing
+
+Don't be afraid to open a PR just because you're not sure if it's perfect.
+
+We can figure it out.
+
+Thanks for contributing to **aetrna-music**.
+
+> Discord music bot. unfortunately.

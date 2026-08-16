@@ -34,7 +34,7 @@ func (m *Manager) LoadEmbeddedLocales() error {
 
 	entries, err := fs.ReadDir(locales.FS, ".")
 	if err != nil {
-		log.Printf("⚠️ [i18n] Error reading embedded locales: %v", err)
+		log.Printf("[WARN] [i18n] Error reading embedded locales: %v", err)
 		return err
 	}
 
@@ -46,18 +46,18 @@ func (m *Manager) LoadEmbeddedLocales() error {
 		lang := strings.TrimSuffix(entry.Name(), ".json")
 		data, err := locales.FS.ReadFile(entry.Name())
 		if err != nil {
-			log.Printf("⚠️ [i18n] Failed to read embedded locale %s: %v", entry.Name(), err)
+			log.Printf("[WARN] [i18n] Failed to read embedded locale %s: %v", entry.Name(), err)
 			continue
 		}
 
 		var translations map[string]string
 		if err := json.Unmarshal(data, &translations); err != nil {
-			log.Printf("⚠️ [i18n] Failed to parse JSON in embedded locale %s: %v", entry.Name(), err)
+			log.Printf("[WARN] [i18n] Failed to parse JSON in embedded locale %s: %v", entry.Name(), err)
 			continue
 		}
 
 		m.locales[lang] = translations
-		log.Printf("🌐 [i18n] Loaded embedded locale '%s' (%d keys)", lang, len(translations))
+		log.Printf("[INFO] [i18n] Loaded embedded locale '%s' (%d keys)", lang, len(translations))
 	}
 	return nil
 }

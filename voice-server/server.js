@@ -21,14 +21,22 @@ function getCookieHeaderString() {
         if (!content) return '';
         const lines = content.split('\n');
         const cookiePairs = [];
+        const essentialKeys = new Set([
+            'YSC', 'VISITOR_INFO1_LIVE', 'LOGIN_INFO', 'PREF', 'GPS',
+            'SID', 'HSID', 'SSID', 'APISID', 'SAPISID', 'SIDCC',
+            '__Secure-1PAPISID', '__Secure-3PAPISID', '__Secure-1PSID', '__Secure-3PSID',
+            '__Secure-1PSIDTS', '__Secure-3PSIDTS'
+        ]);
+
         for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed || trimmed.startsWith('#')) continue;
             const parts = trimmed.split('\t');
             if (parts.length >= 7) {
+                const domain = parts[0].trim();
                 const name = parts[5].trim();
                 const value = parts[6].trim();
-                if (name && value) {
+                if ((domain.includes('youtube') || domain.includes('googlevideo')) && essentialKeys.has(name) && value) {
                     cookiePairs.push(`${name}=${value}`);
                 }
             }
@@ -163,17 +171,8 @@ discordClient.login(BOT_TOKEN).then(async () => {
     try {
         const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
         
-        await rest.put(Routes.applicationCommands(discordClient.user.id), { body: [] });
-        console.log('[INFO] [VoiceServer] Cleared global slash commands');
-        
-        for (const [gId] of discordClient.guilds.cache) {
-            try {
-                await rest.put(Routes.applicationGuildCommands(discordClient.user.id, gId), { body: commands });
-                console.log(`[INFO] [VoiceServer] Registered guild commands for ${gId}`);
-            } catch (e) {
-                console.error(`[WARN] [VoiceServer] Failed to register commands for guild ${gId}:`, e.message);
-            }
-        }
+        await rest.put(Routes.applicationCommands(discordClient.user.id), { body: commands });
+        console.log('[INFO] [VoiceServer] Registered global slash commands successfully');
         console.log('[INFO] [VoiceServer] Slash commands registered successfully');
     } catch (e) {
         console.error('[WARN] [VoiceServer] Failed to register slash commands:', e.message);

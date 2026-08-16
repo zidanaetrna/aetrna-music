@@ -46,7 +46,7 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 		artist = cleanQuery(artistName)
 	}
 
-	log.Printf("🔍 [Lyrics] Extracted title: '%s' | artist: '%s' from raw: '%s'", title, artist, trackName)
+	log.Printf("[INFO] [Lyrics] Extracted title: '%s' | artist: '%s' from raw: '%s'", title, artist, trackName)
 
 	// 1. Try search with extracted title + artist
 	if title != "" && artist != "" {
@@ -65,7 +65,7 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 	// 3. Fallback search with Netease Cloud Music API (Over 10M Synced LRC Lyrics)
 	if title != "" {
 		if resp, err := queryNeteaseLyrics(title, artist); err == nil && resp != nil && resp.SyncedLyrics != "" {
-			log.Printf("✅ [Lyrics] Synced lyrics found on Netease Cloud Music fallback!")
+			log.Printf("[INFO] [Lyrics] Synced lyrics found on Netease Cloud Music fallback!")
 			return parseResponse(resp), nil
 		}
 	}
