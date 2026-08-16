@@ -1,0 +1,161 @@
+/* Aetrna's Music — Cloudflare Sidebar CSS */
+
+.sidebar {
+    width: 250px;
+    background-color: var(--cf-sidebar-bg);
+    border-right: 1px solid var(--cf-sidebar-border);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 1.25rem 0.85rem;
+    transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar.collapsed {
+    width: 64px;
+}
+
+.sidebar.collapsed .sidebar-label {
+    display: none !important;
+}
+
+.sidebar.collapsed .nav-item {
+    justify-content: center;
+    padding: 0.55rem 0;
+}
+
+.cf-top-account-selector {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--cf-sidebar-border);
+    margin-bottom: 1rem;
+}
+
+.cf-account-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.cf-account-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--cf-text-white);
+}
+
+.cf-collapse-btn {
+    background: transparent;
+    border: none;
+    color: var(--cf-text-subtle);
+    cursor: pointer;
+    padding: 0.3rem;
+    border-radius: var(--radius-sm);
+}
+
+.cf-collapse-btn:hover {
+    color: var(--cf-text-white);
+    background: rgba(255,255,255,0.06);
+}
+
+.cf-search-box {
+    display: flex;
+    align-items: center;
+    background: #14151B;
+    border: 1px solid var(--cf-card-border);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 1.25rem;
+    gap: 0.5rem;
+}
+
+.cf-search-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--cf-text-white);
+    font-size: 0.8rem;
+    width: 100%;
+}
+
+.cf-search-kbd {
+    font-size: 0.65rem;
+    background: #1E2028;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    color: var(--cf-text-muted);
+}
+
+.cf-nav-section-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--cf-text-muted);
+    margin: 1.2rem 0 0.5rem 0.5rem;
+}
+
+.nav-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.55rem 0.75rem;
+    background: transparent;
+    border: none;
+    border-left: 3px solid transparent;
+    border-radius: var(--radius-md);
+    color: var(--cf-text-white);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.nav-item-left {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.nav-icon {
+    display: flex;
+    align-items: center;
+    color: var(--cf-text-subtle);
+}
+
+.nav-item:hover {
+    background: rgba(255,255,255,0.04);
+}
+
+.nav-item.active {
+    background: var(--brand-teal);
+    border-left-color: var(--brand-green-bright);
+    color: var(--cf-text-white);
+}
+
+.nav-item.active .nav-icon {
+    color: var(--brand-green-bright);
+}
+
+.lang-select {
+    width: 100%;
+    margin-top: 1rem;
+    padding: 0.45rem 0.6rem;
+    background: #14151B;
+    border: 1px solid var(--cf-card-border);
+    border-radius: var(--radius-sm);
+    color: var(--cf-text-white);
+    font-size: 0.78rem;
+    outline: none;
+    cursor: pointer;
+}

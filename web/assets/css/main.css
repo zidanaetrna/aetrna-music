@@ -1,0 +1,54 @@
+/* Aetrna's Music — Core CSS Tokens & System Layout */
+:root {
+    --brand-green: #10B981;
+    --brand-green-bright: #00E676;
+    --brand-teal: #06403C;
+    --brand-teal-dark: #022C29;
+    --cf-sidebar-bg: #0D0E12;
+    --cf-sidebar-border: #1E2028;
+    --cf-black: #070709;
+    --cf-card-bg: #111216;
+    --cf-card-border: #23252C;
+    --cf-text-white: #F3F4F6;
+    --cf-text-subtle: #9CA3AF;
+    --cf-text-muted: #6B7280;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--cf-black);
+    color: var(--cf-text-white);
+    line-height: 1.5;
+    overflow-x: hidden;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.app-container {
+    display: flex;
+    min-height: 100vh;
+    background-color: var(--cf-black);
+}
+
+.main-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+.main-content {
+    padding: 2rem;
+    flex: 1;
+}

@@ -1,0 +1,13 @@
+# ==============================================================================
+# Aetrna's Music — Caddyfile Reverse Proxy Template
+# ==============================================================================
+# Caddy automatically handles Let's Encrypt SSL certificates.
+
+music.yourdomain.com {
+    reverse_proxy 127.0.0.1:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
