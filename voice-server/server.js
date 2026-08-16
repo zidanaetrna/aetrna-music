@@ -25,6 +25,15 @@ function getAbsoluteCookiesPath() {
     return null;
 }
 
+function getCacheDir() {
+    try {
+        const dir = path.join(__dirname, '../.cache/yt-dlp');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        return dir;
+    } catch (_) {}
+    return null;
+}
+
 function getCookieHeaderString() {
     try {
         const cookiesFile = getAbsoluteCookiesPath();
@@ -320,6 +329,7 @@ function cleanupPrefetch(guildId) {
 function startPrefetch(guildId, youtubeUrl) {
     cleanupPrefetch(guildId);
     const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
+    const cacheDir = getCacheDir();
     const cookiesPath = getAbsoluteCookiesPath();
     const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
     const ytdlpArgs = [
@@ -327,6 +337,7 @@ function startPrefetch(guildId, youtubeUrl) {
         '--js-runtimes', 'node',
         '--extractor-args', `youtube:player_client=${ytdlpClients}`,
         '-f', 'ba/ba*/bestaudio/b',
+        '--concurrent-fragments', '5',
         '--no-playlist',
         '--geo-bypass',
         '--no-check-certificates',
@@ -335,6 +346,7 @@ function startPrefetch(guildId, youtubeUrl) {
         '-o', '-',
         youtubeUrl
     ];
+    if (cacheDir) ytdlpArgs.unshift('--cache-dir', cacheDir);
     if (cookiesPath) ytdlpArgs.unshift('--cookies', cookiesPath);
 
     console.log(`[INFO] [VoiceServer] Prefetching yt-dlp for '${youtubeUrl}' in guild ${guildId}`);
@@ -574,6 +586,7 @@ app.post('/join-and-play', async (req, res) => {
                             '--js-runtimes', 'node',
                             '--extractor-args', `youtube:player_client=${ytdlpClients}`,
                             '-f', 'ba/ba*/bestaudio/b',
+                            '--concurrent-fragments', '5',
                             '--no-playlist',
                             '--geo-bypass',
                             '--no-check-certificates',
@@ -582,6 +595,7 @@ app.post('/join-and-play', async (req, res) => {
                             '-o', '-',
                             videoInputUrl
                         ];
+                        if (cacheDir) ytdlpArgs.unshift('--cache-dir', cacheDir);
                         if (cookiesPath) ytdlpArgs.unshift('--cookies', cookiesPath);
 
                         console.log(`[INFO] [VoiceServer] Spawning yt-dlp pipe for '${videoInputUrl}' in guild ${guildId}`);
