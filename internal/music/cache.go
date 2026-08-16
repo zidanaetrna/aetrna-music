@@ -16,7 +16,7 @@ type StreamCache struct {
 	mu    sync.RWMutex
 }
 
-var GlobalStreamCache = NewStreamCache(3 * time.Hour)
+var GlobalStreamCache = NewStreamCache(10 * time.Minute)
 
 func NewStreamCache(ttl time.Duration) *StreamCache {
 	c := &StreamCache{
