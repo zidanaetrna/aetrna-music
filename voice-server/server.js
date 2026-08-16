@@ -509,14 +509,32 @@ app.post('/join-and-play', async (req, res) => {
                 let ffmpeg;
                 let ytdlp;
 
-                const videoInputUrl = (songUrl && (songUrl.includes('youtube.com') || songUrl.includes('youtu.be'))) ? songUrl : streamUrl;
-                if (videoInputUrl.includes('youtube.com') || videoInputUrl.includes('youtu.be')) {
+                // streamUrl from Go Bot is already a resolved googlevideo.com CDN URL.
+                // Only spawn yt-dlp pipe if we got a bare YouTube watch URL (no CDN URL).
+                if (streamUrl.includes('googlevideo.com')) {
+                    // Go Bot resolved the CDN URL — feed it directly to FFmpeg (fastest path)
+                    try {
+                        const u = new URL(streamUrl);
+                        console.log(`[DEBUG] [VoiceServer] Spawning direct FFmpeg | Guild: ${guildId} | Client: ${u.searchParams.get('c')} | iTag: ${u.searchParams.get('itag')}`);
+                    } catch (_) {}
+
+                    ffmpeg = spawn('ffmpeg', [
+                        '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+                        '-user_agent', userAgent,
+                        '-headers', headerStr,
+                        '-i', streamUrl,
+                        '-loglevel', 'warning',
+                        '-af', audioFilter,
+                        '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
+                    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+                } else {
+                    // Fallback: spawn yt-dlp to resolve and pipe raw audio (e.g. bare youtube.com/watch?v=... URL)
+                    const videoInputUrl = (songUrl && (songUrl.includes('youtube.com') || songUrl.includes('youtu.be'))) ? songUrl : streamUrl;
                     const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
                     const cookiesPath = getAbsoluteCookiesPath();
                     const ytdlpArgs = [
                         '-4',
                         '--no-cache-dir',
-                        '--no-sleep-requests',
                         '--js-runtimes', 'node',
                         '--extractor-args', `youtube:player_client=${ytdlpClients}`,
                         '-f', 'ba[ext=m4a]/ba[ext=webm]/ba/bestaudio/best',
@@ -543,21 +561,6 @@ app.post('/join-and-play', async (req, res) => {
 
                     ytdlp.stdout.pipe(ffmpeg.stdin);
                     ytdlp.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ytdlp ${guildId}] ${msg}`); });
-                } else {
-                    try {
-                        const u = new URL(streamUrl);
-                        console.log(`[DEBUG] [VoiceServer] Spawning direct FFmpeg | Guild: ${guildId} | Host: ${u.hostname}`);
-                    } catch (_) {}
-
-                    ffmpeg = spawn('ffmpeg', [
-                        '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
-                        '-user_agent', userAgent,
-                        '-headers', headerStr,
-                        '-i', streamUrl,
-                        '-loglevel', 'warning',
-                        '-af', audioFilter,
-                        '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
-                    ], { stdio: ['ignore', 'pipe', 'pipe'] });
                 }
 
                 activeStreams.set(guildId, { ffmpeg, ytdlp });

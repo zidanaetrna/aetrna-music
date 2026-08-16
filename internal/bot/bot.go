@@ -68,20 +68,15 @@ func (b *Bot) Start() error {
 	log.Printf("[INFO] [GoBot] Backend Microservice starting on :47392")
 
 	playCb := func(guildID string, song music.Song) error {
-		streamURL := song.StreamURL
-		if streamURL == "" || time.Since(song.ResolvedAt) > 2*time.Minute {
-			log.Printf("[INFO] [Bot] Extracting fresh stream URL for '%s'...", song.Title)
-			var err error
-			streamURL, err = commands.GetStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
-			if err != nil {
-				return err
-			}
-			log.Printf("[INFO] [Bot] yt-dlp stream URL resolved for '%s'", song.Title)
-		} else {
-			log.Printf("[INFO] [Bot] Using pre-fetched stream URL for '%s'", song.Title)
+		// Always get a fresh stream URL — never reuse pre-fetched to avoid 403 expired URL.
+		log.Printf("[INFO] [Bot] Extracting fresh stream URL for '%s'...", song.Title)
+		streamURL, err := commands.GetStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+		if err != nil {
+			return err
 		}
+		log.Printf("[INFO] [Bot] yt-dlp stream URL resolved for '%s'", song.Title)
 		q := b.store.Get(guildID)
-		err := b.voice.PlayStream(guildID, song.ChannelID, streamURL, song.URL, q.Filter, 1.0)
+		err = b.voice.PlayStream(guildID, song.ChannelID, streamURL, song.URL, q.Filter, 1.0)
 		if err == nil && song.TextChannelID != "" && song.IsAutoTransition {
 			go func() {
 				lang := b.db.GetGuildLanguage(guildID)
