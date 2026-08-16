@@ -68,19 +68,11 @@ func (b *Bot) Start() error {
 	log.Printf("[INFO] [GoBot] Backend Microservice starting on :47392")
 
 	playCb := func(guildID string, song music.Song) error {
-		// Always get a fresh stream URL — never reuse pre-fetched to avoid 403 expired URL.
-		log.Printf("[INFO] [Bot] Extracting fresh stream URL for '%s'...", song.Title)
-		streamURL, err := commands.GetStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
-		if err != nil {
-			return err
-		}
-		log.Printf("[INFO] [Bot] yt-dlp stream URL resolved for '%s'", song.Title)
 		q := b.store.Get(guildID)
-
-		// Find next song URL for voice-server prefetch (reduces delay between tracks)
 		nextSongURL := q.GetNextSongURL()
 
-		err = b.voice.PlayStream(guildID, song.ChannelID, streamURL, song.URL, nextSongURL, q.Filter, 1.0)
+		log.Printf("[INFO] [Bot] Delegating playback of '%s' directly to voice-server", song.Title)
+		err := b.voice.PlayStream(guildID, song.ChannelID, song.URL, song.URL, nextSongURL, q.Filter, 1.0)
 		if err == nil && song.TextChannelID != "" && song.IsAutoTransition {
 			go func() {
 				lang := b.db.GetGuildLanguage(guildID)

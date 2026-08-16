@@ -319,7 +319,7 @@ function cleanupPrefetch(guildId) {
 // Spawn yt-dlp in background for a YouTube URL to warm up player JS cache
 function startPrefetch(guildId, youtubeUrl) {
     cleanupPrefetch(guildId);
-    const ytdlpClients = process.env.YTDLP_CLIENTS || 'ios,tv';
+    const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
     const cookiesPath = getAbsoluteCookiesPath();
     const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
     const ytdlpArgs = [
@@ -558,7 +558,7 @@ app.post('/join-and-play', async (req, res) => {
                     : null;
 
                 if (videoInputUrl) {
-                    const ytdlpClients = process.env.YTDLP_CLIENTS || 'ios,tv';
+                    const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
                     const cookiesPath = getAbsoluteCookiesPath();
 
                     // Check if we have a prefetched yt-dlp process for this URL
