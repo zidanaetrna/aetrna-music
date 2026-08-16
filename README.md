@@ -119,7 +119,7 @@ npx aetrna-music init
 ### Option 3: Manual Execution (Local Run)
 
 #### Prerequisites:
-- **Go**: `1.22+`
+- **Go**: `1.23+`
 - **Node.js**: `22+`
 - **FFmpeg**: Installed and added to system `PATH`
 - **yt-dlp**: Installed and added to system `PATH`
