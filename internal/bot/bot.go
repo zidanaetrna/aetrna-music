@@ -76,7 +76,11 @@ func (b *Bot) Start() error {
 		}
 		log.Printf("[INFO] [Bot] yt-dlp stream URL resolved for '%s'", song.Title)
 		q := b.store.Get(guildID)
-		err = b.voice.PlayStream(guildID, song.ChannelID, streamURL, song.URL, q.Filter, 1.0)
+
+		// Find next song URL for voice-server prefetch (reduces delay between tracks)
+		nextSongURL := q.GetNextSongURL()
+
+		err = b.voice.PlayStream(guildID, song.ChannelID, streamURL, song.URL, nextSongURL, q.Filter, 1.0)
 		if err == nil && song.TextChannelID != "" && song.IsAutoTransition {
 			go func() {
 				lang := b.db.GetGuildLanguage(guildID)

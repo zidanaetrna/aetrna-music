@@ -80,6 +80,15 @@ func NewGuildQueue(guildID string, playCb PlayCallback, stopCb StopCallback, pre
 	}
 }
 
+func (q *GuildQueue) GetNextSongURL() string {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if len(q.Songs) > 0 {
+		return q.Songs[0].URL
+	}
+	return ""
+}
+
 func (q *GuildQueue) PreFetchNext() {
 	q.mu.Lock()
 	if !q.IsPlaying || len(q.Songs) == 0 || q.PreFetchCb == nil {

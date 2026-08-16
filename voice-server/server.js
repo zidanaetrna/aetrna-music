@@ -132,6 +132,7 @@ const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
 const playSessions = new Map(); // guildId -> sessionId (integer)
+const prefetchStreams = new Map(); // guildId -> { ytdlp, chunks: Buffer[] } pre-spawned yt-dlp for next track
 
 function getFFmpegAudioFilter(filterName) {
     const baseLoudnorm = 'loudnorm=I=-16:TP=-1.5:LRA=11';
@@ -306,6 +307,48 @@ function cleanupStreams(guildId) {
     }
 }
 
+// Kill any pre-fetched yt-dlp process for a guild
+function cleanupPrefetch(guildId) {
+    if (prefetchStreams.has(guildId)) {
+        const pf = prefetchStreams.get(guildId);
+        try { if (pf.ytdlp) pf.ytdlp.kill('SIGKILL'); } catch (e) {}
+        prefetchStreams.delete(guildId);
+    }
+}
+
+// Spawn yt-dlp in background for a YouTube URL to warm up player JS cache
+function startPrefetch(guildId, youtubeUrl) {
+    cleanupPrefetch(guildId);
+    const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
+    const cookiesPath = getAbsoluteCookiesPath();
+    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
+    const ytdlpArgs = [
+        '-4',
+        '--js-runtimes', 'node',
+        '--extractor-args', `youtube:player_client=${ytdlpClients}`,
+        '-f', 'ba[ext=m4a]/ba[ext=webm]/ba/bestaudio/best',
+        '--no-playlist',
+        '--geo-bypass',
+        '--no-check-certificates',
+        '--no-warnings',
+        '--user-agent', userAgent,
+        '-o', '-',
+        youtubeUrl
+    ];
+    if (cookiesPath) ytdlpArgs.unshift('--cookies', cookiesPath);
+
+    console.log(`[INFO] [VoiceServer] Prefetching yt-dlp for '${youtubeUrl}' in guild ${guildId}`);
+    const ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const chunks = [];
+    ytdlp.stdout.on('data', (chunk) => chunks.push(chunk));
+    ytdlp.stderr.on('data', (d) => {
+        const msg = d.toString().trim();
+        if (msg) console.log(`[prefetch ${guildId}] ${msg}`);
+    });
+    ytdlp.on('error', () => {});
+    prefetchStreams.set(guildId, { ytdlp, chunks, url: youtubeUrl });
+}
+
 // Notify Go Bot of track end
 function notifyBotTrackEnd(guildId, reason) {
     const data = JSON.stringify({ guildId, reason });
@@ -394,7 +437,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 3005;
 
 app.post('/join-and-play', async (req, res) => {
-    const { guildId, channelId, streamUrl, songUrl, volume = 1.0, filter = 'none' } = req.body;
+    const { guildId, channelId, streamUrl, songUrl, nextSongUrl, volume = 1.0, filter = 'none' } = req.body;
     if (!guildId || !channelId || !streamUrl) {
         return res.status(400).json({ error: 'Missing guildId, channelId, or streamUrl' });
     }
@@ -509,13 +552,61 @@ app.post('/join-and-play', async (req, res) => {
                 let ffmpeg;
                 let ytdlp;
 
-                // streamUrl from Go Bot is already a resolved googlevideo.com CDN URL.
-                // Only spawn yt-dlp pipe if we got a bare YouTube watch URL (no CDN URL).
-                if (streamUrl.includes('googlevideo.com')) {
-                    // Go Bot resolved the CDN URL — feed it directly to FFmpeg (fastest path)
+                // Always use yt-dlp pipe for YouTube streams — direct CDN URL gets IP-blocked 403 on track 2+
+                const videoInputUrl = (songUrl && (songUrl.includes('youtube.com') || songUrl.includes('youtu.be'))) ? songUrl
+                    : (streamUrl.includes('youtube.com') || streamUrl.includes('youtu.be')) ? streamUrl
+                    : null;
+
+                if (videoInputUrl) {
+                    const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
+                    const cookiesPath = getAbsoluteCookiesPath();
+
+                    // Check if we have a prefetched yt-dlp process for this URL
+                    const pf = prefetchStreams.get(guildId);
+                    if (pf && pf.url === videoInputUrl && pf.ytdlp && pf.ytdlp.exitCode === null) {
+                        console.log(`[INFO] [VoiceServer] Using prefetched yt-dlp for '${videoInputUrl}' in guild ${guildId}`);
+                        ytdlp = pf.ytdlp;
+                        prefetchStreams.delete(guildId);
+                    } else {
+                        cleanupPrefetch(guildId);
+                        const ytdlpArgs = [
+                            '-4',
+                            '--js-runtimes', 'node',
+                            '--extractor-args', `youtube:player_client=${ytdlpClients}`,
+                            '-f', 'ba[ext=m4a]/ba[ext=webm]/ba/bestaudio/best',
+                            '--no-playlist',
+                            '--geo-bypass',
+                            '--no-check-certificates',
+                            '--no-warnings',
+                            '--user-agent', userAgent,
+                            '-o', '-',
+                            videoInputUrl
+                        ];
+                        if (cookiesPath) ytdlpArgs.unshift('--cookies', cookiesPath);
+
+                        console.log(`[INFO] [VoiceServer] Spawning yt-dlp pipe for '${videoInputUrl}' in guild ${guildId}`);
+                        ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+                    }
+
+                    ffmpeg = spawn('ffmpeg', [
+                        '-i', 'pipe:0',
+                        '-loglevel', 'warning',
+                        '-af', audioFilter,
+                        '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
+                    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+                    ytdlp.stdout.pipe(ffmpeg.stdin);
+                    ytdlp.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ytdlp ${guildId}] ${msg}`); });
+
+                    // Start prefetching next song immediately so player JS is already cached when needed
+                    if (nextSongUrl && (nextSongUrl.includes('youtube.com') || nextSongUrl.includes('youtu.be'))) {
+                        setTimeout(() => startPrefetch(guildId, nextSongUrl), 3000);
+                    }
+                } else {
+                    // Non-YouTube stream (e.g. SoundCloud, direct URL)
                     try {
                         const u = new URL(streamUrl);
-                        console.log(`[DEBUG] [VoiceServer] Spawning direct FFmpeg | Guild: ${guildId} | Client: ${u.searchParams.get('c')} | iTag: ${u.searchParams.get('itag')}`);
+                        console.log(`[DEBUG] [VoiceServer] Spawning direct FFmpeg | Guild: ${guildId} | Host: ${u.hostname}`);
                     } catch (_) {}
 
                     ffmpeg = spawn('ffmpeg', [
@@ -527,40 +618,6 @@ app.post('/join-and-play', async (req, res) => {
                         '-af', audioFilter,
                         '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
                     ], { stdio: ['ignore', 'pipe', 'pipe'] });
-                } else {
-                    // Fallback: spawn yt-dlp to resolve and pipe raw audio (e.g. bare youtube.com/watch?v=... URL)
-                    const videoInputUrl = (songUrl && (songUrl.includes('youtube.com') || songUrl.includes('youtu.be'))) ? songUrl : streamUrl;
-                    const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
-                    const cookiesPath = getAbsoluteCookiesPath();
-                    const ytdlpArgs = [
-                        '-4',
-                        '--no-cache-dir',
-                        '--js-runtimes', 'node',
-                        '--extractor-args', `youtube:player_client=${ytdlpClients}`,
-                        '-f', 'ba[ext=m4a]/ba[ext=webm]/ba/bestaudio/best',
-                        '--no-playlist',
-                        '--geo-bypass',
-                        '--no-check-certificates',
-                        '--no-warnings',
-                        '--user-agent', userAgent,
-                        '-o', '-',
-                        videoInputUrl
-                    ];
-                    if (cookiesPath) {
-                        ytdlpArgs.unshift('--cookies', cookiesPath);
-                    }
-
-                    console.log(`[INFO] [VoiceServer] Spawning yt-dlp pipe for '${videoInputUrl}' in guild ${guildId}`);
-                    ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-                    ffmpeg = spawn('ffmpeg', [
-                        '-i', 'pipe:0',
-                        '-loglevel', 'warning',
-                        '-af', audioFilter,
-                        '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
-                    ], { stdio: ['pipe', 'pipe', 'pipe'] });
-
-                    ytdlp.stdout.pipe(ffmpeg.stdin);
-                    ytdlp.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ytdlp ${guildId}] ${msg}`); });
                 }
 
                 activeStreams.set(guildId, { ffmpeg, ytdlp });
