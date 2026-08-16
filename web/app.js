@@ -4,13 +4,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginModal = document.getElementById('loginModal');
     const loginForm = document.getElementById('loginForm');
     const passwordInput = document.getElementById('passwordInput');
-    const loginError = document.getElementById('loginError');
+    const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+    const loginErrorText = document.getElementById('loginErrorText');
     const dashboardApp = document.getElementById('dashboardApp');
     const logoutBtn = document.getElementById('logoutBtn');
     const navItems = document.querySelectorAll('.nav-item');
     const tabPages = document.querySelectorAll('.tab-page');
 
     let sessionToken = localStorage.getItem('aetrna_token') || '';
+
+    // Password Visibility Toggle Handler
+    if (togglePasswordBtn) {
+        togglePasswordBtn.addEventListener('click', () => {
+            const isPassword = passwordInput.type === 'password';
+            passwordInput.type = isPassword ? 'text' : 'password';
+        });
+    }
+
+    // Copy EVM Donation Wallet Handler
+    const copyWalletBtn = document.getElementById('copyWalletBtn');
+    const donationWalletInput = document.getElementById('donationWalletInput');
+    const copyWalletBtnText = document.getElementById('copyWalletBtnText');
+
+    if (copyWalletBtn && donationWalletInput) {
+        copyWalletBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(donationWalletInput.value).then(() => {
+                if (copyWalletBtnText) copyWalletBtnText.textContent = 'Copied!';
+                setTimeout(() => {
+                    if (copyWalletBtnText) copyWalletBtnText.textContent = 'Copy';
+                }, 2000);
+            }).catch(() => {
+                donationWalletInput.select();
+                document.execCommand('copy');
+                if (copyWalletBtnText) copyWalletBtnText.textContent = 'Copied!';
+                setTimeout(() => {
+                    if (copyWalletBtnText) copyWalletBtnText.textContent = 'Copy';
+                }, 2000);
+            });
+        });
+    }
 
     // Tab Navigation Switcher
     navItems.forEach(item => {
@@ -26,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Login Form Handler
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        loginError.textContent = '';
+        loginError.classList.add('hidden');
         const password = passwordInput.value;
 
         try {
@@ -37,7 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!res.ok) {
-                loginError.textContent = '❌ Invalid password. Please try again.';
+                loginErrorText.textContent = 'Invalid password. Please check your .env configuration.';
+                loginError.classList.remove('hidden');
                 return;
             }
 
@@ -46,7 +79,8 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('aetrna_token', sessionToken);
             showDashboard();
         } catch (err) {
-            loginError.textContent = '❌ Connection error to bot API server.';
+            loginErrorText.textContent = 'Connection error to Aetrna Bot API server.';
+            loginError.classList.remove('hidden');
         }
     });
 

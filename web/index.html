@@ -3,32 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aetrna's Music — Dashboard</title>
+    <title>Aetrna's Music — Control Panel</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Background Glow Effects -->
-    <div class="glow glow-1"></div>
-    <div class="glow glow-2"></div>
-
-    <!-- Login Modal Screen -->
-    <div id="loginModal" class="modal-overlay">
-        <div class="glass-card modal-card">
-            <div class="logo-container">
-                <span class="logo-icon">🎵</span>
-                <h2>Aetrna's Music</h2>
-            </div>
-            <p class="subtitle">Enter your Dashboard Password to access control panel</p>
-            <form id="loginForm">
-                <div class="input-group">
-                    <input type="password" id="passwordInput" placeholder="Dashboard Password" required autocomplete="current-password">
+    <!-- Split Screen Login Modal Screen -->
+    <div id="loginModal" class="auth-split-screen">
+        <!-- Left Side: Form Column -->
+        <div class="auth-form-column">
+            <div class="auth-form-inner">
+                <div class="auth-brand">
+                    <img src="artwork.png" alt="Aetrna Logo" class="auth-brand-img">
+                    <div class="auth-brand-meta">
+                        <span class="auth-brand-name">Aetrna's Music</span>
+                        <span class="artist-credit">Artwork by <strong>@br_lie</strong></span>
+                    </div>
                 </div>
-                <button type="submit" class="btn btn-primary btn-block">Unlock Dashboard</button>
-            </form>
-            <div id="loginError" class="error-msg"></div>
+
+                <div class="auth-header">
+                    <h2>Welcome Back!</h2>
+                    <p>Sign in to access your self-hosted dashboard and manage live audio playback.</p>
+                </div>
+
+                <form id="loginForm" class="split-auth-form">
+                    <div class="form-group">
+                        <label for="passwordInput">Dashboard Password</label>
+                        <div class="input-with-icon">
+                            <span class="input-icon">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                    <path d="M7 11V7a5 5 0 0110 0v4"/>
+                                </svg>
+                            </span>
+                            <input type="password" id="passwordInput" placeholder="Enter your password" required autocomplete="current-password">
+                            <button type="button" id="togglePasswordBtn" class="toggle-eye" aria-label="Toggle Password Visibility">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-split-submit">Sign In</button>
+                </form>
+
+                <div id="loginError" class="auth-error-alert hidden">
+                    <span id="loginErrorText">Invalid password. Please check your config.</span>
+                </div>
+
+                <div class="auth-footer-note">
+                    <span>Protected Self-Hosted Session • Aetrna Music Platform</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: Hero Banner Showcase -->
+        <div class="auth-hero-column">
+            <div class="hero-bg-overlay"></div>
+            <div class="auth-hero-content">
+                <h1>Revolutionize Discord Music with Native Hybrid Engine</h1>
+                
+                <div class="testimonial-card">
+                    <p class="testimonial-text">“Gua cuma Professional AI Prompter. Kalo kodenya agak ajaib tapi lagunya muter lancar jaya, berarti prompt gua gacor.”</p>
+                    
+                    <div class="author-profile">
+                        <img src="https://github.com/zidanaetrna.png" alt="zidanaetrna" class="author-avatar">
+                        <div class="author-info">
+                            <span class="author-name">zidanaetrna</span>
+                            <span class="author-role">Professional AI Prompter</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tech-ecosystem-section">
+                    <span class="tech-section-title">POWERED BY MODERN TECH STACK</span>
+                    <div class="tech-logo-row">
+                        <!-- Discord Logo -->
+                        <span class="tech-logo-item" title="Discord API Gateway">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.061 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.893.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                            Discord
+                        </span>
+
+                        <!-- Go Logo -->
+                        <span class="tech-logo-item" title="Go 1.22 Microservice">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M1.811 10.231c-.046 0-.093 0-.139.012-.662.139-.906.778-.545 1.36.313.51.987.674 1.58.384.603-.29.835-.94.51-1.474-.244-.407-.812-.293-1.406-.282zm20.378.012c-.594-.011-1.162-.125-1.406.282-.325.534-.093 1.184.51 1.474.593.29 1.267.126 1.58-.384.361-.582.117-1.221-.545-1.36a.669.669 0 00-.139-.012zM12 4.5c-4.142 0-7.5 3.358-7.5 7.5s3.358 7.5 7.5 7.5 7.5-3.358 7.5-7.5-3.358-7.5-7.5-7.5zm0 12c-2.485 0-4.5-2.015-4.5-4.5S9.515 7.5 12 7.5s4.5 2.015 4.5 4.5-2.015 4.5-4.5 4.5z"/></svg>
+                            Go 1.22
+                        </span>
+
+                        <!-- Node.js Logo -->
+                        <span class="tech-logo-item" title="Node.js 22 Voice Gateway">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2L2 7.5v9L12 22l10-5.5v-9L12 2zm8 13.5L12 20l-8-4.5V8.5L12 4l8 4.5v7zM12 7L6 10.3v3.4l6 3.3 6-3.3v-3.4L12 7z"/></svg>
+                            Node.js 22
+                        </span>
+
+                        <!-- yt-dlp Logo -->
+                        <span class="tech-logo-item" title="yt-dlp Audio Extractor">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                            yt-dlp
+                        </span>
+
+                        <!-- FFmpeg Logo -->
+                        <span class="tech-logo-item" title="FFmpeg DSP & EBU R128">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M2 6h20v2H2V6zm0 5h20v2H2v-2zm0 5h14v2H2v-2z"/></svg>
+                            FFmpeg
+                        </span>
+
+                        <!-- Spotify Logo -->
+                        <span class="tech-logo-item" title="Spotify Resolver">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 0C5.376 0 0 5.377 0 12s5.376 12 12 12 12-5.377 12-12S18.624 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.18-1.38-.72-.18-.6.18-1.2.72-1.38 4.26-1.26 11.28-1.02 15.721 1.62.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+                            Spotify
+                        </span>
+
+                        <!-- SQLite Logo -->
+                        <span class="tech-logo-item" title="SQLite WAL Database">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 3C6.477 3 2 4.79 2 7v10c0 2.21 4.477 4 10 4s10-1.79 10-4V7c0-2.21-4.477-4-10-4zm0 2c4.418 0 8 1.343 8 3s-3.582 3-8 3-8-1.343-8-3 3.582-3 8-3zm0 8c-4.418 0-8-1.343-8-3v3c0 1.657 3.582 3 8 3s8-1.343 8-3v-3c0 1.657-3.582 3-8 3zm0 5c-4.418 0-8-1.343-8-3v3c0 1.657 3.582 3 8 3s8-1.343 8-3v-3c0 1.657-3.582 3-8 3z"/></svg>
+                            SQLite WAL
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Donation Box Section -->
+                <div class="donation-box">
+                    <div class="donation-header">
+                        <span class="donation-icon">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3"/></svg>
+                        </span>
+                        <span class="donation-title">SUPPORT THE PROJECT (EVM DONATION)</span>
+                    </div>
+                    <div class="donation-input-row">
+                        <input type="text" readonly value="0xA1a4d3F3A49f4514CCEE434Cfc66837A1fFC687d" id="donationWalletInput" class="donation-wallet-text">
+                        <button type="button" id="copyWalletBtn" class="btn-copy-wallet" title="Copy Wallet Address">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            <span id="copyWalletBtnText">Copy</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -37,30 +151,41 @@
         <!-- Sidebar Navigation -->
         <aside class="glass-card sidebar">
             <div class="brand">
-                <span class="brand-icon">🎵</span>
+                <img src="artwork.png" alt="Aetrna Logo" class="brand-img">
                 <div class="brand-text">
                     <h1>Aetrna's Music</h1>
-                    <span class="badge">v2.0 Hybrid</span>
+                    <span class="badge">v2.0 Hybrid Engine</span>
+                    <span class="sidebar-artist-credit">Art by @br_lie</span>
                 </div>
             </div>
 
             <nav class="nav-menu">
                 <button class="nav-item active" data-tab="overview">
-                    <span class="nav-icon">📊</span> Overview
+                    <span class="nav-icon">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    </span> Overview
                 </button>
                 <button class="nav-item" data-tab="queue">
-                    <span class="nav-icon">🎶</span> Queue & Player
+                    <span class="nav-icon">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13M9 9l12-2M9 18a3 3 0 11-6 0 3 3 0 016 0zM21 16a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    </span> Queue & Player
                 </button>
                 <button class="nav-item" data-tab="favorites">
-                    <span class="nav-icon">⭐</span> Favorites & History
+                    <span class="nav-icon">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </span> Favorites & History
                 </button>
                 <button class="nav-item" data-tab="settings">
-                    <span class="nav-icon">⚙️</span> Settings & System
+                    <span class="nav-icon">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                    </span> Settings & System
                 </button>
             </nav>
 
             <div class="user-footer">
-                <span id="serverStatus" class="status-indicator online">System Online</span>
+                <span id="serverStatus" class="status-indicator online">
+                    <span class="status-dot"></span> System Online
+                </span>
                 <button id="logoutBtn" class="btn btn-sm btn-ghost">Logout</button>
             </div>
         </aside>
@@ -71,34 +196,45 @@
             <section id="tab-overview" class="tab-page active">
                 <div class="header-title">
                     <h2>System Overview</h2>
-                    <p>Real-time status of Aetrna's Music Platform</p>
+                    <p>Real-time telemetry and engine status</p>
                 </div>
 
                 <!-- Stats Grid -->
                 <div class="stats-grid">
                     <div class="glass-card stat-card">
-                        <div class="stat-icon">🌐</div>
+                        <div class="stat-icon-wrapper cyan">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                        </div>
                         <div class="stat-data">
                             <span class="stat-value" id="statGuilds">0</span>
                             <span class="stat-label">Active Discord Guilds</span>
                         </div>
                     </div>
+
                     <div class="glass-card stat-card">
-                        <div class="stat-icon">💻</div>
+                        <div class="stat-icon-wrapper purple">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                        </div>
                         <div class="stat-data">
                             <span class="stat-value" id="statRam">0 MB</span>
-                            <span class="stat-label">Memory Consumption</span>
+                            <span class="stat-label">Memory Usage</span>
                         </div>
                     </div>
+
                     <div class="glass-card stat-card">
-                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-icon-wrapper blue">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </div>
                         <div class="stat-data">
                             <span class="stat-value" id="statUptime">0h 0m</span>
                             <span class="stat-label">System Uptime</span>
                         </div>
                     </div>
+
                     <div class="glass-card stat-card">
-                        <div class="stat-icon">🔑</div>
+                        <div class="stat-icon-wrapper green">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.778-7.778zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                        </div>
                         <div class="stat-data">
                             <span class="stat-value" id="statCookies">Loaded</span>
                             <span class="stat-label">YouTube Cookies</span>
@@ -109,16 +245,16 @@
                 <!-- Currently Playing Hero Card -->
                 <div class="glass-card now-playing-hero">
                     <div class="hero-header">
-                        <h3>🎵 NOW PLAYING GLOBAL</h3>
+                        <span class="section-tag">GLOBAL PLAYER STATE</span>
                         <div class="equalizer-bars">
                             <span></span><span></span><span></span><span></span>
                         </div>
                     </div>
                     <div class="hero-body">
-                        <img id="heroThumbnail" src="https://via.placeholder.com/180x180/1a1e29/808080?text=No+Track" alt="Thumbnail" class="hero-thumb">
+                        <img id="heroThumbnail" src="artwork.png" alt="Artwork by @br_lie" class="hero-thumb">
                         <div class="hero-info">
                             <h4 id="heroTitle">No track currently playing</h4>
-                            <p id="heroAuthor">Add a track via Discord command or Queue tab</p>
+                            <p id="heroAuthor">Add a track via Discord slash command or Queue tab</p>
                             <div class="hero-progress-container">
                                 <div class="progress-bar"><div id="heroProgressBar" class="progress-fill"></div></div>
                                 <div class="progress-time">
@@ -135,33 +271,40 @@
             <section id="tab-queue" class="tab-page">
                 <div class="header-title">
                     <h2>Queue & Player Controls</h2>
-                    <p>Manage active playback and upcoming songs</p>
+                    <p>Manage active playback and upcoming tracks</p>
                 </div>
 
-                <!-- Guild Selector Dropdown -->
                 <div class="glass-card control-header-card">
-                    <label for="guildSelect">Select Server Guild:</label>
+                    <label for="guildSelect">Select Active Server Guild:</label>
                     <select id="guildSelect" class="form-select">
                         <option value="">Loading guilds...</option>
                     </select>
                 </div>
 
-                <!-- Control Buttons Panel -->
                 <div class="glass-card player-controls-card">
                     <div class="control-buttons-row">
-                        <button id="btnPause" class="btn btn-control">⏯️ Pause / Resume</button>
-                        <button id="btnSkip" class="btn btn-control">⏭️ Skip Track</button>
-                        <button id="btnStop" class="btn btn-control btn-danger">⏹️ Stop Playback</button>
+                        <button id="btnPause" class="btn btn-control">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                            Pause / Resume
+                        </button>
+                        <button id="btnSkip" class="btn btn-control">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                            Skip Track
+                        </button>
+                        <button id="btnStop" class="btn btn-control btn-danger">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/></svg>
+                            Stop Playback
+                        </button>
                     </div>
 
                     <div class="control-settings-row">
                         <div class="control-item">
-                            <label>🔊 Volume Control:</label>
+                            <label>Volume:</label>
                             <input type="range" id="volumeSlider" min="0" max="2" step="0.05" value="1.0">
                             <span id="volumeVal">100%</span>
                         </div>
                         <div class="control-item">
-                            <label>🎛️ Audio DSP Filter:</label>
+                            <label>DSP Filter:</label>
                             <select id="filterSelect" class="form-select">
                                 <option value="off">Off (Standard)</option>
                                 <option value="bassboost">Bass Boost</option>
@@ -174,9 +317,8 @@
                     </div>
                 </div>
 
-                <!-- Queue List -->
                 <div class="glass-card queue-list-card">
-                    <h3>📜 Upcoming Queue</h3>
+                    <h3>Upcoming Queue</h3>
                     <div id="queueItems" class="queue-items-container">
                         <p class="empty-msg">Queue is currently empty</p>
                     </div>
@@ -192,13 +334,13 @@
 
                 <div class="favorites-grid">
                     <div class="glass-card fav-card">
-                        <h3>⭐ Saved Favorites</h3>
+                        <h3>Saved Favorites</h3>
                         <div id="favList" class="fav-list-container">
                             <p class="empty-msg">No favorite tracks saved yet</p>
                         </div>
                     </div>
                     <div class="glass-card fav-card">
-                        <h3>📜 Recent History</h3>
+                        <h3>Recent History</h3>
                         <div id="historyList" class="fav-list-container">
                             <p class="empty-msg">No recent playback history</p>
                         </div>
@@ -209,15 +351,19 @@
             <!-- TAB 4: SETTINGS & SYSTEM -->
             <section id="tab-settings" class="tab-page">
                 <div class="header-title">
-                    <h2>Settings & System Information</h2>
-                    <p>Platform parameters and environment details</p>
+                    <h2>Settings & System Telemetry</h2>
+                    <p>Platform parameters and environment configuration</p>
                 </div>
 
                 <div class="glass-card settings-card">
-                    <h3>🔧 Platform Configuration</h3>
+                    <h3>Platform Configuration</h3>
                     <div class="setting-row">
                         <span>Bot Engine Architecture:</span>
                         <strong>Go 1.22 + Node.js 22 Hybrid Gateway</strong>
+                    </div>
+                    <div class="setting-row">
+                        <span>Official Bot Illustration:</span>
+                        <strong>Artwork by @br_lie</strong>
                     </div>
                     <div class="setting-row">
                         <span>Loudness Normalization:</span>
@@ -228,7 +374,7 @@
                         <strong>Discord DAVE E2EE Ready</strong>
                     </div>
                     <div class="setting-row">
-                        <span>Database Driver:</span>
+                        <span>Database Engine:</span>
                         <strong>SQLite3 WAL Mode (./data/aetrna.db)</strong>
                     </div>
                 </div>
