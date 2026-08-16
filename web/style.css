@@ -1,0 +1,350 @@
+/* Aetrna's Music Dashboard — Modern Glassmorphism Styling */
+
+:root {
+    --bg-dark: #090B10;
+    --card-bg: rgba(255, 255, 255, 0.03);
+    --card-border: rgba(255, 255, 255, 0.08);
+    --card-glow: rgba(0, 242, 254, 0.15);
+    --accent-blue: #00F2FE;
+    --accent-purple: #4FACFE;
+    --text-main: #F0F4F8;
+    --text-muted: #8E9BAE;
+    --danger: #FF4D4D;
+    --success: #00E676;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* Background Glow Blobs */
+.glow {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(140px);
+    z-index: 0;
+    pointer-events: none;
+}
+.glow-1 {
+    width: 450px;
+    height: 450px;
+    background: radial-gradient(circle, rgba(0, 242, 254, 0.15), transparent);
+    top: -100px;
+    left: -100px;
+}
+.glow-2 {
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(79, 172, 254, 0.12), transparent);
+    bottom: -150px;
+    right: -150px;
+}
+
+/* Glassmorphism Cards */
+.glass-card {
+    background: var(--card-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.hidden { display: none !important; }
+
+/* Login Modal Screen */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(9, 11, 16, 0.85);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.modal-card {
+    width: 100%;
+    max-width: 420px;
+    padding: 2.5rem;
+    text-align: center;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+.logo-icon { font-size: 2rem; }
+
+.subtitle {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    color: #fff;
+    font-size: 1rem;
+    outline: none;
+    margin-bottom: 1rem;
+    transition: border-color 0.2s;
+}
+.input-group input:focus {
+    border-color: var(--accent-blue);
+}
+
+/* Buttons */
+.btn {
+    padding: 0.75rem 1.25rem;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+}
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+    color: #000;
+}
+.btn-primary:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+.btn-block { width: 100%; }
+.btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+.btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--card-border); }
+.btn-ghost:hover { color: #fff; border-color: #fff; }
+.btn-danger { background: rgba(255, 77, 77, 0.2); color: var(--danger); border: 1px solid var(--danger); }
+.btn-danger:hover { background: var(--danger); color: #fff; }
+
+.error-msg {
+    color: var(--danger);
+    font-size: 0.85rem;
+    margin-top: 1rem;
+}
+
+/* App Layout */
+.app-container {
+    display: flex;
+    min-height: 100vh;
+    z-index: 1;
+    position: relative;
+}
+
+.sidebar {
+    width: 260px;
+    margin: 1rem;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+}
+.brand-icon { font-size: 1.75rem; }
+.brand-text h1 { font-size: 1.1rem; font-weight: 700; }
+.badge { font-size: 0.65rem; background: rgba(0, 242, 254, 0.15); color: var(--accent-blue); padding: 0.1rem 0.4rem; border-radius: 4px; }
+
+.nav-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-muted);
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-align: left;
+    transition: all 0.2s;
+}
+.nav-item:hover, .nav-item.active {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+.nav-item.active {
+    border-left: 3px solid var(--accent-blue);
+}
+
+.user-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 1rem;
+    border-top: 1px solid var(--card-border);
+}
+.status-indicator {
+    font-size: 0.75rem;
+    color: var(--success);
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.header-title h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
+.header-title p { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.5rem; }
+
+.tab-page { display: none; }
+.tab-page.active { display: block; }
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.stat-card {
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.stat-icon { font-size: 2rem; }
+.stat-value { font-size: 1.25rem; font-weight: 700; display: block; }
+.stat-label { font-size: 0.75rem; color: var(--text-muted); }
+
+/* Now Playing Hero */
+.now-playing-hero {
+    padding: 1.75rem;
+    margin-bottom: 1.5rem;
+}
+.hero-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+.hero-header h3 { font-size: 0.85rem; color: var(--text-muted); letter-spacing: 1px; }
+
+/* Animated Equalizer */
+.equalizer-bars {
+    display: flex;
+    gap: 3px;
+    height: 16px;
+    align-items: flex-end;
+}
+.equalizer-bars span {
+    width: 3px;
+    background: var(--accent-blue);
+    animation: bounce 1s infinite alternate;
+}
+.equalizer-bars span:nth-child(2) { animation-delay: 0.2s; }
+.equalizer-bars span:nth-child(3) { animation-delay: 0.4s; }
+.equalizer-bars span:nth-child(4) { animation-delay: 0.1s; }
+
+@keyframes bounce {
+    0% { height: 4px; }
+    100% { height: 16px; }
+}
+
+.hero-body {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+}
+.hero-thumb {
+    width: 120px;
+    height: 120px;
+    border-radius: 12px;
+    object-fit: cover;
+}
+.hero-info { flex: 1; }
+.hero-info h4 { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.25rem; }
+.hero-info p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+
+.hero-progress-container { margin-top: 1rem; }
+.progress-bar {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.4rem;
+}
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+    transition: width 0.3s linear;
+}
+.progress-time {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Forms & Controls */
+.form-select {
+    padding: 0.6rem 1rem;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--card-border);
+    color: #fff;
+    border-radius: 8px;
+    outline: none;
+}
+.control-header-card, .player-controls-card, .queue-list-card, .fav-card, .settings-card {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.control-buttons-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.btn-control {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+.btn-control:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+.control-settings-row {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+}
+.control-item { display: flex; align-items: center; gap: 0.75rem; }
+
+.setting-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.875rem 0;
+    border-bottom: 1px solid var(--card-border);
+}

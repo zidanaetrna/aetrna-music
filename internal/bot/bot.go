@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -26,13 +27,14 @@ import (
 var startTime = time.Now()
 
 type Bot struct {
-	session *discordgo.Session
-	cfg     *config.Config
-	db      *db.DB
-	store   *music.QueueStore
-	handler *commands.Handler
-	spotify *spotify.Client
-	voice   *voice.Client
+	session   *discordgo.Session
+	cfg       *config.Config
+	db        *db.DB
+	store     *music.QueueStore
+	handler   *commands.Handler
+	spotify   *spotify.Client
+	voice     *voice.Client
+	startedAt time.Time
 
 	sync.RWMutex
 }
@@ -45,14 +47,22 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 		return nil, fmt.Errorf("error creating discord session: %w", err)
 	}
 	return &Bot{
-		session: dg,
-		cfg:     cfg,
-		db:      database,
-		voice:   voice.NewClient("http://127.0.0.1:3005"),
+		session:   dg,
+		cfg:       cfg,
+		db:        database,
+		voice:     voice.NewClient("http://127.0.0.1:3005"),
+		startedAt: time.Now(),
 	}, nil
 }
 
 func (b *Bot) Start() error {
+	// Start Web Dashboard HTTP Server on port 8080 (or PORT env)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	b.StartDashboardServer(port)
+
 	// Node.js (voice-server) is the SINGLE Discord Gateway client.
 	// Go Bot is a pure HTTP backend microservice — no session.Open() needed.
 	log.Printf("[INFO] [GoBot] Backend Microservice starting on :47392")

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aetrna's Music — Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Background Glow Effects -->
+    <div class="glow glow-1"></div>
+    <div class="glow glow-2"></div>
+
+    <!-- Login Modal Screen -->
+    <div id="loginModal" class="modal-overlay">
+        <div class="glass-card modal-card">
+            <div class="logo-container">
+                <span class="logo-icon">🎵</span>
+                <h2>Aetrna's Music</h2>
+            </div>
+            <p class="subtitle">Enter your Dashboard Password to access control panel</p>
+            <form id="loginForm">
+                <div class="input-group">
+                    <input type="password" id="passwordInput" placeholder="Dashboard Password" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Unlock Dashboard</button>
+            </form>
+            <div id="loginError" class="error-msg"></div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard Container -->
+    <div id="dashboardApp" class="app-container hidden">
+        <!-- Sidebar Navigation -->
+        <aside class="glass-card sidebar">
+            <div class="brand">
+                <span class="brand-icon">🎵</span>
+                <div class="brand-text">
+                    <h1>Aetrna's Music</h1>
+                    <span class="badge">v2.0 Hybrid</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="overview">
+                    <span class="nav-icon">📊</span> Overview
+                </button>
+                <button class="nav-item" data-tab="queue">
+                    <span class="nav-icon">🎶</span> Queue & Player
+                </button>
+                <button class="nav-item" data-tab="favorites">
+                    <span class="nav-icon">⭐</span> Favorites & History
+                </button>
+                <button class="nav-item" data-tab="settings">
+                    <span class="nav-icon">⚙️</span> Settings & System
+                </button>
+            </nav>
+
+            <div class="user-footer">
+                <span id="serverStatus" class="status-indicator online">System Online</span>
+                <button id="logoutBtn" class="btn btn-sm btn-ghost">Logout</button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- TAB 1: OVERVIEW -->
+            <section id="tab-overview" class="tab-page active">
+                <div class="header-title">
+                    <h2>System Overview</h2>
+                    <p>Real-time status of Aetrna's Music Platform</p>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="glass-card stat-card">
+                        <div class="stat-icon">🌐</div>
+                        <div class="stat-data">
+                            <span class="stat-value" id="statGuilds">0</span>
+                            <span class="stat-label">Active Discord Guilds</span>
+                        </div>
+                    </div>
+                    <div class="glass-card stat-card">
+                        <div class="stat-icon">💻</div>
+                        <div class="stat-data">
+                            <span class="stat-value" id="statRam">0 MB</span>
+                            <span class="stat-label">Memory Consumption</span>
+                        </div>
+                    </div>
+                    <div class="glass-card stat-card">
+                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-data">
+                            <span class="stat-value" id="statUptime">0h 0m</span>
+                            <span class="stat-label">System Uptime</span>
+                        </div>
+                    </div>
+                    <div class="glass-card stat-card">
+                        <div class="stat-icon">🔑</div>
+                        <div class="stat-data">
+                            <span class="stat-value" id="statCookies">Loaded</span>
+                            <span class="stat-label">YouTube Cookies</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Currently Playing Hero Card -->
+                <div class="glass-card now-playing-hero">
+                    <div class="hero-header">
+                        <h3>🎵 NOW PLAYING GLOBAL</h3>
+                        <div class="equalizer-bars">
+                            <span></span><span></span><span></span><span></span>
+                        </div>
+                    </div>
+                    <div class="hero-body">
+                        <img id="heroThumbnail" src="https://via.placeholder.com/180x180/1a1e29/808080?text=No+Track" alt="Thumbnail" class="hero-thumb">
+                        <div class="hero-info">
+                            <h4 id="heroTitle">No track currently playing</h4>
+                            <p id="heroAuthor">Add a track via Discord command or Queue tab</p>
+                            <div class="hero-progress-container">
+                                <div class="progress-bar"><div id="heroProgressBar" class="progress-fill"></div></div>
+                                <div class="progress-time">
+                                    <span id="heroCurrentTime">00:00</span>
+                                    <span id="heroDuration">00:00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: QUEUE & PLAYER -->
+            <section id="tab-queue" class="tab-page">
+                <div class="header-title">
+                    <h2>Queue & Player Controls</h2>
+                    <p>Manage active playback and upcoming songs</p>
+                </div>
+
+                <!-- Guild Selector Dropdown -->
+                <div class="glass-card control-header-card">
+                    <label for="guildSelect">Select Server Guild:</label>
+                    <select id="guildSelect" class="form-select">
+                        <option value="">Loading guilds...</option>
+                    </select>
+                </div>
+
+                <!-- Control Buttons Panel -->
+                <div class="glass-card player-controls-card">
+                    <div class="control-buttons-row">
+                        <button id="btnPause" class="btn btn-control">⏯️ Pause / Resume</button>
+                        <button id="btnSkip" class="btn btn-control">⏭️ Skip Track</button>
+                        <button id="btnStop" class="btn btn-control btn-danger">⏹️ Stop Playback</button>
+                    </div>
+
+                    <div class="control-settings-row">
+                        <div class="control-item">
+                            <label>🔊 Volume Control:</label>
+                            <input type="range" id="volumeSlider" min="0" max="2" step="0.05" value="1.0">
+                            <span id="volumeVal">100%</span>
+                        </div>
+                        <div class="control-item">
+                            <label>🎛️ Audio DSP Filter:</label>
+                            <select id="filterSelect" class="form-select">
+                                <option value="off">Off (Standard)</option>
+                                <option value="bassboost">Bass Boost</option>
+                                <option value="nightcore">Nightcore</option>
+                                <option value="vaporwave">Vaporwave</option>
+                                <option value="8d">8D Panning</option>
+                                <option value="pop">Pop Equalizer</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Queue List -->
+                <div class="glass-card queue-list-card">
+                    <h3>📜 Upcoming Queue</h3>
+                    <div id="queueItems" class="queue-items-container">
+                        <p class="empty-msg">Queue is currently empty</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: FAVORITES & HISTORY -->
+            <section id="tab-favorites" class="tab-page">
+                <div class="header-title">
+                    <h2>Favorites & History</h2>
+                    <p>Access your saved tracks and recent playback</p>
+                </div>
+
+                <div class="favorites-grid">
+                    <div class="glass-card fav-card">
+                        <h3>⭐ Saved Favorites</h3>
+                        <div id="favList" class="fav-list-container">
+                            <p class="empty-msg">No favorite tracks saved yet</p>
+                        </div>
+                    </div>
+                    <div class="glass-card fav-card">
+                        <h3>📜 Recent History</h3>
+                        <div id="historyList" class="fav-list-container">
+                            <p class="empty-msg">No recent playback history</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: SETTINGS & SYSTEM -->
+            <section id="tab-settings" class="tab-page">
+                <div class="header-title">
+                    <h2>Settings & System Information</h2>
+                    <p>Platform parameters and environment details</p>
+                </div>
+
+                <div class="glass-card settings-card">
+                    <h3>🔧 Platform Configuration</h3>
+                    <div class="setting-row">
+                        <span>Bot Engine Architecture:</span>
+                        <strong>Go 1.22 + Node.js 22 Hybrid Gateway</strong>
+                    </div>
+                    <div class="setting-row">
+                        <span>Loudness Normalization:</span>
+                        <strong>FFmpeg EBU R128 (-16 LUFS)</strong>
+                    </div>
+                    <div class="setting-row">
+                        <span>Voice Protocol Encryption:</span>
+                        <strong>Discord DAVE E2EE Ready</strong>
+                    </div>
+                    <div class="setting-row">
+                        <span>Database Driver:</span>
+                        <strong>SQLite3 WAL Mode (./data/aetrna.db)</strong>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

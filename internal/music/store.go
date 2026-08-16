@@ -65,3 +65,19 @@ func (s *QueueStore) Remove(guildID string) {
 		delete(s.queues, guildID)
 	}
 }
+
+func (s *QueueStore) GetActiveCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.queues)
+}
+
+func (s *QueueStore) GetAllGuildIDs() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ids := make([]string, 0, len(s.queues))
+	for id := range s.queues {
+		ids = append(ids, id)
+	}
+	return ids
+}
