@@ -1,0 +1,14 @@
+# Trivy Ignore File
+# The following SSH-related CVEs in golang.org/x/crypto belong to the /ssh package.
+# aetrna-music only imports nacl/secretbox for Discord voice payload encryption and does not run or connect to SSH servers/agents.
+
+CVE-2025-47913
+CVE-2026-39828
+CVE-2026-39829
+CVE-2026-39830
+CVE-2026-39831
+CVE-2026-39832
+CVE-2026-39835
+CVE-2026-42508
+CVE-2026-46595
+CVE-2026-46597
