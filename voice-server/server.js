@@ -516,6 +516,7 @@ app.post('/join-and-play', async (req, res) => {
                     const ytdlpArgs = [
                         '-4',
                         '--no-cache-dir',
+                        '--no-sleep-requests',
                         '--js-runtimes', 'node',
                         '--extractor-args', `youtube:player_client=${ytdlpClients}`,
                         '-f', 'ba[ext=m4a]/ba[ext=webm]/ba/bestaudio/best',
