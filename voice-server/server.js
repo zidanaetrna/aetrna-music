@@ -386,7 +386,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 3005;
 
 app.post('/join-and-play', async (req, res) => {
-    const { guildId, channelId, streamUrl, volume = 1.0, filter = 'none' } = req.body;
+    const { guildId, channelId, streamUrl, songUrl, volume = 1.0, filter = 'none' } = req.body;
     if (!guildId || !channelId || !streamUrl) {
         return res.status(400).json({ error: 'Missing guildId, channelId, or streamUrl' });
     }
@@ -501,7 +501,8 @@ app.post('/join-and-play', async (req, res) => {
                 let ffmpeg;
                 let ytdlp;
 
-                if (streamUrl.includes('googlevideo.com') || streamUrl.includes('youtube.com') || streamUrl.includes('youtu.be')) {
+                const videoInputUrl = (songUrl && (songUrl.includes('youtube.com') || songUrl.includes('youtu.be'))) ? songUrl : streamUrl;
+                if (videoInputUrl.includes('youtube.com') || videoInputUrl.includes('youtu.be')) {
                     const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
                     const cookiesPath = process.env.COOKIES_PATH || path.join(__dirname, '../cookies.txt');
                     const ytdlpArgs = [
@@ -516,13 +517,13 @@ app.post('/join-and-play', async (req, res) => {
                         '--no-warnings',
                         '--user-agent', userAgent,
                         '-o', '-',
-                        streamUrl
+                        videoInputUrl
                     ];
                     if (fs.existsSync(cookiesPath)) {
                         ytdlpArgs.unshift('--cookies', cookiesPath);
                     }
 
-                    console.log(`[INFO] [VoiceServer] Spawning yt-dlp pipe for YouTube stream in guild ${guildId}`);
+                    console.log(`[INFO] [VoiceServer] Spawning yt-dlp pipe for '${videoInputUrl}' in guild ${guildId}`);
                     ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
                     ffmpeg = spawn('ffmpeg', [
                         '-i', 'pipe:0',
