@@ -7,18 +7,18 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@discordjs/voice": "^0.19.2",
+    "@discordjs/voice": "^0.19.4",
     "@snazzah/davey": "^0.1.6",
     "@stablelib/xchacha20poly1305": "^1.0.1",
     "@noble/ciphers": "^0.4.1",
-    "discord.js": "^14.17.3",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "opusscript": "^0.0.8",
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "opusscript": "^0.1.1",
     "@discordjs/opus": "^0.9.0",
     "prism-media": "^1.3.5",
     "tweetnacl": "^1.0.3",
     "sodium-native": "^4.1.1",
-    "libsodium-wrappers": "^0.7.13"
+    "libsodium-wrappers": "^0.7.15"
   }
 }
