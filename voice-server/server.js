@@ -3,25 +3,33 @@ const fs = require('fs');
 const path = require('path');
 dns.setDefaultResultOrder('ipv4first');
 
-function getCookieHeaderString() {
+function getAbsoluteCookiesPath() {
     try {
         const possiblePaths = [
             process.env.COOKIES_PATH,
+            process.env.COOKIES_PATH ? path.resolve(process.cwd(), process.env.COOKIES_PATH) : null,
             path.join(__dirname, '../cookies.txt'),
             path.join(__dirname, 'cookies.txt'),
-            './cookies.txt',
             '/opt/aetrna-music/prod/cookies.txt',
             '/opt/aetrna-music/cookies.txt',
+            './cookies.txt',
             '/app/cookies.txt'
         ].filter(Boolean);
 
-        let content = '';
         for (const p of possiblePaths) {
             if (fs.existsSync(p)) {
-                content = fs.readFileSync(p, 'utf8');
-                break;
+                return p;
             }
         }
+    } catch (_) {}
+    return null;
+}
+
+function getCookieHeaderString() {
+    try {
+        const cookiesFile = getAbsoluteCookiesPath();
+        if (!cookiesFile) return '';
+        const content = fs.readFileSync(cookiesFile, 'utf8');
         if (!content) return '';
 
         const lines = content.split('\n');
@@ -504,7 +512,7 @@ app.post('/join-and-play', async (req, res) => {
                 const videoInputUrl = (songUrl && (songUrl.includes('youtube.com') || songUrl.includes('youtu.be'))) ? songUrl : streamUrl;
                 if (videoInputUrl.includes('youtube.com') || videoInputUrl.includes('youtu.be')) {
                     const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
-                    const cookiesPath = process.env.COOKIES_PATH || path.join(__dirname, '../cookies.txt');
+                    const cookiesPath = getAbsoluteCookiesPath();
                     const ytdlpArgs = [
                         '-4',
                         '--no-cache-dir',
@@ -519,7 +527,7 @@ app.post('/join-and-play', async (req, res) => {
                         '-o', '-',
                         videoInputUrl
                     ];
-                    if (fs.existsSync(cookiesPath)) {
+                    if (cookiesPath) {
                         ytdlpArgs.unshift('--cookies', cookiesPath);
                     }
 
