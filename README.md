@@ -1,5 +1,11 @@
 <div align="center">
 
+<img src="web/artwork.png" alt="aetrna-music Official Artwork" width="380" style="border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
+
+<sub><i>Official Bot Artwork by <b>@br_lie</b></i></sub>
+
+<br /><br />
+
 # aetrna-music
 
 **A high-performance, Lavalink-free, native Discord Music Engine & Web Dashboard**
@@ -11,17 +17,11 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
 
-<br />
-
-<img src="pp_bot_musijk.png" alt="aetrna-music Official Artwork" width="380" style="border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
-
-<sub><i>Official Bot Artwork by <b>@br_lie</b></i></sub>
-
 <br /><br />
 
 > *“Gua cuma Professional AI Prompter. Kalo kodenya agak ajaib tapi lagunya muter lancar jaya, berarti prompt gua gacor.”*
 > <br />
-> — **[zidanaetrna](https://github.com/zidanaetrna)** *(Professional AI Prompter & Founder)*
+> — **[zidanaetrna](https://github.com/zidanaetrna)** *(Professional AI Prompter)*
 
 ---
 
@@ -222,8 +222,8 @@ If `aetrna-music` helped you run a fast, ad-free Discord music bot without expen
 ## License & Credits
 
 - **License**: Released under the **[Apache License 2.0](LICENSE)**.
-- **Founder & Prompter**: **[zidanaetrna](https://github.com/zidanaetrna)**
-- **Official Bot Artwork**: **[@br_lie](https://github.com/zidanaetrna)** (`pp_bot_musijk.png`)
+- **Creator**: **[zidanaetrna](https://github.com/zidanaetrna)** *(Professional AI Prompter)*
+- **Official Bot Artwork**: **[@br_lie](https://github.com/zidanaetrna)** (`web/artwork.png`)
 
 <div align="center">
   <sub>Built by <b>zidanaetrna</b> using Go & Node.js</sub>
