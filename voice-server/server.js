@@ -280,6 +280,7 @@ discordClient.on('interactionCreate', async (interaction) => {
         custom_id: (interaction.isButton() || interaction.isStringSelectMenu()) ? interaction.customId : null,
         message_id: (interaction.isButton() || interaction.isStringSelectMenu()) ? interaction.message?.id : null,
         values: interaction.isStringSelectMenu() ? interaction.values : [],
+        is_admin: interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) || false,
     };
 
     // Fire and forget — Go Bot has 15 minutes to edit the deferred message

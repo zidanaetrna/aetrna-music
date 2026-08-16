@@ -131,6 +131,7 @@ type ProxiedInteraction struct {
 	CustomID             string          `json:"custom_id"`
 	MessageID            string          `json:"message_id"`
 	Values               []string        `json:"values"`
+	IsAdmin              bool            `json:"is_admin"`
 }
 
 // buildInteractionCreate reconstructs a discordgo InteractionCreate from proxied data.
@@ -538,7 +539,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		}
 
 	case "language":
-		isAdmin := b.handler.IsAdmin(p.UserID)
+		isAdmin := p.IsAdmin || b.handler.IsAdmin(p.UserID)
 		currentLang := b.db.GetGuildLanguage(p.GuildID)
 
 		var selectedLang string
@@ -559,7 +560,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			_ = b.db.SetGuildLanguage(p.GuildID, selectedLang)
 			content = i18n.Globali18n.T(selectedLang, "language_changed")
 		} else {
-			content = fmt.Sprintf("🌐 Current language: **%s**", currentLang)
+			content = fmt.Sprintf("Current language: **%s**", currentLang)
 		}
 
 	case "filter":
