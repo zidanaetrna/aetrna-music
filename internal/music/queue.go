@@ -57,6 +57,7 @@ type GuildQueue struct {
 	lyricsCancel func()
 	SkipVotes    map[string]bool
 	LyricsOffset time.Duration
+	isLooping    bool
 
 	mu sync.RWMutex
 }
@@ -241,6 +242,7 @@ func (q *GuildQueue) Stop() {
 	q.NowPlaying = nil
 	q.IsPlaying = false
 	q.IsPaused = false
+	q.isLooping = false
 	gid := q.GuildID
 	stopCb := q.StopCb
 	q.mu.Unlock()
@@ -359,6 +361,18 @@ func (q *GuildQueue) EvaluateSkip(userID string, listenerCount int, isAdmin bool
 func (q *GuildQueue) PlayNext() {
 	q.mu.Lock()
 
+	if q.isLooping {
+		log.Printf("[DEBUG] [GuildQueue %s] PlayNext loop already active, skipping duplicate call", q.GuildID)
+		q.mu.Unlock()
+		return
+	}
+	q.isLooping = true
+
+	// Drain any stale unconsumed signals in TrackEndCh
+	for len(q.TrackEndCh) > 0 {
+		<-q.TrackEndCh
+	}
+
 	q.SkipVotes = make(map[string]bool)
 	q.LyricsOffset = 0
 
@@ -387,6 +401,7 @@ func (q *GuildQueue) PlayNext() {
 		} else {
 			q.IsPlaying = false
 			q.NowPlaying = nil
+			q.isLooping = false
 
 			// Start 3-minute (180s) idle disconnect timer when queue finishes
 			gid := q.GuildID
@@ -434,8 +449,9 @@ func (q *GuildQueue) PlayNext() {
 			log.Printf("[ERROR] [PlayNext] Playback error for %s: %v", song.Title, err)
 			q.mu.Lock()
 			q.NowPlaying = nil
+			q.isLooping = false
 			q.mu.Unlock()
-			go q.PlayNext()
+			q.PlayNext()
 			return
 		}
 	}
@@ -446,13 +462,14 @@ func (q *GuildQueue) PlayNext() {
 	// Wait for TrackEnd event (signalled by bot from Voice Engine WS event)
 	<-q.TrackEndCh
 
-	q.mu.RLock()
+	q.mu.Lock()
 	isPlaying := q.IsPlaying
-	q.mu.RUnlock()
+	q.isLooping = false
+	q.mu.Unlock()
 
 	if !isPlaying {
 		return // Stop() was called
 	}
 
-	go q.PlayNext()
+	q.PlayNext()
 }

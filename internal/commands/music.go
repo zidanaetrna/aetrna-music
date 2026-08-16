@@ -370,7 +370,22 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 
 	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 	if ytdlpClients == "" {
-		ytdlpClients = "mweb,android,ios"
+		ytdlpClients = "ios,android"
+	} else {
+		// Filter out web/mweb to prevent PoToken 403 Forbidden on official music label videos
+		parts := strings.Split(ytdlpClients, ",")
+		var filtered []string
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "web" && p != "mweb" && p != "" {
+				filtered = append(filtered, p)
+			}
+		}
+		if len(filtered) > 0 {
+			ytdlpClients = strings.Join(filtered, ",")
+		} else {
+			ytdlpClients = "ios,android"
+		}
 	}
 	args := []string{
 		"-4",
