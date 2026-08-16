@@ -13,7 +13,13 @@ import (
 
 	"aetrna-music/internal/music"
 	"aetrna-music/web"
+
+	"github.com/gorilla/websocket"
 )
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
 
 // getClientIP extracts real client IP respecting reverse proxy headers
 func getClientIP(r *http.Request) string {
@@ -208,7 +214,38 @@ func (b *Bot) StartDashboardServer(port string) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	}))
 
-	// 5. Static Files Web Dashboard Server
+	// 5. Real-Time Telemetry WebSocket Endpoint
+	mux.HandleFunc("/api/ws", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+
+			payload := map[string]interface{}{
+				"type": "telemetry",
+				"data": map[string]interface{}{
+					"activeGuilds": b.store.ActiveGuildCount(),
+					"memoryUsage":  fmt.Sprintf("%d MB", m.Alloc/1024/1024),
+					"uptime":       fmt.Sprintf("%d MB", m.Sys/1024/1024),
+					"timestamp":    time.Now().Unix(),
+				},
+			}
+
+			if err := conn.WriteJSON(payload); err != nil {
+				break
+			}
+		}
+	}))
+
+	// 6. Static Files Web Dashboard Server
 	subFS, err := fs.Sub(web.FS, "dist")
 	if err == nil {
 		fileServer := http.FileServer(http.FS(subFS))

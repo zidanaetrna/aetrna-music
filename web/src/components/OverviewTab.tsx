@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useI18n } from '../context/I18nContext';
 import { useToast } from '../context/ToastContext';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 interface OverviewTabProps {
     selectedGuild: string;
@@ -9,6 +10,7 @@ interface OverviewTabProps {
 export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
     const { t } = useI18n();
     const { showToast } = useToast();
+    const { connected, telemetry } = useWebSocket();
     const [volume, setVolume] = useState(1.0);
 
     const handleAction = async (action: string, toastKey: string, type: 'info' | 'error' | 'success' = 'info') => {
@@ -24,10 +26,14 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
 
     return (
         <section className="tab-page active">
-            <div className="header-title-row" style={{ marginBottom: '1.5rem' }}>
+            <div className="header-title-row" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="header-title">
                     <h2>{t('title_overview')}</h2>
                     <p>{t('desc_overview')}</p>
+                </div>
+                <div className="telemetry-ws-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem', fontWeight: 700, padding: '0.35rem 0.75rem', borderRadius: '20px', background: connected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)', color: connected ? '#10B981' : '#EAB308', border: `1px solid ${connected ? 'rgba(16, 185, 129, 0.3)' : 'rgba(234, 179, 8, 0.3)'}` }}>
+                    <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
+                    <span>{connected ? 'WebSocket Stream Active' : 'Polling Sync Mode'}</span>
                 </div>
             </div>
 
@@ -36,10 +42,10 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
                 <div className="glass-card stat-card">
                     <div className="stat-header">
                         <span className="stat-title">{t('stat_guilds')}</span>
-                        <span className="stat-badge green">+15.8%</span>
+                        <span className="stat-badge green">Live Sync</span>
                     </div>
                     <div className="stat-value-row">
-                        <span className="stat-value">14</span>
+                        <span className="stat-value">{telemetry.activeGuilds ?? 14}</span>
                         <span style={{ color: 'var(--cf-text-muted)', fontSize: '0.75rem' }}>{t('sub_guilds')}</span>
                     </div>
                 </div>
@@ -47,10 +53,10 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
                 <div className="glass-card stat-card">
                     <div className="stat-header">
                         <span className="stat-title">{t('stat_ram')}</span>
-                        <span className="stat-badge blue">34.0%</span>
+                        <span className="stat-badge blue">Sub-ms</span>
                     </div>
                     <div className="stat-value-row">
-                        <span className="stat-value">142 MB</span>
+                        <span className="stat-value">{telemetry.memoryUsage ?? '142 MB'}</span>
                         <span style={{ color: 'var(--cf-text-muted)', fontSize: '0.75rem' }}>{t('sub_ram')}</span>
                     </div>
                 </div>
