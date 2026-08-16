@@ -12,11 +12,14 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o aetrna-bot ./cmd/bot
 FROM node:22-alpine
 WORKDIR /app
 
-# Install system dependencies: FFmpeg, yt-dlp, Python3, CA certificates, tzdata
+# Install system dependencies: FFmpeg, yt-dlp, Python3, C++ build tools for native addons
 RUN apk add --no-cache \
     ffmpeg \
     yt-dlp \
     python3 \
+    make \
+    g++ \
+    build-base \
     ca-certificates \
     tzdata \
     bash
