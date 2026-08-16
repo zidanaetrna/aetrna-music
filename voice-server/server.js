@@ -33,7 +33,7 @@ function getCookieHeaderString() {
             if (!trimmed) continue;
             if (trimmed.startsWith('#') && !trimmed.startsWith('#HttpOnly_')) continue;
             const cleanLine = trimmed.startsWith('#HttpOnly_') ? trimmed.substring(10) : trimmed;
-            const parts = cleanLine.split('\t');
+            const parts = cleanLine.split(/\s+/);
             if (parts.length >= 7) {
                 const domain = parts[0].trim();
                 const name = parts[5].trim();
