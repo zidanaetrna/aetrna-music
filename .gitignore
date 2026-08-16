@@ -1,7 +1,8 @@
 /index.js
 
 # Go Binaries & Artifacts
-bin/
+bin/*
+!bin/cli.js
 bot.exe
 *.exe
 *.dll
