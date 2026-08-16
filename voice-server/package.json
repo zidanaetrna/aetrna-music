@@ -1,6 +1,6 @@
 {
   "name": "aetrna-voice-server",
-  "version": "1.0.0",
+  "version": "2.1.1",
   "description": "DAVE E2EE compatible Voice Server for aetrna-music",
   "main": "server.js",
   "scripts": {

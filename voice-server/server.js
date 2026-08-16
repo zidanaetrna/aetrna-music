@@ -173,13 +173,31 @@ discordClient.login(BOT_TOKEN).then(async () => {
         
         await rest.put(Routes.applicationCommands(discordClient.user.id), { body: commands });
         console.log('[INFO] [VoiceServer] Registered global slash commands successfully');
-        console.log('[INFO] [VoiceServer] Slash commands registered successfully');
+
+        for (const [gId, guild] of discordClient.guilds.cache) {
+            try {
+                await rest.put(Routes.applicationGuildCommands(discordClient.user.id, gId), { body: commands });
+                console.log(`[INFO] [VoiceServer] Instant-registered guild slash commands for ${guild.name} (${gId})`);
+            } catch (e) {
+                console.error(`[WARN] [VoiceServer] Failed to register guild commands for ${gId}:`, e.message);
+            }
+        }
     } catch (e) {
         console.error('[WARN] [VoiceServer] Failed to register slash commands:', e.message);
     }
 }).catch(err => {
     console.error('[ERROR] [VoiceServer] Login failed:', err.message);
     process.exit(1);
+});
+
+discordClient.on('guildCreate', async (guild) => {
+    try {
+        const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
+        await rest.put(Routes.applicationGuildCommands(discordClient.user.id, guild.id), { body: commands });
+        console.log(`[INFO] [VoiceServer] Instant-registered guild slash commands for new guild ${guild.name} (${guild.id})`);
+    } catch (e) {
+        console.error(`[WARN] [VoiceServer] Failed to register commands for new guild ${guild.id}:`, e.message);
+    }
 });
 
 // Serialize interaction options recursively
