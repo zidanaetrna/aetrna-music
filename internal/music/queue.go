@@ -53,6 +53,9 @@ type GuildQueue struct {
 	// TrackEndCh is signalled by the bot when track finishes.
 	TrackEndCh chan struct{}
 
+	// TrackFailReason holds the failure reason from the last track-end signal.
+	TrackFailReason string
+
 	idleTimer    *time.Timer
 	lyricsCancel func()
 	SkipVotes    map[string]bool
@@ -222,12 +225,17 @@ func (q *GuildQueue) Resume() {
 
 // Skip signals TrackEndCh so PlayNext moves to the next song.
 func (q *GuildQueue) Skip() {
-	q.SignalTrackEnd()
+	q.SignalTrackEndWithReason("skip")
 }
 
 func (q *GuildQueue) SignalTrackEnd() {
+	q.SignalTrackEndWithReason("finished")
+}
+
+func (q *GuildQueue) SignalTrackEndWithReason(reason string) {
 	q.mu.Lock()
 	isLooping := q.isLooping
+	q.TrackFailReason = reason
 	q.mu.Unlock()
 
 	if isLooping {
@@ -456,6 +464,8 @@ func (q *GuildQueue) PlayNext() {
 	playCb := q.PlayCb
 	q.mu.Unlock()
 
+	const maxPlaybackRetries = 2
+
 	if playCb != nil {
 		if err := playCb(gid, song); err != nil {
 			log.Printf("[ERROR] [PlayNext] Playback error for %s: %v", song.Title, err)
@@ -476,11 +486,57 @@ func (q *GuildQueue) PlayNext() {
 
 	q.mu.Lock()
 	isPlaying := q.IsPlaying
+	failReason := q.TrackFailReason
+	q.TrackFailReason = ""
 	q.isLooping = false
 	q.mu.Unlock()
 
 	if !isPlaying {
 		return // Stop() was called
+	}
+
+	// Auto-retry on playback_failed: clear stream URL cache and re-call playCb
+	// YouTube CDN may reject requests that arrive immediately after a stream closes.
+	// Re-resolving via yt-dlp often picks a different CDN edge server, bypassing the rejection.
+	if failReason == "playback_failed" && playCb != nil {
+		for attempt := 1; attempt <= maxPlaybackRetries; attempt++ {
+			log.Printf("[INFO] [PlayNext] playback_failed for '%s' — clearing stream cache and retrying (attempt %d/%d)", song.Title, attempt, maxPlaybackRetries)
+			GlobalStreamCache.Delete(song.URL)
+			song.StreamURL = ""
+
+			q.mu.Lock()
+			q.NowPlaying = &song
+			q.isLooping = true
+			for len(q.TrackEndCh) > 0 {
+				<-q.TrackEndCh
+			}
+			q.mu.Unlock()
+
+			if err := playCb(gid, song); err != nil {
+				log.Printf("[ERROR] [PlayNext] Retry playCb error for '%s': %v", song.Title, err)
+				break
+			}
+
+			<-q.TrackEndCh
+
+			q.mu.Lock()
+			isPlaying = q.IsPlaying
+			failReason = q.TrackFailReason
+			q.TrackFailReason = ""
+			q.isLooping = false
+			q.mu.Unlock()
+
+			if !isPlaying {
+				return
+			}
+			if failReason != "playback_failed" {
+				// Retry succeeded — carry on to next song
+				log.Printf("[INFO] [PlayNext] Retry succeeded for '%s' on attempt %d", song.Title, attempt)
+				q.PlayNext()
+				return
+			}
+		}
+		log.Printf("[WARN] [PlayNext] All retries exhausted for '%s', skipping to next song", song.Title)
 	}
 
 	q.PlayNext()

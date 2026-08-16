@@ -43,6 +43,15 @@ func (c *StreamCache) Get(url string) (string, bool) {
 	return item.streamURL, true
 }
 
+func (c *StreamCache) Delete(url string) {
+	if url == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.items, url)
+}
+
 func (c *StreamCache) Set(url, streamURL string) {
 	if url == "" || streamURL == "" {
 		return
