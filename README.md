@@ -141,32 +141,11 @@ npx aetrna-music init
 
 ---
 
-## How to Export & Configure YouTube Cookies
+## YouTube Cookies Configuration
 
-YouTube frequently blocks data center IPs, imposes rate limits (429), or restricts age-gated songs. Supplying a valid `cookies.txt` file ensures uninterrupted playback.
+YouTube frequently blocks data center IPs or restricts age-gated tracks. To ensure smooth, uninterrupted audio playback, you can supply a `youtube_cookies.txt` file.
 
-### Step-by-Step Cookie Export Guide:
-
-1. **Install Browser Extension**:
-   - **Chrome / Brave / Edge**: Install **[Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)** from Chrome Web Store.
-   - **Firefox**: Install **[Get cookies.txt LOCALLY](https://addons.mozilla.org/en-US/firefox/addon/get-cookies-txt-locally/)** from Mozilla Add-ons.
-
-2. **Log into YouTube**:
-   - Open `https://youtube.com` in your browser and make sure you are logged into an active account.
-
-3. **Export Cookies File**:
-   - Click the extension icon in your browser toolbar.
-   - Click **Export** (or **Download**) to save the cookie file.
-   - Rename the downloaded file to `youtube_cookies.txt`.
-
-4. **Place in Project Directory**:
-   - Place `youtube_cookies.txt` in your project root directory (same folder as `docker-compose.yml`).
-
-5. **Configure `.env`**:
-   ```env
-   YOUTUBE_COOKIES_PATH=./youtube_cookies.txt
-   ```
-   *If running in Docker, `docker-compose.yml` automatically mounts `./youtube_cookies.txt` into the container.*
+For step-by-step instructions on exporting cookies using browser extensions, refer to the **[YouTube Cookies Setup Guide](docs/YOUTUBE_COOKIES.md)**.
 
 ---
 
