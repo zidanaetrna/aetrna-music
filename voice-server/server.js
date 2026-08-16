@@ -1,6 +1,7 @@
 const dns = require('dns');
 const fs = require('fs');
 const path = require('path');
+const { PassThrough } = require('stream');
 dns.setDefaultResultOrder('ipv4first');
 
 function getAbsoluteCookiesPath() {
@@ -496,6 +497,15 @@ app.post('/join-and-play', async (req, res) => {
         // Return HTTP 200 immediately to Go Bot
         res.json({ status: 'ok', message: 'Voice connection initiated' });
 
+        // Kick off yt-dlp for the current song IN PARALLEL with voice connection negotiation
+        // so by the time connection is Ready, audio data is already flowing
+        const currentVideoUrl = (songUrl && (songUrl.includes('youtube.com') || songUrl.includes('youtu.be'))) ? songUrl
+            : (streamUrl.includes('youtube.com') || streamUrl.includes('youtu.be')) ? streamUrl
+            : null;
+        if (currentVideoUrl && (!prefetchStreams.has(guildId) || prefetchStreams.get(guildId).url !== currentVideoUrl)) {
+            startPrefetch(guildId, currentVideoUrl);
+        }
+
         // Start playback asynchronously once connection reaches Ready with retry loop (Fixes Issue #11553)
         (async () => {
             try {
@@ -586,12 +596,43 @@ app.post('/join-and-play', async (req, res) => {
 
                     // Check if we have a prefetched yt-dlp process for this URL
                     const pf = prefetchStreams.get(guildId);
-                    if (pf && pf.url === videoInputUrl && pf.ytdlp && pf.ytdlp.exitCode === null) {
-                        console.log(`[INFO] [VoiceServer] Using prefetched yt-dlp for '${videoInputUrl}' in guild ${guildId}`);
-                        ytdlp = pf.ytdlp;
-                        prefetchStreams.delete(guildId);
+                    let needsFreshSpawn = false;
+
+                    ffmpeg = spawn('ffmpeg', [
+                        '-i', 'pipe:0',
+                        '-loglevel', 'warning',
+                        '-af', audioFilter,
+                        '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
+                    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+                    if (pf && pf.url === videoInputUrl && pf.ytdlp) {
+                        if (pf.ytdlp.exitCode === null) {
+                            // Process still running — pipe its stdout live into ffmpeg
+                            console.log(`[INFO] [VoiceServer] Using live prefetched yt-dlp for '${videoInputUrl}' in guild ${guildId}`);
+                            ytdlp = pf.ytdlp;
+                            prefetchStreams.delete(guildId);
+                            ytdlp.stdout.pipe(ffmpeg.stdin);
+                            ytdlp.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ytdlp ${guildId}] ${msg}`); });
+                        } else if (pf.chunks && pf.chunks.length > 0) {
+                            // Process already finished — replay buffered chunks via PassThrough
+                            const totalBytes = pf.chunks.reduce((s, c) => s + c.length, 0);
+                            console.log(`[INFO] [VoiceServer] Using fully-buffered prefetch (${(totalBytes/1024).toFixed(0)}KB) for '${videoInputUrl}' in guild ${guildId} — INSTANT PLAYBACK`);
+                            const pt = new PassThrough();
+                            pt.pipe(ffmpeg.stdin);
+                            for (const chunk of pf.chunks) pt.write(chunk);
+                            pt.end();
+                            prefetchStreams.delete(guildId);
+                        } else {
+                            // Prefetch exited with no data — fall through to fresh spawn
+                            cleanupPrefetch(guildId);
+                            needsFreshSpawn = true;
+                        }
                     } else {
-                        cleanupPrefetch(guildId);
+                        if (pf) cleanupPrefetch(guildId);
+                        needsFreshSpawn = true;
+                    }
+
+                    if (needsFreshSpawn) {
                         const ytdlpArgs = [
                             '-4',
                             '--js-runtimes', 'node',
@@ -608,20 +649,11 @@ app.post('/join-and-play', async (req, res) => {
                         ];
                         if (cacheDir) ytdlpArgs.unshift('--cache-dir', cacheDir);
                         if (cookiesPath) ytdlpArgs.unshift('--cookies', cookiesPath);
-
                         console.log(`[INFO] [VoiceServer] Spawning yt-dlp pipe for '${videoInputUrl}' in guild ${guildId}`);
                         ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+                        ytdlp.stdout.pipe(ffmpeg.stdin);
+                        ytdlp.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ytdlp ${guildId}] ${msg}`); });
                     }
-
-                    ffmpeg = spawn('ffmpeg', [
-                        '-i', 'pipe:0',
-                        '-loglevel', 'warning',
-                        '-af', audioFilter,
-                        '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
-                    ], { stdio: ['pipe', 'pipe', 'pipe'] });
-
-                    ytdlp.stdout.pipe(ffmpeg.stdin);
-                    ytdlp.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ytdlp ${guildId}] ${msg}`); });
 
                     // Start prefetching next song immediately so player JS is already cached when needed
                     if (nextSongUrl && (nextSongUrl.includes('youtube.com') || nextSongUrl.includes('youtu.be'))) {
