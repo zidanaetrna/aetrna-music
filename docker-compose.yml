@@ -1,0 +1,14 @@
+services:
+  aetrna-music:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aetrna-music
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./cookies.txt:/app/cookies.txt:ro

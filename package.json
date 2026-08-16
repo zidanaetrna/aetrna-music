@@ -1,0 +1,23 @@
+{
+  "name": "aetrna-music",
+  "version": "2.0.0",
+  "description": "A fast, self-hosted Discord music platform",
+  "main": "bin/cli.js",
+  "bin": {
+    "aetrna-music": "bin/cli.js"
+  },
+  "scripts": {
+    "init": "node bin/cli.js init",
+    "setup": "node bin/cli.js init"
+  },
+  "keywords": [
+    "discord",
+    "music-bot",
+    "self-hosted",
+    "audio",
+    "lyrics",
+    "aetrna"
+  ],
+  "author": "Aetrna Team",
+  "license": "MIT"
+}
