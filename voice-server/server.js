@@ -526,8 +526,8 @@ app.post('/join-and-play', async (req, res) => {
                 const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.Raw, inlineVolume: true });
                 resource.volume.setVolume(volume);
 
-                player.play(resource);
                 connection.subscribe(player);
+                player.play(resource);
             } catch (asyncErr) {
                 if (playSessions.get(guildId) !== currentSessionId) return;
                 console.error(`[ERROR] [VoiceServer] Async voice connection/playback failed for guild ${guildId}:`, asyncErr.message);
