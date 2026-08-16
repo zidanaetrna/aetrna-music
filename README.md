@@ -8,7 +8,7 @@
 [![NodeJS](https://img.shields.io/badge/Node.js-22+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![Web Dashboard](https://img.shields.io/badge/Web_Dashboard-v2.0-8A2BE2?style=for-the-badge&logo=fastapi&logoColor=white)](#web-control-panel--dashboard)
-[![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
 
 <br />
@@ -221,7 +221,7 @@ If `aetrna-music` helped you run a fast, ad-free Discord music bot without expen
 
 ## License & Credits
 
-- **License**: Released under the **[MIT License](LICENSE)**.
+- **License**: Released under the **[Apache License 2.0](LICENSE)**.
 - **Founder & Prompter**: **[zidanaetrna](https://github.com/zidanaetrna)**
 - **Official Bot Artwork**: **[@br_lie](https://github.com/zidanaetrna)** (`pp_bot_musijk.png`)
 
