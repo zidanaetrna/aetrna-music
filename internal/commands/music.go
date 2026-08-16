@@ -372,7 +372,6 @@ func GetStreamURL(query string, cookiesPath string) (string, error) {
 		"--no-check-certificates",
 		"--no-warnings",
 		"--user-agent", userAgent,
-		"--extractor-args", "youtube:player_client=android,ios,web,tv",
 		"-g",
 		query,
 	}

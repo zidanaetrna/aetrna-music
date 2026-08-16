@@ -400,14 +400,28 @@ app.post('/join-and-play', async (req, res) => {
                 player = createAudioPlayer();
                 players.set(guildId, player);
 
+                let streamPlaybackStartedAt = 0;
+
+                player.on(AudioPlayerStatus.Playing, () => {
+                    streamPlaybackStartedAt = Date.now();
+                    console.log(`[INFO] [VoiceServer] AudioPlayer entered Playing state for guild ${guildId}`);
+                });
+
                 player.on(AudioPlayerStatus.Idle, () => {
                     if (playSessions.get(guildId) !== currentSessionId) {
                         console.log(`[DEBUG] [VoiceServer] Stale Idle ignored for guild ${guildId} (session ${currentSessionId})`);
                         return;
                     }
-                    console.log(`[INFO] [VoiceServer] Track finished for guild ${guildId} (session ${currentSessionId})`);
+                    const durationMs = streamPlaybackStartedAt > 0 ? (Date.now() - streamPlaybackStartedAt) : 0;
+                    console.log(`[INFO] [VoiceServer] Track ended for guild ${guildId} (session ${currentSessionId}, duration: ${durationMs}ms)`);
                     cleanupStreams(guildId);
-                    notifyBotTrackEnd(guildId, 'finished');
+
+                    if (streamPlaybackStartedAt === 0 || durationMs < 1500) {
+                        console.warn(`[WARN] [VoiceServer] Track ended prematurely (${durationMs}ms). FFmpeg stream failed to play.`);
+                        notifyBotTrackEnd(guildId, 'playback_failed');
+                    } else {
+                        notifyBotTrackEnd(guildId, 'finished');
+                    }
                 });
 
                 player.on('error', (err) => {
@@ -423,7 +437,7 @@ app.post('/join-and-play', async (req, res) => {
                 const ffmpeg = spawn('ffmpeg', [
                     '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
                     '-user_agent', userAgent,
-                    '-headers', `User-Agent: ${userAgent}\r\n`,
+                    '-headers', `User-Agent: ${userAgent}\r\nReferer: https://www.youtube.com/\r\n`,
                     '-i', streamUrl,
                     '-analyzeduration', '0', '-loglevel', 'error',
                     '-af', audioFilter,
