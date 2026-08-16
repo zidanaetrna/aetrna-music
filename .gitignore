@@ -18,7 +18,8 @@ youtube_cookies.txt
 # Dependencies
 node_modules/
 web/node_modules/
-web/dist/
+web/dist/*
+!web/dist/.gitkeep
 
 # Data & Caches
 data/
