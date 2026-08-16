@@ -496,7 +496,11 @@ app.post('/join-and-play', async (req, res) => {
                 const audioFilter = getFFmpegAudioFilter(filter);
                 console.log(`[INFO] [VoiceServer] Starting FFmpeg audio stream for guild ${guildId} [Filter: ${filter}]`);
                 const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-                const headerStr = `Referer: https://www.youtube.com/\r\n`;
+                let headerStr = `User-Agent: ${userAgent}\r\nReferer: https://www.youtube.com/\r\n`;
+                const cookieHeader = getCookieHeaderString();
+                if (cookieHeader) {
+                    headerStr += `Cookie: ${cookieHeader}\r\n`;
+                }
 
                 const ffmpeg = spawn('ffmpeg', [
                     '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
