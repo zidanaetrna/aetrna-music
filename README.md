@@ -1,10 +1,7 @@
 <div align="center">
 
-<img src="web/artwork.png" alt="aetrna-music Official Artwork" width="120" height="120" style="border-radius: 50%; object-fit: cover; border: 3px solid #00F2FE; box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);" />
-
+<img src="web/artwork.png" alt="aetrna-music Official Artwork" width="120" height="120" style="border-radius: 50%; object-fit: cover; border: 3px solid #00F2FE; box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);" /><br />
 <sub><i>Official Bot Artwork by <b>@br_lie</b></i></sub>
-
-<br /><br />
 
 # aetrna-music
 
