@@ -390,6 +390,7 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 	args := []string{
 		"-4",
 		"--no-cache-dir",
+		"--js-runtimes", "node",
 		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"-f", "bestaudio/best",
 		"--no-playlist",
