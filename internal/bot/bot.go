@@ -69,8 +69,8 @@ func (b *Bot) Start() error {
 
 	playCb := func(guildID string, song music.Song) error {
 		streamURL := song.StreamURL
-		if streamURL == "" || time.Since(song.ResolvedAt) > 15*time.Minute {
-			log.Printf("[INFO] [Bot] Extracting stream URL for '%s'...", song.Title)
+		if streamURL == "" || time.Since(song.ResolvedAt) > 2*time.Minute {
+			log.Printf("[INFO] [Bot] Extracting fresh stream URL for '%s'...", song.Title)
 			var err error
 			streamURL, err = commands.GetStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 			if err != nil {
