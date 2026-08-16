@@ -27,7 +27,7 @@
 ## Features Highlights
 
 - **100% Lavalink-Free Architecture**: No Java runtime or bulky Lavalink servers required. Consumes only **15–30 MB RAM** per instance using a lightweight native Go core + Node.js voice worker.
-- **Embedded Web Control Panel (`http://localhost:8080`)**: Self-hosted split-screen Web Control Panel with HMAC-SHA256 password protection (`DASHBOARD_PASSWORD`), real-time playback control, and live queue monitoring.
+- **Enterprise React 18 + TypeScript Web Dashboard**: Self-hosted split-screen SPA built with React 18, TypeScript, Vite, Cloudflare dark charcoal UI (`#0D0E12`), multi-guild target selector, real-time WebSocket telemetry engine (`/api/ws`), toast notifications, and multi-language support (EN, ID, JP).
 - **Interactive Discord UI Cards**:
   - Full-width dynamic album cover cards.
   - Interactive Now Playing Control Bar (Pause, Skip, Prev, Loop, Shuffle, Vol+, Vol-, Filter, Favorite, Stop).
@@ -35,6 +35,7 @@
   - Paginated queue tables with visual playback progress bars.
 - **SQLite Persistence Engine**: WAL-mode SQLite database for instant user song favorites (`/favorite`) and custom user playlists (`/collection`).
 - **Dynamic Audio DSP Filters**: On-the-fly FFmpeg equalizer filters (Bassboost, Nightcore, Vaporwave, 8D Audio, Pop).
+- **Synchronized LRC Lyrics Engine (`/lyrics`)**: Real-time LRCLIB API integration fetching synced line-by-line LRC lyrics directly in Discord embeds.
 - **Single Container Deployment**: Multi-stage POSIX supervisor container bundling Go, Node.js, FFmpeg, and yt-dlp into one lightweight container.
 - **Interactive CLI Setup Wizard**: Initialize configuration in seconds with `npx aetrna-music init`.
 
@@ -151,15 +152,19 @@ For step-by-step instructions on exporting cookies using browser extensions, ref
 
 ## Web Control Panel / Dashboard
 
-`aetrna-music` comes with a self-hosted split-screen Web Dashboard accessible at `http://localhost:8080`.
+`aetrna-music` comes with a modern React 18 + TypeScript Web Dashboard accessible at `http://localhost:8080`.
 
-- **Authentication**: Protected via password authentication configured in `.env` (`DASHBOARD_PASSWORD`).
-- **Live Status Monitoring**: Monitor active voice channels, system uptime, and memory usage.
-- **Remote Control**: Play, pause, skip tracks, and clear queues directly from your browser.
-- **REST API Endpoints**:
+- **React 18 + TypeScript + Vite**: Built with modern component architecture, strict type safety, and zero external JS runtime overhead (`//go:embed all:dist`).
+- **Real-Time Telemetry Stream**: WebSocket engine (`/api/ws`) broadcasting sub-millisecond RAM telemetry, active guild counts, and server uptime across browser tabs.
+- **Cloudflare Dark Charcoal UI**: Collapsible sidebar (`250px` vs `64px`), quick search modal shortcut (`Ctrl + K`), and unified Deep Emerald Green theme (`#10B981`).
+- **Multi-Guild Target Selector**: Switch between connected Discord servers to manage active queues, voice disconnects/kicks, and playback controls per guild.
+- **Dynamic Multi-Language & Toasts**: Real-time language switching (English, Natural Tech Indonesian, Japanese) with sleek toast notifications.
+- **HMAC-SHA256 Password Authentication**: Session protection configured via `.env` (`DASHBOARD_PASSWORD`).
+- **REST API & WebSocket Endpoints**:
   - `POST /api/login` — Authenticate and receive HMAC session token.
   - `GET /api/status` — Get bot stats and active guild queues.
   - `POST /api/control` — Send playback control commands.
+  - `WS /api/ws` — Real-time telemetry WebSocket stream.
 
 ---
 
@@ -174,6 +179,7 @@ For step-by-step instructions on exporting cookies using browser extensions, ref
 | `/stop` | Playback | Stop playback, clear queue, and leave voice channel |
 | `/queue` | Queue | View paginated queue table with progress bar |
 | `/nowplaying` | Queue | View Now Playing card with interactive control buttons |
+| `/lyrics` | Playback | Fetch synced line-by-line LRC lyrics for current track |
 | `/favorite` | Favorites | Save current song to your personal SQLite favorites |
 | `/favorites` | Favorites | View and play your saved favorite songs |
 | `/collection` | Collection | Save or load custom user playlists (`save <name>`, `load <name>`) |
