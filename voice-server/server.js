@@ -572,6 +572,7 @@ app.post('/join-and-play', async (req, res) => {
                 if (videoInputUrl) {
                     const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
                     const cookiesPath = getAbsoluteCookiesPath();
+                    const cacheDir = getCacheDir();
 
                     // Check if we have a prefetched yt-dlp process for this URL
                     const pf = prefetchStreams.get(guildId);
