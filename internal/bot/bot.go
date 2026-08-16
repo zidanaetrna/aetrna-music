@@ -72,7 +72,7 @@ func (b *Bot) Start() error {
 		if streamURL == "" || time.Since(song.ResolvedAt) > 15*time.Minute {
 			log.Printf("[INFO] [Bot] Extracting stream URL for '%s'...", song.Title)
 			var err error
-			streamURL, err = commands.GetStreamURL(song.URL, b.cfg.CookiesPath)
+			streamURL, err = commands.GetStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 			if err != nil {
 				return err
 			}
@@ -97,7 +97,7 @@ func (b *Bot) Start() error {
 	}
 	stopCb := func(guildID string) error { return b.voice.Stop(guildID) }
 	preFetchCb := func(songURL string) (string, error) {
-		return commands.GetStreamURL(songURL, b.cfg.CookiesPath)
+		return commands.GetStreamURL(songURL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 	}
 
 	spotifyCl := spotify.NewClient(b.cfg.SpotifyClientID, b.cfg.SpotifyClientSecret)

@@ -356,7 +356,7 @@ func getVoiceState(s *discordgo.Session, guildID, userID string) (*discordgo.Voi
 	return nil, fmt.Errorf("user not in voice channel")
 }
 
-func GetStreamURL(query string, cookiesPath string) (string, error) {
+func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string, error) {
 	query = sanitizeQuery(query)
 
 	if cachedURL, ok := music.GlobalStreamCache.Get(query); ok && cachedURL != "" {
@@ -365,7 +365,11 @@ func GetStreamURL(query string, cookiesPath string) (string, error) {
 	}
 
 	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	if ytdlpClients == "" {
+		ytdlpClients = "mweb,android,ios"
+	}
 	args := []string{
+		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"-f", "bestaudio/best",
 		"--no-playlist",
 		"--geo-bypass",
