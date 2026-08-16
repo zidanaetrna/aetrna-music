@@ -495,12 +495,13 @@ app.post('/join-and-play', async (req, res) => {
                 });
 
                 const audioFilter = getFFmpegAudioFilter(filter);
-                const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+                const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
                 let headerStr = `User-Agent: ${userAgent}\r\nReferer: https://www.youtube.com/\r\n`;
                 const cookieHeader = getCookieHeaderString();
                 if (cookieHeader) {
                     headerStr += `Cookie: ${cookieHeader}\r\n`;
                 }
+                headerStr += `\r\n`;
 
                 try {
                     const u = new URL(streamUrl);
