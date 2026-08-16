@@ -391,11 +391,26 @@ func GetStreamURL(query string, cookiesPath string) (string, error) {
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) == 0 || lines[0] == "" {
+	var validLines []string
+	for _, l := range lines {
+		l = strings.TrimSpace(l)
+		if l != "" {
+			validLines = append(validLines, l)
+		}
+	}
+	if len(validLines) == 0 {
 		return "", fmt.Errorf("yt-dlp returned empty URL")
 	}
 
-	streamURL := lines[0]
+	// Select audio stream URL if yt-dlp outputs video + audio URLs
+	streamURL := validLines[len(validLines)-1]
+	for _, l := range validLines {
+		if strings.Contains(l, "mime=audio") || strings.Contains(l, "audio") {
+			streamURL = l
+			break
+		}
+	}
+
 	music.GlobalStreamCache.Set(query, streamURL)
 	return streamURL, nil
 }
