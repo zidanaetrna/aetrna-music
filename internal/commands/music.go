@@ -71,6 +71,7 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 
 	// Use --flat-playlist to fetch search metadata instantly without triggering n-sig format deciphering
 	args := []string{
+		"-4",
 		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"--flat-playlist",
 		"--dump-single-json",
@@ -160,6 +161,7 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 	}
 
 	args := []string{
+		"-4",
 		"--default-search", "ytsearch",
 		"--flat-playlist",
 		"--dump-json",
@@ -369,6 +371,7 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 		ytdlpClients = "mweb,android,ios"
 	}
 	args := []string{
+		"-4",
 		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"-f", "bestaudio/best",
 		"--no-playlist",
