@@ -327,6 +327,15 @@ app.post('/join-and-play', async (req, res) => {
         return res.status(400).json({ error: 'Missing guildId, channelId, or streamUrl' });
     }
 
+    try {
+        const parsedUrl = new URL(streamUrl);
+        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            return res.status(400).json({ error: 'Invalid streamUrl protocol' });
+        }
+    } catch (err) {
+        return res.status(400).json({ error: 'Invalid streamUrl format' });
+    }
+
     const currentSessionId = (playSessions.get(guildId) || 0) + 1;
     playSessions.set(guildId, currentSessionId);
 
