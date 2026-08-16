@@ -6,7 +6,7 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o aetrna-bot ./...
+RUN CGO_ENABLED=0 GOOS=linux go build -o aetrna-bot ./cmd/bot
 
 # Stage 2: Final Production Runtime Image
 FROM node:22-alpine
