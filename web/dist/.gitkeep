@@ -1,0 +1,14 @@
+# Placeholder file to satisfy Go's //go:embed all:dist directive.
+#
+# The web/dist/ folder MUST contain at least one file for `go build` to work
+# (Go's embed package refuses to embed empty directories).
+#
+# The real contents of this folder (Vite/React dashboard build output) are
+# generated during CI / production build by running:
+#   $ cd web && npm install && npm run build
+#
+# That command will populate this folder with: index.html, assets/*.js,
+# assets/*.css, etc. Those are the files that get embedded into the
+# final aetrna-bot Go binary for the web dashboard UI.
+#
+# This placeholder MUST remain in version control. DO NOT DELETE.
