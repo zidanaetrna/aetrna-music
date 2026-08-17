@@ -95,7 +95,6 @@ func (b *Bot) Start() error {
 	stopCb := func(guildID string) error { return b.voice.Stop(guildID) }
 	preFetchCb := func(guildID, songURL string) (string, error) {
 		log.Printf("[INFO] [Bot] Pre-fetching stream URL in background for '%s'", songURL)
-		_ = b.voice.Prefetch(guildID, songURL)
 		return commands.GetStreamURL(songURL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 	}
 
