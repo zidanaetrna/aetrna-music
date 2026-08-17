@@ -572,7 +572,7 @@ app.post('/join-and-play', async (req, res) => {
                     '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
                 ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-                ffmpeg.stdin.on('error', () => {});
+                if (ffmpeg.stdin) ffmpeg.stdin.on('error', () => {});
                 activeStreams.set(guildId, { ffmpeg });
                 ffmpeg.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ffmpeg ${guildId}] ${msg}`); });
                 ffmpeg.on('exit', (code, signal) => {
