@@ -36,6 +36,16 @@
 
 ---
 
+## Try the Bot
+
+A public instance is available if you want to test things out before setting up your own.
+
+[Add to your server](https://discord.com/oauth2/authorize?client_id=1460301126854246541&scope=bot%20applications.commands&permissions=11922048)
+
+It's the same codebase. No guarantees on uptime.
+
+---
+
 ## Quick Start & Installation
 
 ### Option 1: Interactive CLI Setup Wizard (Recommended)
