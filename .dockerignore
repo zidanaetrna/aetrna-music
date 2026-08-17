@@ -1,0 +1,46 @@
+# ============================================================
+# aetrna-music .dockerignore
+# Exclude local-only artifacts that MUST NOT enter the build context.
+# Keeps docker build context tiny and cache-friendly.
+# ============================================================
+
+# ---- Node.js local installs + output ----------------------------------
+**/node_modules
+**/.npm
+**/.cache
+**/.pnpm-store
+web/dist/*
+!web/dist/.gitkeep
+web/vitest.config.ts
+web/src/test
+
+# ---- Go local artifacts ----------------------------------------
+*.exe
+*.test
+*.out
+*.a
+*.o
+
+# ---- Git / CI ------------------------------------------------
+.git
+.gitignore
+.github
+**/.trae
+
+# ---- Random local scratch / screenshots / temp ---------------
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.zip
+*.tar.gz
+*.log
+.env
+.env.local
+.env.*.local
+docker-compose.override.yml
+
+# ---- Existing build outputs on host ------------------------------
+aetrna-bot
+aetrna-music
+aetrna-music.exe
