@@ -626,13 +626,12 @@ app.post('/join-and-play', async (req, res) => {
                         '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
                     ], { stdio: ['pipe', 'pipe', 'pipe'] });
 
-                    ytdlp.stdout.pipe(ffmpeg.stdin);
-                    ytdlp.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ytdlp ${guildId}] ${msg}`); });
-                }
-
-                // Start prefetching next song immediately so player JS is already cached when needed
-                if (nextSongUrl && (nextSongUrl.includes('youtube.com') || nextSongUrl.includes('youtu.be'))) {
-                    setTimeout(() => startPrefetch(guildId, nextSongUrl), 3000);
+                    ffmpeg.stdin.on('error', () => {});
+                    if (ytdlp && ytdlp.stdout) {
+                        ytdlp.stdout.on('error', () => {});
+                        ytdlp.stdout.pipe(ffmpeg.stdin);
+                        ytdlp.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ytdlp ${guildId}] ${msg}`); });
+                    }
                 }
 
                 activeStreams.set(guildId, { ffmpeg, ytdlp });
