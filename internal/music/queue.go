@@ -97,6 +97,11 @@ func (q *GuildQueue) PreFetchNext() {
 	}
 
 	song := q.Songs[0]
+	if song.StreamURL != "" && time.Since(song.ResolvedAt) < 15*time.Minute {
+		q.mu.Unlock()
+		return
+	}
+
 	targetSongURL := song.URL
 	targetSongTitle := song.Title
 	guildID := q.GuildID
@@ -104,10 +109,19 @@ func (q *GuildQueue) PreFetchNext() {
 	q.mu.Unlock()
 
 	go func() {
-		fmt.Printf("[INFO] [GuildQueue %s] Pre-fetching in background for next track: '%s'...\n", guildID, targetSongTitle)
-		_, err := preFetchCb(guildID, targetSongURL)
+		fmt.Printf("[INFO] [GuildQueue %s] Pre-fetching StreamURL in background for next track: '%s'...\n", guildID, targetSongTitle)
+		streamURL, err := preFetchCb(guildID, targetSongURL)
 		if err != nil {
 			fmt.Printf("[WARN] [GuildQueue %s] Pre-fetch failed for '%s': %v\n", guildID, targetSongTitle, err)
+			return
+		}
+
+		q.mu.Lock()
+		defer q.mu.Unlock()
+		if len(q.Songs) > 0 && q.Songs[0].URL == targetSongURL {
+			q.Songs[0].StreamURL = streamURL
+			q.Songs[0].ResolvedAt = time.Now()
+			fmt.Printf("[INFO] [GuildQueue %s] Successfully pre-fetched StreamURL for '%s' (ready for instant transition!)\n", guildID, targetSongTitle)
 		}
 	}()
 }

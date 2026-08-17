@@ -558,83 +558,22 @@ app.post('/join-and-play', async (req, res) => {
                 });
 
                 const audioFilter = getFFmpegAudioFilter(filter);
-                const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
-                let headerStr = `Referer: https://www.youtube.com/\r\n`;
-                const cookieHeader = getCookieHeaderString();
-                if (cookieHeader) {
-                    headerStr += `Cookie: ${cookieHeader}\r\n`;
-                }
+                console.log(`[INFO] [VoiceServer] Starting FFmpeg audio stream for guild ${guildId} [Filter: ${filter}]`);
+                const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+                const headerStr = `Referer: https://www.youtube.com/\r\n`;
 
-                let ffmpeg;
-                let ytdlp;
+                const ffmpeg = spawn('ffmpeg', [
+                    '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+                    '-user_agent', userAgent,
+                    '-headers', headerStr,
+                    '-i', streamUrl,
+                    '-loglevel', 'warning',
+                    '-af', audioFilter,
+                    '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
+                ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-                const isFirstTrackInVC = !wasAlreadyInVoice;
-                const videoInputUrl = (songUrl && (songUrl.includes('youtube.com') || songUrl.includes('youtu.be'))) ? songUrl
-                    : (streamUrl.includes('youtube.com') || streamUrl.includes('youtu.be')) ? streamUrl
-                    : null;
-
-                if (isFirstTrackInVC && streamUrl && (streamUrl.includes('googlevideo.com') || streamUrl.includes('soundcloud.com') || !videoInputUrl)) {
-                    // FIRST TRACK (BOT BARU MASUK VC): Direct FFmpeg stream like commit fd5769b — INSTANT 0.5s PLAYBACK!
-                    console.log(`[INFO] [VoiceServer] Playing first track directly via FFmpeg (bot joining VC): ${streamUrl.substring(0, 60)}...`);
-                    ffmpeg = spawn('ffmpeg', [
-                        '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
-                        '-user_agent', userAgent,
-                        '-headers', headerStr,
-                        '-i', streamUrl,
-                        '-loglevel', 'warning',
-                        '-af', audioFilter,
-                        '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
-                    ], { stdio: ['ignore', 'pipe', 'pipe'] });
-                } else if (videoInputUrl) {
-                    // CONSECUTIVE TRACK (LAGU KE-2 DST / TRANSISI): Use yt-dlp pipe to 100% prevent HTTP 403 Forbidden!
-                    const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
-                    const cookiesPath = getAbsoluteCookiesPath();
-                    const cacheDir = getCacheDir();
-
-                    // Check if we have a prefetched yt-dlp process still running for this URL
-                    const pf = prefetchStreams.get(guildId);
-                    if (pf && pf.url === videoInputUrl && pf.ytdlp && pf.ytdlp.exitCode === null) {
-                        console.log(`[INFO] [VoiceServer] Using live prefetched yt-dlp for '${videoInputUrl}' in guild ${guildId}`);
-                        ytdlp = pf.ytdlp;
-                        prefetchStreams.delete(guildId);
-                    } else {
-                        cleanupPrefetch(guildId);
-                        const ytdlpArgs = [
-                            '-4',
-                            '--js-runtimes', 'node',
-                            '--extractor-args', `youtube:player_client=${ytdlpClients}`,
-                            '-f', 'ba/ba*/bestaudio/b',
-                            '--concurrent-fragments', '5',
-                            '--no-playlist',
-                            '--geo-bypass',
-                            '--no-check-certificates',
-                            '--no-warnings',
-                            '--user-agent', userAgent,
-                            '-o', '-',
-                            videoInputUrl
-                        ];
-                        if (cacheDir) ytdlpArgs.unshift('--cache-dir', cacheDir);
-                        if (cookiesPath) ytdlpArgs.unshift('--cookies', cookiesPath);
-                        console.log(`[INFO] [VoiceServer] Spawning yt-dlp pipe for '${videoInputUrl}' in guild ${guildId}`);
-                        ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-                    }
-
-                    ffmpeg = spawn('ffmpeg', [
-                        '-i', 'pipe:0',
-                        '-loglevel', 'warning',
-                        '-af', audioFilter,
-                        '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
-                    ], { stdio: ['pipe', 'pipe', 'pipe'] });
-
-                    ffmpeg.stdin.on('error', () => {});
-                    if (ytdlp && ytdlp.stdout) {
-                        ytdlp.stdout.on('error', () => {});
-                        ytdlp.stdout.pipe(ffmpeg.stdin);
-                        ytdlp.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ytdlp ${guildId}] ${msg}`); });
-                    }
-                }
-
-                activeStreams.set(guildId, { ffmpeg, ytdlp });
+                ffmpeg.stdin.on('error', () => {});
+                activeStreams.set(guildId, { ffmpeg });
                 ffmpeg.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error(`[ffmpeg ${guildId}] ${msg}`); });
                 ffmpeg.on('exit', (code, signal) => {
                     if (code !== 0 && code !== null && signal !== 'SIGKILL') {
