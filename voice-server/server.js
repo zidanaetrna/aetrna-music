@@ -480,6 +480,9 @@ app.post('/join-and-play', async (req, res) => {
     try {
         cleanupStreams(guildId);
 
+        // Track whether bot was ALREADY connected in voice chat before this request
+        const wasAlreadyInVoice = connections.has(guildId) && connections.get(guildId).state.status === VoiceConnectionStatus.Ready;
+
         let guild = discordClient.guilds.cache.get(guildId);
         if (!guild) {
             try {
@@ -575,14 +578,14 @@ app.post('/join-and-play', async (req, res) => {
                 let ffmpeg;
                 let ytdlp;
 
-                const isFirstTrackInGuild = !activeStreams.has(guildId);
+                const isFirstTrackInVC = !wasAlreadyInVoice;
                 const videoInputUrl = (songUrl && (songUrl.includes('youtube.com') || songUrl.includes('youtu.be'))) ? songUrl
                     : (streamUrl.includes('youtube.com') || streamUrl.includes('youtu.be')) ? streamUrl
                     : null;
 
-                if (isFirstTrackInGuild && streamUrl && (streamUrl.includes('googlevideo.com') || streamUrl.includes('soundcloud.com') || !videoInputUrl)) {
-                    // FIRST TRACK (IDLE STATE): Direct FFmpeg stream like commit fd5769b — INSTANT 0.5s PLAYBACK!
-                    console.log(`[INFO] [VoiceServer] Playing first track directly via FFmpeg (instant playback!): ${streamUrl.substring(0, 60)}...`);
+                if (isFirstTrackInVC && streamUrl && (streamUrl.includes('googlevideo.com') || streamUrl.includes('soundcloud.com') || !videoInputUrl)) {
+                    // FIRST TRACK (BOT BARU MASUK VC): Direct FFmpeg stream like commit fd5769b — INSTANT 0.5s PLAYBACK!
+                    console.log(`[INFO] [VoiceServer] Playing first track directly via FFmpeg (bot joining VC): ${streamUrl.substring(0, 60)}...`);
                     ffmpeg = spawn('ffmpeg', [
                         '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
                         '-user_agent', userAgent,
@@ -593,7 +596,7 @@ app.post('/join-and-play', async (req, res) => {
                         '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
                     ], { stdio: ['ignore', 'pipe', 'pipe'] });
                 } else if (videoInputUrl) {
-                    // CONSECUTIVE TRACK (TRACK 2+): Use yt-dlp piping to 100% prevent HTTP 403 Forbidden!
+                    // CONSECUTIVE TRACK (LAGU KE-2 DST / TRANSISI): Use yt-dlp pipe to 100% prevent HTTP 403 Forbidden!
                     const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
                     const cookiesPath = getAbsoluteCookiesPath();
                     const cacheDir = getCacheDir();
