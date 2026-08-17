@@ -142,7 +142,6 @@ const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
 const playSessions = new Map(); // guildId -> sessionId (integer)
-const prefetchStreams = new Map(); // guildId -> { ytdlp, chunks: Buffer[] } pre-spawned yt-dlp for next track
 
 function getFFmpegAudioFilter(filterName) {
     const baseLoudnorm = 'loudnorm=I=-16:TP=-1.5:LRA=11';
@@ -315,51 +314,6 @@ function cleanupStreams(guildId) {
         try { if (stream.ffmpeg) stream.ffmpeg.kill('SIGKILL'); } catch (e) {}
         activeStreams.delete(guildId);
     }
-}
-
-// Kill any pre-fetched yt-dlp process for a guild
-function cleanupPrefetch(guildId) {
-    if (prefetchStreams.has(guildId)) {
-        const pf = prefetchStreams.get(guildId);
-        try { if (pf.ytdlp) pf.ytdlp.kill('SIGKILL'); } catch (e) {}
-        prefetchStreams.delete(guildId);
-    }
-}
-
-// Spawn yt-dlp in background for a YouTube URL to warm up player JS cache
-function startPrefetch(guildId, youtubeUrl) {
-    cleanupPrefetch(guildId);
-    const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
-    const cacheDir = getCacheDir();
-    const cookiesPath = getAbsoluteCookiesPath();
-    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
-    const ytdlpArgs = [
-        '-4',
-        '--js-runtimes', 'node',
-        '--extractor-args', `youtube:player_client=${ytdlpClients}`,
-        '-f', 'ba/ba*/bestaudio/b',
-        '--concurrent-fragments', '5',
-        '--no-playlist',
-        '--geo-bypass',
-        '--no-check-certificates',
-        '--no-warnings',
-        '--user-agent', userAgent,
-        '-o', '-',
-        youtubeUrl
-    ];
-    if (cacheDir) ytdlpArgs.unshift('--cache-dir', cacheDir);
-    if (cookiesPath) ytdlpArgs.unshift('--cookies', cookiesPath);
-
-    console.log(`[INFO] [VoiceServer] Prefetching yt-dlp for '${youtubeUrl}' in guild ${guildId}`);
-    const ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-    const chunks = [];
-    ytdlp.stdout.on('data', (chunk) => chunks.push(chunk));
-    ytdlp.stderr.on('data', (d) => {
-        const msg = d.toString().trim();
-        if (msg) console.log(`[prefetch ${guildId}] ${msg}`);
-    });
-    ytdlp.on('error', () => {});
-    prefetchStreams.set(guildId, { ytdlp, chunks, url: youtubeUrl });
 }
 
 // Notify Go Bot of track end
