@@ -3,18 +3,20 @@ package commands
 import (
 	"fmt"
 
+	"aetrna-music/internal/i18n"
 	"aetrna-music/internal/music"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 func (h *Handler) HandleFavoriteAdd(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	lang := h.GetGuildLang(i.GuildID)
 	queue := h.store.Get(i.GuildID)
 	if queue.NowPlaying == nil {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Ga ada lagu yang diputar sekarang buat ditambahkan ke favorites!",
+				Content: i18n.Globali18n.T(lang, "no_fav_playing_direct"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -27,7 +29,7 @@ func (h *Handler) HandleFavoriteAdd(s *discordgo.Session, i *discordgo.Interacti
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: fmt.Sprintf("❌ Gagal nambah ke favorites: %v", err),
+				Content: i18n.Globali18n.T(lang, "favorite_error", err),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -37,18 +39,19 @@ func (h *Handler) HandleFavoriteAdd(s *discordgo.Session, i *discordgo.Interacti
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("⭐ **%s** ditambahkan ke favorites kamu!", song.Title),
+			Content: i18n.Globali18n.T(lang, "added_favorite", song.Title),
 		},
 	})
 }
 
 func (h *Handler) HandleFavoritesList(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	lang := h.GetGuildLang(i.GuildID)
 	favs, err := h.database.GetFavorites(i.Member.User.ID)
 	if err != nil || len(favs) == 0 {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Lu belum punya favorite songs! Pake `/favorite` saat mutar lagu.",
+				Content: i18n.Globali18n.T(lang, "no_favorites"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -64,11 +67,11 @@ func (h *Handler) HandleFavoritesList(s *discordgo.Session, i *discordgo.Interac
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("⭐ %s's Favorite Songs", i.Member.User.Username),
+		Title:       i18n.Globali18n.T(lang, "favorites_title", i.Member.User.Username),
 		Description: desc,
 		Color:       0xFFFF00,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("Total: %d songs", len(favs)),
+			Text: i18n.Globali18n.T(lang, "favorites_footer", len(favs)),
 		},
 	}
 

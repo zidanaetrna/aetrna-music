@@ -1,18 +1,22 @@
 import React from 'react';
 import { useI18n } from '../context/I18nContext';
 import { useToast } from '../context/ToastContext';
+import { useGuilds, GuildInfo } from '../hooks/useGuilds';
 
 interface TopBarProps {
     activeTab: string;
     selectedGuild: string;
     setSelectedGuild: (guildId: string) => void;
+    token?: string | null;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
     activeTab,
     selectedGuild,
-    setSelectedGuild
+    setSelectedGuild,
+    token = null
 }) => {
+    const { guilds, loading } = useGuilds(token ?? null);
     const { t } = useI18n();
     const { showToast } = useToast();
 
@@ -43,10 +47,12 @@ export const TopBar: React.FC<TopBarProps> = ({
                     onChange={handleGuildChange}
                     className="cf-guild-dropdown"
                 >
-                    <option value="102938475610293847">🟢 Aetrna Lounge (Playing: Echoes of Eternity)</option>
-                    <option value="293847102938471029">🔵 Chill Vibes & Gaming (Queued: 3 tracks)</option>
-                    <option value="384729103847291038">🟣 Code & Music Squad (Idle)</option>
-                    <option value="482910384729103847">⚪ Anime Music Hub (Idle)</option>
+                    {loading && <option value="" disabled>Loading guilds…</option>}
+                    {guilds.map((g: GuildInfo) => (
+                        <option key={g.id} value={g.id}>
+                            {g.status === 'playing' ? '🟢' : '⚪'} {g.name} ({g.status})
+                        </option>
+                    ))}
                 </select>
             </div>
         </header>

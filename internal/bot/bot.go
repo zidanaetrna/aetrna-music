@@ -50,7 +50,7 @@ func New(cfg *config.Config, database *db.DB) (*Bot, error) {
 		session:   dg,
 		cfg:       cfg,
 		db:        database,
-		voice:     voice.NewClient("http://127.0.0.1:3005"),
+		voice:     voice.NewClient("http://127.0.0.1:3005", cfg.InternalIPCToken),
 		startedAt: time.Now(),
 	}, nil
 }
@@ -89,7 +89,7 @@ func (b *Bot) Start() error {
 			go func() {
 				lang := b.db.GetGuildLanguage(guildID)
 				embed := commands.CreateNowPlayingEmbed(&song, q, lang)
-				comps := commands.CreateControlButtons(q.IsPaused)
+				comps := commands.CreateControlButtons(q.IsPaused, lang)
 				_, _ = b.session.ChannelMessageSendComplex(song.TextChannelID, &discordgo.MessageSend{
 					Embeds:     []*discordgo.MessageEmbed{embed},
 					Components: comps,
@@ -181,8 +181,24 @@ func buildInteractionCreate(p ProxiedInteraction) *discordgo.InteractionCreate {
 func (b *Bot) startInternalWebhookServer() {
 	mux := http.NewServeMux()
 
+	ipcToken := b.cfg.InternalIPCToken
+	requireIPCToken := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if ipcToken != "" {
+				reqToken := r.Header.Get("X-Internal-IPC-Token")
+				if reqToken != ipcToken {
+					log.Printf("[WARN] [GoBot] Rejected internal request from %s: invalid IPC token", r.RemoteAddr)
+					w.WriteHeader(http.StatusUnauthorized)
+					_, _ = w.Write([]byte(`{"error":"Unauthorized"}`))
+					return
+				}
+			}
+			next(w, r)
+		}
+	}
+
 	// Track-end event from voice-server
-	mux.HandleFunc("/internal/track-end", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/internal/track-end", requireIPCToken(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			GuildID string `json:"guildId"`
 			Reason  string `json:"reason"`
@@ -196,10 +212,10 @@ func (b *Bot) startInternalWebhookServer() {
 			b.store.Get(body.GuildID).SignalTrackEndWithReason(reason)
 		}
 		w.WriteHeader(http.StatusOK)
-	})
+	}))
 
 	// Interaction proxy — Node.js always defers first, Go Bot uses FollowupMessageCreate
-	mux.HandleFunc("/internal/interaction", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/internal/interaction", requireIPCToken(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 
 		var p ProxiedInteraction
@@ -233,7 +249,7 @@ func (b *Bot) startInternalWebhookServer() {
 				b.handleProxiedCommand(i, p)
 			}
 		}()
-	})
+	}))
 
 	log.Printf("[INFO] [GoBot] Starting HTTP webhook server on 127.0.0.1:47392...")
 	if err := (&http.Server{Addr: "127.0.0.1:47392", Handler: mux}).ListenAndServe(); err != nil {
@@ -251,9 +267,11 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 		}
 	}
 
+	lang := b.db.GetGuildLanguage(p.GuildID)
+
 	if p.MemberVoiceChannelID == "" {
 		followup(&discordgo.WebhookParams{
-			Content: "❌ Lu harus masuk voice channel dulu!",
+			Content: i18n.Globali18n.T(lang, "must_join_voice"),
 			Flags:   discordgo.MessageFlagsEphemeral,
 		})
 		return
@@ -275,7 +293,7 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 	}
 
 	if query == "" {
-		followup(&discordgo.WebhookParams{Content: "❌ Query tidak boleh kosong!"})
+		followup(&discordgo.WebhookParams{Content: i18n.Globali18n.T(lang, "query_empty")})
 		return
 	}
 
@@ -288,7 +306,7 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 	if isSpotifyPlaylist || isSpotifyTrack {
 		if b.spotify == nil || !b.spotify.IsEnabled() {
 			followup(&discordgo.WebhookParams{
-				Content: "❌ Spotify API belum dikonfigurasi! Pastikan `SPOTIFY_CLIENT_ID` & `SPOTIFY_CLIENT_SECRET` diset di `.env`.",
+				Content: i18n.Globali18n.T(lang, "spotify_not_configured"),
 			})
 			return
 		}
@@ -298,7 +316,7 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 			tracks, err := b.spotify.GetPlaylistTracks(query, 50)
 			if err != nil || len(tracks) == 0 {
 				log.Printf("[WARN] [Bot] Failed to resolve Spotify playlist: %v", err)
-				followup(&discordgo.WebhookParams{Content: fmt.Sprintf("❌ Gagal mengambil playlist Spotify: %v", err)})
+				followup(&discordgo.WebhookParams{Content: i18n.Globali18n.T(lang, "spotify_playlist_error", err)})
 				return
 			}
 
@@ -313,7 +331,7 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 			}
 
 			if len(songs) == 0 {
-				followup(&discordgo.WebhookParams{Content: "❌ Gagal mencari lagu pertama dari playlist Spotify!"})
+				followup(&discordgo.WebhookParams{Content: i18n.Globali18n.T(lang, "spotify_first_track_error")})
 				return
 			}
 
@@ -337,7 +355,7 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 			track, err := b.spotify.GetTrack(query)
 			if err != nil || track == nil {
 				log.Printf("[WARN] [Bot] Failed to resolve Spotify track: %v", err)
-				followup(&discordgo.WebhookParams{Content: fmt.Sprintf("❌ Gagal mengambil lagu Spotify: %v", err)})
+				followup(&discordgo.WebhookParams{Content: i18n.Globali18n.T(lang, "spotify_track_error", err)})
 				return
 			}
 			query = fmt.Sprintf("%s - %s", track.Artist, track.Name)
@@ -350,7 +368,7 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 		ytSongs, err := commands.SearchYouTube(query, 1, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 		if err != nil || len(ytSongs) == 0 {
 			log.Printf("[WARN] [Bot] Search returned 0 results for '%s': %v", query, err)
-			followup(&discordgo.WebhookParams{Content: "❌ Ga nemu lagu yang lu cari!"})
+			followup(&discordgo.WebhookParams{Content: i18n.Globali18n.T(lang, "song_not_found")})
 			return
 		}
 		songs = ytSongs
@@ -370,8 +388,6 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 		go queue.PlayNext()
 	}
 
-	lang := b.db.GetGuildLanguage(p.GuildID)
-
 	if isAlreadyPlaying {
 		followup(&discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{commands.CreateAddedToQueueEmbed(&song, queue, lang)},
@@ -379,7 +395,7 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 	} else {
 		followup(&discordgo.WebhookParams{
 			Embeds:     []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(&song, queue, lang)},
-			Components: commands.CreateControlButtons(queue.IsPaused),
+			Components: commands.CreateControlButtons(queue.IsPaused, lang),
 		})
 	}
 }
@@ -442,7 +458,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 	case "queue":
 		q := b.store.Get(p.GuildID)
-		embeds = []*discordgo.MessageEmbed{commands.CreateQueueEmbed(q, 1, 10)}
+		embeds = []*discordgo.MessageEmbed{commands.CreateQueueEmbed(q, 1, 10, lang)}
 
 	case "nowplaying":
 		q := b.store.Get(p.GuildID)
@@ -451,7 +467,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			flags = discordgo.MessageFlagsEphemeral
 		} else {
 			embeds = []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(q.NowPlaying, q, lang)}
-			comps = commands.CreateControlButtons(q.IsPaused)
+			comps = commands.CreateControlButtons(q.IsPaused, lang)
 		}
 
 	case "lyrics", "lirik", "btn_lyrics":
@@ -493,8 +509,8 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		if p.MessageID != "" && q.NowPlaying != nil && q.NowPlaying.Lyrics != nil {
 			if lRes, ok := q.NowPlaying.Lyrics.(*lyrics.LyricsResult); ok {
 				dur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
-				updEmbed := commands.CreateLyricsEmbed(q.NowPlaying, lRes, dur)
-				comps := commands.CreateLyricsButtons(lRes.IsSynced)
+				updEmbed := commands.CreateLyricsEmbed(q.NowPlaying, lRes, dur, lang)
+				comps := commands.CreateLyricsButtons(lRes.IsSynced, lang)
 				_, _ = b.session.FollowupMessageEdit(i.Interaction, p.MessageID, &discordgo.WebhookEdit{
 					Embeds:     &[]*discordgo.MessageEmbed{updEmbed},
 					Components: &comps,
@@ -540,15 +556,25 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 				desc += fmt.Sprintf("**%d.** [%s](%s)\n", idx+1, f.Title, f.URL)
 			}
 			embeds = []*discordgo.MessageEmbed{{
-				Title:       fmt.Sprintf("⭐ %s's Favorites", p.Username),
+				Title:       i18n.Globali18n.T(lang, "favorites_title", p.Username),
 				Description: desc,
 				Color:       0xFFFF00,
+				Footer: &discordgo.MessageEmbedFooter{
+					Text: i18n.Globali18n.T(lang, "favorites_footer", len(favs)),
+				},
 			}}
 		}
 
 	case "language":
 		isAdmin := p.IsAdmin || b.handler.IsAdmin(p.UserID)
 		currentLang := b.db.GetGuildLanguage(p.GuildID)
+
+		validLangs := map[string]bool{"en": true, "id": true, "jp": true}
+		langDisplayName := map[string]string{
+			"en": i18n.Globali18n.T("en", "lang_name"),
+			"id": i18n.Globali18n.T("id", "lang_name"),
+			"jp": i18n.Globali18n.T("jp", "lang_name"),
+		}
 
 		var selectedLang string
 		var opts []*discordgo.ApplicationCommandInteractionDataOption
@@ -557,7 +583,11 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		}
 		for _, opt := range opts {
 			if opt.Name == "lang" {
-				selectedLang = fmt.Sprintf("%v", opt.Value)
+				if s, ok := opt.Value.(string); ok {
+					selectedLang = strings.TrimSpace(strings.ToLower(s))
+				} else {
+					selectedLang = strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", opt.Value)))
+				}
 			}
 		}
 
@@ -565,10 +595,29 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			content = i18n.Globali18n.T(currentLang, "permission_denied")
 			flags = discordgo.MessageFlagsEphemeral
 		} else if selectedLang != "" {
-			_ = b.db.SetGuildLanguage(p.GuildID, selectedLang)
-			content = i18n.Globali18n.T(selectedLang, "language_changed")
+			if !validLangs[selectedLang] {
+				content = i18n.Globali18n.T(currentLang, "language_invalid_code", selectedLang)
+				flags = discordgo.MessageFlagsEphemeral
+			} else {
+				if err := b.db.SetGuildLanguage(p.GuildID, selectedLang); err != nil {
+					log.Printf("[ERROR] [Bot] Failed to set guild language for %s: %v", p.GuildID, err)
+					content = i18n.Globali18n.T(currentLang, "language_db_error")
+					flags = discordgo.MessageFlagsEphemeral
+				} else {
+					log.Printf("[INFO] [Bot] Guild %s language changed from %s to %s by user %s", p.GuildID, currentLang, selectedLang, p.UserID)
+					content = i18n.Globali18n.T(selectedLang, "language_changed")
+					if strings.TrimSpace(content) == "" {
+						content = fmt.Sprintf("🌐 Server language changed to **%s**!", langDisplayName[selectedLang])
+					}
+				}
+			}
 		} else {
-			content = fmt.Sprintf("Current language: **%s**", currentLang)
+			name, ok := langDisplayName[currentLang]
+			if !ok || strings.TrimSpace(name) == "" {
+				name = currentLang
+			}
+			content = i18n.Globali18n.T(currentLang, "language_current", name, currentLang)
+			flags = discordgo.MessageFlagsEphemeral
 		}
 
 	case "filter":
@@ -601,49 +650,55 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 	case "help":
 		embeds = []*discordgo.MessageEmbed{{
-			Title:       "🎵 aetrna-music Commands & Guide",
-			Description: "Prefix: `/` (Slash Commands)",
+			Title:       i18n.Globali18n.T(lang, "help_title"),
+			Description: i18n.Globali18n.T(lang, "help_description"),
 			Color:       0x0099FF,
 			Fields: []*discordgo.MessageEmbedField{
 				{
-					Name:  "🎶 Playback Commands",
-					Value: "`/play <query>` - Play / queue lagu dari YouTube/Spotify\n`/pause` - Pause lagu\n`/resume` - Resume lagu\n`/skip` - Skip ke lagu berikutnya\n`/stop` - Stop & clear queue",
+					Name:  i18n.Globali18n.T(lang, "help_section_playback"),
+					Value: i18n.Globali18n.T(lang, "help_section_playback_value"),
 				},
 				{
-					Name:  "📜 Queue & Collections",
-					Value: "`/queue` - Lihat daftar queue berhalaman\n`/nowplaying` - Lihat lagu yang diputar\n`/favorite` - Tambahkan lagu ke favorites\n`/favorites` - Lihat list favorites",
+					Name:  i18n.Globali18n.T(lang, "help_section_queue"),
+					Value: i18n.Globali18n.T(lang, "help_section_queue_value"),
 				},
 				{
-					Name:  "🎛️ Audio DSP Filters",
-					Value: "`/filter <bassboost/nightcore/vaporwave/8d/pop/off>` - Dynamic audio equalizer",
+					Name:  i18n.Globali18n.T(lang, "help_section_filters"),
+					Value: i18n.Globali18n.T(lang, "help_section_filters_value"),
 				},
 				{
-					Name:  "⭐ System & Info",
-					Value: "`/stats` - Performance & system metrics\n`/ping` - Check latency",
+					Name:  i18n.Globali18n.T(lang, "help_section_info"),
+					Value: i18n.Globali18n.T(lang, "help_section_info_value"),
 				},
 			},
 			Footer: &discordgo.MessageEmbedFooter{
-				Text: "aetrna-music v2.0 • Ultra-fast Go Music Engine",
+				Text: i18n.Globali18n.T(lang, "help_footer"),
 			},
 		}}
 
 	case "stats":
+		if !b.handler.IsAdmin(p.UserID) {
+			content = i18n.Globali18n.T(lang, "stats_owner_only")
+			flags = discordgo.MessageFlagsEphemeral
+			break
+		}
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
 		uptime := time.Since(startTime).Round(time.Second)
 		embeds = []*discordgo.MessageEmbed{{
-			Title: "📊 Bot Performance & Statistics",
+			Title: i18n.Globali18n.T(lang, "stats_title"),
 			Color: 0x00FF00,
 			Fields: []*discordgo.MessageEmbedField{
-				{Name: "⏱️ Uptime", Value: uptime.String(), Inline: true},
-				{Name: "💾 Memory Alloc (RAM)", Value: fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024), Inline: true},
-				{Name: "⚡ Goroutines", Value: fmt.Sprintf("%d", runtime.NumGoroutine()), Inline: true},
-				{Name: "🖥️ Go Version", Value: runtime.Version(), Inline: true},
+				{Name: i18n.Globali18n.T(lang, "stats_uptime"), Value: uptime.String(), Inline: true},
+				{Name: i18n.Globali18n.T(lang, "stats_ram"), Value: fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024), Inline: true},
+				{Name: i18n.Globali18n.T(lang, "stats_goroutines"), Value: fmt.Sprintf("%d", runtime.NumGoroutine()), Inline: true},
+				{Name: i18n.Globali18n.T(lang, "stats_go_version"), Value: runtime.Version(), Inline: true},
 			},
 		}}
 
 	case "ping":
-		content = "🏓 Pong! Webhook Interaction Engine Active ⚡"
+		apiLatency := b.session.HeartbeatLatency().Milliseconds()
+		content = i18n.Globali18n.T(lang, "ping_response", apiLatency)
 
 	// ── Buttons ───────────────────────────────────────────────
 	case "btn_pause":
@@ -651,11 +706,11 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		if q.IsPaused {
 			q.Resume()
 			_ = b.voice.Resume(p.GuildID)
-			content = "▶️ Resumed!"
+			content = i18n.Globali18n.T(lang, "resumed")
 		} else {
 			q.Pause()
 			_ = b.voice.Pause(p.GuildID)
-			content = "⏸️ Paused!"
+			content = i18n.Globali18n.T(lang, "paused")
 		}
 		flags = discordgo.MessageFlagsEphemeral
 
@@ -663,7 +718,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		q := b.store.Get(p.GuildID)
 		q.Stop()
 		_ = b.voice.Stop(p.GuildID)
-		content = "⏹️ Stopped!"
+		content = i18n.Globali18n.T(lang, "stopped_plain")
 		flags = discordgo.MessageFlagsEphemeral
 
 	case "btn_favorite":
@@ -671,9 +726,9 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		if q.NowPlaying != nil {
 			song := q.NowPlaying
 			_ = b.db.AddFavorite(p.UserID, song.Title, song.URL, song.Duration, song.Thumbnail, song.Author)
-			content = fmt.Sprintf("⭐ **%s** ditambahkan ke favorites!", song.Title)
+			content = i18n.Globali18n.T(lang, "added_favorite", song.Title)
 		} else {
-			content = "❌ Ga ada lagu yang diputar!"
+			content = i18n.Globali18n.T(lang, "no_song_playing")
 		}
 		flags = discordgo.MessageFlagsEphemeral
 
@@ -694,9 +749,11 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteraction) {
 	q := b.store.Get(p.GuildID)
+	lang := b.db.GetGuildLanguage(p.GuildID)
+
 	if q.NowPlaying == nil {
 		_, _ = b.session.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: "❌ Tidak ada lagu yang sedang diputar saat ini!",
+			Content: i18n.Globali18n.T(lang, "no_song_playing"),
 			Flags:   discordgo.MessageFlagsEphemeral,
 		})
 		return
@@ -720,9 +777,9 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 	}
 
 	currentDur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
-	embed := commands.CreateLyricsEmbed(song, lResult, currentDur)
+	embed := commands.CreateLyricsEmbed(song, lResult, currentDur, lang)
 	isSynced := lResult != nil && lResult.IsSynced
-	comps := commands.CreateLyricsButtons(isSynced)
+	comps := commands.CreateLyricsButtons(isSynced, lang)
 
 	msg, err := b.session.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds:     []*discordgo.MessageEmbed{embed},
@@ -746,7 +803,7 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 			// Compensate -5.0s FFmpeg audio buffering & streaming startup latency + user LyricsOffset
 			dur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
 
-			updEmbed := commands.CreateLyricsEmbed(np, lResult, dur)
+			updEmbed := commands.CreateLyricsEmbed(np, lResult, dur, lang)
 			_, _ = b.session.FollowupMessageEdit(i.Interaction, targetMsgID, &discordgo.WebhookEdit{
 				Embeds:     &[]*discordgo.MessageEmbed{updEmbed},
 				Components: &comps,

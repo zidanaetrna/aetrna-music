@@ -82,8 +82,8 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 		"--no-check-certificates",
 	}
 
-	if _, err := os.Stat(cookiesPath); err == nil {
-		log.Printf("[INFO] [SearchYouTube] Found cookies file at: %s", cookiesPath)
+	if fi, err := os.Stat(cookiesPath); err == nil && fi.Size() > 100 {
+		log.Printf("[INFO] [SearchYouTube] Found cookies file at: %s (size: %d bytes)", cookiesPath, fi.Size())
 		args = append([]string{"--cookies", cookiesPath}, args...)
 	}
 
@@ -164,6 +164,7 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 
 	args := []string{
 		"-4",
+		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"--default-search", "ytsearch",
 		"--flat-playlist",
 		"--dump-json",
@@ -171,8 +172,8 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 		"--no-check-certificates",
 	}
 
-	if _, err := os.Stat(cookiesPath); err == nil {
-		log.Printf("[INFO] [SearchYouTubeFallback] Found cookies file at: %s", cookiesPath)
+	if fi, err := os.Stat(cookiesPath); err == nil && fi.Size() > 100 {
+		log.Printf("[INFO] [SearchYouTubeFallback] Found cookies file at: %s (size: %d bytes)", cookiesPath, fi.Size())
 		args = append([]string{"--cookies", cookiesPath}, args...)
 	}
 
@@ -249,18 +250,17 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 	})
 
+	lang := h.GetGuildLang(i.GuildID)
+
 	voiceState, err := getVoiceState(s, i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState == nil {
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: "❌ Lu harus masuk voice channel dulu!",
+			Content: i18n.Globali18n.T(lang, "must_join_voice"),
 		})
 		return
 	}
 
 	queue := h.store.Get(i.GuildID)
-
-	// Search songs with cookies support
-	lang := h.database.GetGuildLanguage(i.GuildID)
 
 	songs, err := SearchYouTube(query, 1, h.cfg.CookiesPath, h.cfg.YtdlpClients)
 	if err != nil || len(songs) == 0 {
@@ -284,7 +284,7 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	embed := CreateNowPlayingEmbed(&song, queue, lang)
-	components := CreateControlButtons(queue.IsPaused)
+	components := CreateControlButtons(queue.IsPaused, lang)
 
 	_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds:     []*discordgo.MessageEmbed{embed},
@@ -294,7 +294,7 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 
 
 func (h *Handler) HandleSearch(s *discordgo.Session, i *discordgo.InteractionCreate, query string) {
-	lang := h.database.GetGuildLanguage(i.GuildID)
+	lang := h.GetGuildLang(i.GuildID)
 
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
@@ -326,7 +326,7 @@ func (h *Handler) HandleSearch(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("🔍 SEARCH RESULTS: \"%s\"", query),
+		Title:       i18n.Globali18n.T(lang, "search_results_title", query),
 		Description: desc,
 		Color:       0x0099FF,
 	}
@@ -335,7 +335,7 @@ func (h *Handler) HandleSearch(s *discordgo.Session, i *discordgo.InteractionCre
 		Components: []discordgo.MessageComponent{
 			discordgo.SelectMenu{
 				CustomID:    "select_search_track",
-				Placeholder: "Select track to play...",
+				Placeholder: i18n.Globali18n.T(lang, "search_select_placeholder"),
 				Options:     selectOptions,
 			},
 		},
@@ -397,7 +397,7 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 		query,
 	}
 
-	if _, err := os.Stat(cookiesPath); err == nil {
+	if fi, err := os.Stat(cookiesPath); err == nil && fi.Size() > 100 {
 		args = append([]string{"--cookies", cookiesPath}, args...)
 	}
 

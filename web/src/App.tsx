@@ -5,6 +5,8 @@ import { LoginModal } from './components/LoginModal';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { OverviewTab } from './components/OverviewTab';
+import { useStatus } from './hooks/useStatus';
+import { useLogs } from './hooks/useLogs';
 import '../assets/css/style.css';
 
 const DashboardContent: React.FC = () => {
@@ -15,6 +17,8 @@ const DashboardContent: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const { t } = useI18n();
     const { showToast } = useToast();
+    const { status } = useStatus(token);
+    const { lines, reconnecting } = useLogs(activeTab === 'logs', token);
 
     const handleLogout = () => {
         setToken(null);
@@ -30,7 +34,7 @@ const DashboardContent: React.FC = () => {
         try {
             await fetch('/api/control', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (token ?? '') },
                 body: JSON.stringify({ action: 'play', query, guildId: selectedGuild })
             });
         } catch (e) {}
@@ -60,13 +64,14 @@ const DashboardContent: React.FC = () => {
 
             <div className="main-wrapper">
                 <TopBar 
+                    token={token}
                     activeTab={activeTab}
                     selectedGuild={selectedGuild}
                     setSelectedGuild={setSelectedGuild}
                 />
 
                 <main className="main-content">
-                    {activeTab === 'overview' && <OverviewTab selectedGuild={selectedGuild} />}
+                    {activeTab === 'overview' && <OverviewTab token={token} status={status} selectedGuild={selectedGuild} />}
 
                     {activeTab === 'logs' && (
                         <section className="tab-page active">
@@ -76,9 +81,15 @@ const DashboardContent: React.FC = () => {
                             </div>
                             <div className="glass-card" style={{ padding: '1.5rem' }}>
                                 <div style={{ fontFamily: 'monospace', fontSize: '0.8rem', background: '#000', color: '#10B981', padding: '1.25rem', borderRadius: '10px', height: '350px', overflowY: 'auto', lineHeight: '1.6' }}>
-                                    <div>[INFO] [System] Aetrna Music React Engine v2.1.0 active</div>
-                                    <div>[INFO] [VoiceGateway] WebSocket Session established with Discord Voice Server</div>
-                                    <div>[INFO] [AudioEngine] FFmpeg opus stream active: 320kbps 48kHz Stereo</div>
+                                    {reconnecting && (
+                                        <div style={{ color: '#F59E0B', marginBottom: '0.5rem' }}>[WARN] Reconnecting to log stream...</div>
+                                    )}
+                                    {lines.length === 0 && !reconnecting && (
+                                        <div style={{ color: '#6B7280' }}>Waiting for log events...</div>
+                                    )}
+                                    {lines.map((line, i) => (
+                                        <div key={i} dangerouslySetInnerHTML={{ __html: line }} />
+                                    ))}
                                 </div>
                             </div>
                         </section>
@@ -151,12 +162,17 @@ const DashboardContent: React.FC = () => {
                                 <h3>Platform Configuration</h3>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.85rem 0', borderBottom: '1px solid var(--cf-card-border)' }}>
                                     <span>YouTube Cookies:</span>
-                                    <span className="stat-badge green">cookies.txt Loaded</span>
+                                    {status?.hasCookies === true
+                                        ? <span className="stat-badge green">cookies.txt Loaded</span>
+                                        : <span className="stat-badge grey">Not Loaded</span>
+                                    }
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.85rem 0', borderBottom: '1px solid var(--cf-card-border)' }}>
-                                    <span>Reverse Proxy:</span>
-                                    <span className="stat-badge green">X-Forwarded-For Active</span>
-                                </div>
+                                {status?.clientIP && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.85rem 0', borderBottom: '1px solid var(--cf-card-border)' }}>
+                                        <span>Reverse Proxy:</span>
+                                        <span className="stat-badge">Client IP: {status.clientIP}</span>
+                                    </div>
+                                )}
                             </div>
                         </section>
                     )}

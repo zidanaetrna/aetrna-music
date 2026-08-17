@@ -35,7 +35,7 @@ COPY voice-server/ /app/voice-server/
 COPY bin/ /app/bin/
 COPY package.json /app/
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh /app/aetrna-bot
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh /app/aetrna-bot
 
 # Create persistent data directory
 RUN mkdir -p /app/data

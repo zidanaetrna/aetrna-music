@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"aetrna-music/internal/commands"
+	"aetrna-music/internal/i18n"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -24,52 +25,57 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 				b.handler.HandleSearch(s, i, data.Options[0].StringValue())
 			}
 		case "pause":
+			lang := b.db.GetGuildLanguage(i.GuildID)
 			q := b.store.Get(i.GuildID)
 			q.Pause()
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{Content: "⏸️ Paused!"},
+				Data: &discordgo.InteractionResponseData{Content: i18n.Globali18n.T(lang, "paused")},
 			})
 		case "resume":
+			lang := b.db.GetGuildLanguage(i.GuildID)
 			q := b.store.Get(i.GuildID)
 			q.Resume()
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{Content: "▶️ Resumed!"},
+				Data: &discordgo.InteractionResponseData{Content: i18n.Globali18n.T(lang, "resumed")},
 			})
 		case "skip":
+			lang := b.db.GetGuildLanguage(i.GuildID)
 			q := b.store.Get(i.GuildID)
 			q.Skip()
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{Content: "⏭️ Skipped!"},
+				Data: &discordgo.InteractionResponseData{Content: i18n.Globali18n.T(lang, "skipped_plain")},
 			})
 		case "stop":
+			lang := b.db.GetGuildLanguage(i.GuildID)
 			q := b.store.Get(i.GuildID)
 			q.Stop()
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{Content: "⏹️ Stopped & cleared queue!"},
+				Data: &discordgo.InteractionResponseData{Content: i18n.Globali18n.T(lang, "stopped")},
 			})
 		case "queue":
+			lang := b.db.GetGuildLanguage(i.GuildID)
 			q := b.store.Get(i.GuildID)
-			embed := commands.CreateQueueEmbed(q, 1, 10)
+			embed := commands.CreateQueueEmbed(q, 1, 10, lang)
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}},
 			})
 		case "nowplaying":
+			lang := b.db.GetGuildLanguage(i.GuildID)
 			q := b.store.Get(i.GuildID)
 			if q.NowPlaying == nil {
 				_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{Content: "❌ Tidak ada lagu yang diputar!", Flags: discordgo.MessageFlagsEphemeral},
+					Data: &discordgo.InteractionResponseData{Content: i18n.Globali18n.T(lang, "no_song_playing"), Flags: discordgo.MessageFlagsEphemeral},
 				})
 				return
 			}
-			lang := b.db.GetGuildLanguage(i.GuildID)
 			embed := commands.CreateNowPlayingEmbed(q.NowPlaying, q, lang)
-			comps := commands.CreateControlButtons(q.IsPaused)
+			comps := commands.CreateControlButtons(q.IsPaused, lang)
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{embed}, Components: comps},
@@ -95,6 +101,7 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 	case discordgo.InteractionMessageComponent:
 		data := i.MessageComponentData()
 		q := b.store.Get(i.GuildID)
+		lang := b.db.GetGuildLanguage(i.GuildID)
 
 		switch data.CustomID {
 		case "btn_pause":
@@ -102,26 +109,26 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 				q.Resume()
 				_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{Content: "▶️ Resumed!", Flags: discordgo.MessageFlagsEphemeral},
+					Data: &discordgo.InteractionResponseData{Content: i18n.Globali18n.T(lang, "resumed"), Flags: discordgo.MessageFlagsEphemeral},
 				})
 			} else {
 				q.Pause()
 				_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{Content: "⏸️ Paused!", Flags: discordgo.MessageFlagsEphemeral},
+					Data: &discordgo.InteractionResponseData{Content: i18n.Globali18n.T(lang, "paused"), Flags: discordgo.MessageFlagsEphemeral},
 				})
 			}
 		case "btn_skip":
 			q.Skip()
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{Content: "⏭️ Skipped!", Flags: discordgo.MessageFlagsEphemeral},
+				Data: &discordgo.InteractionResponseData{Content: i18n.Globali18n.T(lang, "skipped_plain"), Flags: discordgo.MessageFlagsEphemeral},
 			})
 		case "btn_stop":
 			q.Stop()
 			_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{Content: "⏹️ Stopped!", Flags: discordgo.MessageFlagsEphemeral},
+				Data: &discordgo.InteractionResponseData{Content: i18n.Globali18n.T(lang, "stopped_plain"), Flags: discordgo.MessageFlagsEphemeral},
 			})
 		case "btn_favorite":
 			b.handler.HandleFavoriteAdd(s, i)

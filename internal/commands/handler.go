@@ -32,6 +32,18 @@ func NewHandler(cfg *config.Config, database *db.DB, store *music.QueueStore, sp
 	}
 }
 
+// GetGuildLang resolves the preferred language for a guild via the database (defaults to "en")
+func (h *Handler) GetGuildLang(guildID string) string {
+	if h == nil || h.database == nil {
+		return "en"
+	}
+	lang := h.database.GetGuildLanguage(guildID)
+	if lang == "" {
+		return "en"
+	}
+	return lang
+}
+
 // CreateNowPlayingEmbed constructs the custom Now Playing UI card with full-width album cover banner
 func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue, lang string) *discordgo.MessageEmbed {
 	volPct := int(queue.Volume * 100)
@@ -134,11 +146,11 @@ func BuildProgressBarImageURL(currentSec, totalSec int) string {
 }
 
 // CreateControlButtons returns the 2-row interactive control buttons below Now Playing
-func CreateControlButtons(isPaused bool) []discordgo.MessageComponent {
-	pauseLabel := "Pause"
+func CreateControlButtons(isPaused bool, lang string) []discordgo.MessageComponent {
+	pauseLabel := i18n.Globali18n.T(lang, "btn_pause")
 	pauseIcon := "⏯️"
 	if isPaused {
-		pauseLabel = "Resume"
+		pauseLabel = i18n.Globali18n.T(lang, "btn_resume")
 		pauseIcon = "▶️"
 	}
 
@@ -152,25 +164,25 @@ func CreateControlButtons(isPaused bool) []discordgo.MessageComponent {
 					Emoji:    &discordgo.ComponentEmoji{Name: pauseIcon},
 				},
 				discordgo.Button{
-					Label:    "Skip",
+					Label:    i18n.Globali18n.T(lang, "btn_skip"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_skip",
 					Emoji:    &discordgo.ComponentEmoji{Name: "⏭️"},
 				},
 				discordgo.Button{
-					Label:    "Prev",
+					Label:    i18n.Globali18n.T(lang, "btn_prev"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_prev",
 					Emoji:    &discordgo.ComponentEmoji{Name: "⏮️"},
 				},
 				discordgo.Button{
-					Label:    "Loop",
+					Label:    i18n.Globali18n.T(lang, "btn_loop"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_loop",
 					Emoji:    &discordgo.ComponentEmoji{Name: "🔁"},
 				},
 				discordgo.Button{
-					Label:    "Shuffle",
+					Label:    i18n.Globali18n.T(lang, "btn_shuffle"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_shuffle",
 					Emoji:    &discordgo.ComponentEmoji{Name: "🔀"},
@@ -180,31 +192,31 @@ func CreateControlButtons(isPaused bool) []discordgo.MessageComponent {
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
-					Label:    "Vol -",
+					Label:    i18n.Globali18n.T(lang, "btn_vol_down"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_vol_down",
 					Emoji:    &discordgo.ComponentEmoji{Name: "🔉"},
 				},
 				discordgo.Button{
-					Label:    "Vol +",
+					Label:    i18n.Globali18n.T(lang, "btn_vol_up"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_vol_up",
 					Emoji:    &discordgo.ComponentEmoji{Name: "🔊"},
 				},
 				discordgo.Button{
-					Label:    "Lyrics",
+					Label:    i18n.Globali18n.T(lang, "btn_lyrics"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_lyrics",
 					Emoji:    &discordgo.ComponentEmoji{Name: "📜"},
 				},
 				discordgo.Button{
-					Label:    "Favorite",
+					Label:    i18n.Globali18n.T(lang, "btn_favorite"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_favorite",
 					Emoji:    &discordgo.ComponentEmoji{Name: "⭐"},
 				},
 				discordgo.Button{
-					Label:    "Stop",
+					Label:    i18n.Globali18n.T(lang, "btn_stop"),
 					Style:    discordgo.DangerButton,
 					CustomID: "btn_stop",
 					Emoji:    &discordgo.ComponentEmoji{Name: "⏹️"},
@@ -215,34 +227,34 @@ func CreateControlButtons(isPaused bool) []discordgo.MessageComponent {
 }
 
 // CreateLyricsEmbed constructs the Live Synced Lyrics UI Embed
-func CreateLyricsEmbed(song *music.Song, res interface{}, currentDur time.Duration) *discordgo.MessageEmbed {
+func CreateLyricsEmbed(song *music.Song, res interface{}, currentDur time.Duration, lang string) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("🎤 LIVE LYRICS — %s", song.Title),
+		Title: i18n.Globali18n.T(lang, "live_lyrics_title", song.Title),
 		Color: 0x9B59B6, // Vibrant Purple
 	}
 
 	if res == nil {
-		embed.Description = "❌ *Lirik tidak ditemukan untuk lagu ini.*"
+		embed.Description = i18n.Globali18n.T(lang, "lyrics_not_found")
 		return embed
 	}
 
 	lResult, ok := res.(*lyrics.LyricsResult)
 	if !ok || lResult == nil {
-		embed.Description = "❌ *Gagal memuat lirik.*"
+		embed.Description = i18n.Globali18n.T(lang, "lyrics_load_fail")
 		return embed
 	}
 
 	if !lResult.IsSynced || len(lResult.Synced) == 0 {
 		text := lResult.Plain
 		if text == "" {
-			text = "❌ *Lirik tidak ditemukan untuk lagu ini.*"
+			text = i18n.Globali18n.T(lang, "lyrics_not_found")
 		}
 		if len(text) > 3800 {
-			text = text[:3800] + "\n\n*(Lirik dipotong karena batas karakter Discord)*"
+			text = text[:3800] + i18n.Globali18n.T(lang, "lyrics_truncated")
 		}
 		embed.Description = text
 		embed.Footer = &discordgo.MessageEmbedFooter{
-			Text: "aetrna-music v2.0 • Plain Text Lyrics",
+			Text: i18n.Globali18n.T(lang, "live_lyrics_footer_plain"),
 		}
 		return embed
 	}
@@ -258,18 +270,18 @@ func CreateLyricsEmbed(song *music.Song, res interface{}, currentDur time.Durati
 
 	var sb strings.Builder
 	if lResult.ArtistName != "" {
-		sb.WriteString(fmt.Sprintf("**Artist:** %s\n\n", lResult.ArtistName))
+		sb.WriteString(i18n.Globali18n.T(lang, "lyrics_artist_line", lResult.ArtistName))
 	}
 
 	if activeIdx == -1 {
-		sb.WriteString("🎵 *(Intro / Instrumental)*\n\n")
+		sb.WriteString(i18n.Globali18n.T(lang, "lyrics_intro_instr"))
 		startLine := 0
 		endLine := 4
 		if endLine > len(lResult.Synced) {
 			endLine = len(lResult.Synced)
 		}
 		for i := startLine; i < endLine; i++ {
-			sb.WriteString(fmt.Sprintf("♪ *%s*\n\n", lResult.Synced[i].Text))
+			sb.WriteString(i18n.Globali18n.T(lang, "lyrics_inactive_line", lResult.Synced[i].Text))
 		}
 	} else {
 		isInstrumentalBreak := false
@@ -302,14 +314,14 @@ func CreateLyricsEmbed(song *music.Song, res interface{}, currentDur time.Durati
 			line := lResult.Synced[i]
 			if i == activeIdx {
 				if isOutro {
-					sb.WriteString("🎼 *(Outro / Music Ending)*\n\n")
+					sb.WriteString(i18n.Globali18n.T(lang, "lyrics_outro"))
 				} else if isInstrumentalBreak {
-					sb.WriteString("🎸 *(Instrumental Break)*\n\n")
+					sb.WriteString(i18n.Globali18n.T(lang, "lyrics_instr_break"))
 				} else {
-					sb.WriteString(fmt.Sprintf("👉 ▶️ **\"%s\"** ◄\n\n", line.Text))
+					sb.WriteString(i18n.Globali18n.T(lang, "lyrics_active_line", line.Text))
 				}
 			} else {
-				sb.WriteString(fmt.Sprintf("♪ *%s*\n\n", line.Text))
+				sb.WriteString(i18n.Globali18n.T(lang, "lyrics_inactive_line", line.Text))
 			}
 		}
 	}
@@ -320,7 +332,7 @@ func CreateLyricsEmbed(song *music.Song, res interface{}, currentDur time.Durati
 
 	embed.Description = sb.String()
 	embed.Footer = &discordgo.MessageEmbedFooter{
-		Text: "aetrna-music v2.0 • Live Synced Lyrics (LRCLIB)",
+		Text: i18n.Globali18n.T(lang, "live_lyrics_footer_synced"),
 	}
 
 	if song.Thumbnail != "" {
@@ -347,7 +359,7 @@ func CreateAddedToQueueEmbed(song *music.Song, queue *music.GuildQueue, lang str
 				Inline: true,
 			},
 			{
-				Name:   "⏱️ Duration",
+				Name:   i18n.Globali18n.T(lang, "progress"),
 				Value:  music.FormatDuration(song.Duration),
 				Inline: true,
 			},
@@ -367,19 +379,19 @@ func CreateAddedToQueueEmbed(song *music.Song, queue *music.GuildQueue, lang str
 	return embed
 }
 
-func CreateLyricsButtons(isSynced bool) []discordgo.MessageComponent {
+func CreateLyricsButtons(isSynced bool, lang string) []discordgo.MessageComponent {
 	if !isSynced {
 		return []discordgo.MessageComponent{
 			discordgo.ActionsRow{
 				Components: []discordgo.MessageComponent{
 					discordgo.Button{
-						Label:    "Full Lyrics",
+						Label:    i18n.Globali18n.T(lang, "btn_full_lyrics"),
 						Style:    discordgo.SecondaryButton,
 						CustomID: "btn_full_lyrics",
 						Emoji:    &discordgo.ComponentEmoji{Name: "📄"},
 					},
 					discordgo.Button{
-						Label:    "Close",
+						Label:    i18n.Globali18n.T(lang, "btn_close"),
 						Style:    discordgo.DangerButton,
 						CustomID: "btn_close_lyrics",
 						Emoji:    &discordgo.ComponentEmoji{Name: "🗑️"},
@@ -393,25 +405,25 @@ func CreateLyricsButtons(isSynced bool) []discordgo.MessageComponent {
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
-					Label:    "-3s",
+					Label:    i18n.Globali18n.T(lang, "btn_sync_minus3"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_lyrics_minus3",
 					Emoji:    &discordgo.ComponentEmoji{Name: "⏪"},
 				},
 				discordgo.Button{
-					Label:    "-1s",
+					Label:    i18n.Globali18n.T(lang, "btn_sync_minus1"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_lyrics_minus1",
 					Emoji:    &discordgo.ComponentEmoji{Name: "◀️"},
 				},
 				discordgo.Button{
-					Label:    "+1s",
+					Label:    i18n.Globali18n.T(lang, "btn_sync_plus1"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_lyrics_plus1",
 					Emoji:    &discordgo.ComponentEmoji{Name: "▶️"},
 				},
 				discordgo.Button{
-					Label:    "+3s",
+					Label:    i18n.Globali18n.T(lang, "btn_sync_plus3"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_lyrics_plus3",
 					Emoji:    &discordgo.ComponentEmoji{Name: "⏩"},
@@ -421,19 +433,19 @@ func CreateLyricsButtons(isSynced bool) []discordgo.MessageComponent {
 		discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
-					Label:    "Reset Sync",
+					Label:    i18n.Globali18n.T(lang, "btn_sync_reset"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_lyrics_reset",
 					Emoji:    &discordgo.ComponentEmoji{Name: "🔄"},
 				},
 				discordgo.Button{
-					Label:    "Full Lyrics",
+					Label:    i18n.Globali18n.T(lang, "btn_full_lyrics"),
 					Style:    discordgo.SecondaryButton,
 					CustomID: "btn_full_lyrics",
 					Emoji:    &discordgo.ComponentEmoji{Name: "📄"},
 				},
 				discordgo.Button{
-					Label:    "Close",
+					Label:    i18n.Globali18n.T(lang, "btn_close"),
 					Style:    discordgo.DangerButton,
 					CustomID: "btn_close_lyrics",
 					Emoji:    &discordgo.ComponentEmoji{Name: "🗑️"},
@@ -444,14 +456,14 @@ func CreateLyricsButtons(isSynced bool) []discordgo.MessageComponent {
 }
 
 // CreateQueueEmbed returns the paginated queue UI mockup with headers and footer
-func CreateQueueEmbed(queue *music.GuildQueue, page, itemsPerPage int) *discordgo.MessageEmbed {
+func CreateQueueEmbed(queue *music.GuildQueue, page, itemsPerPage int, lang string) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{
-		Title: "📜 UPCOMING QUEUE",
+		Title: i18n.Globali18n.T(lang, "queue_title"),
 		Color: 0x2F3136,
 	}
 
 	if len(queue.Songs) == 0 && queue.NowPlaying == nil {
-		embed.Description = "Queue is currently empty! Use `/play` to add songs."
+		embed.Description = i18n.Globali18n.T(lang, "queue_empty_help")
 		return embed
 	}
 
@@ -480,26 +492,30 @@ func CreateQueueEmbed(queue *music.GuildQueue, page, itemsPerPage int) *discordg
 		endIndex = len(queue.Songs)
 	}
 
-	var desc string
-	if queue.NowPlaying != nil {
-		desc += fmt.Sprintf("▶️ **Now Playing:** [%s](%s) (%s)\nRequested by <@%s>\n\n",
-			queue.NowPlaying.Title, queue.NowPlaying.URL, music.FormatDuration(queue.NowPlaying.Duration), queue.NowPlaying.RequestedBy)
-	}
+	headerTemplate := i18n.Globali18n.T(lang, "queue_header_line")
+	headerColumns := i18n.Globali18n.T(lang, "queue_header_columns")
 
-	desc += fmt.Sprintf("```\n%-3s %-42s %-8s\n", "#", "TITLE", "DURATION")
+	var newDesc strings.Builder
+	if queue.NowPlaying != nil {
+		newDesc.WriteString(i18n.Globali18n.T(lang, "queue_now_playing_line",
+			queue.NowPlaying.Title, queue.NowPlaying.URL, music.FormatDuration(queue.NowPlaying.Duration), queue.NowPlaying.RequestedBy))
+	}
+	newDesc.WriteString("```\n")
+	newDesc.WriteString(headerColumns)
+	newDesc.WriteString("\n")
 	for i, song := range queue.Songs[startIndex:endIndex] {
 		trackNum := startIndex + i + 1
 		title := song.Title
 		if len(title) > 40 {
 			title = title[:37] + "..."
 		}
-		desc += fmt.Sprintf("%-3d %-42s %-8s\n", trackNum, title, music.FormatDuration(song.Duration))
+		newDesc.WriteString(fmt.Sprintf(headerTemplate+"\n", fmt.Sprintf("%-3d", trackNum)[:3], fmt.Sprintf("%-42s", title)[:42], fmt.Sprintf("%-8s", music.FormatDuration(song.Duration))[:8]))
 	}
-	desc += "```"
+	newDesc.WriteString("```")
 
-	embed.Description = desc
+	embed.Description = newDesc.String()
 	embed.Footer = &discordgo.MessageEmbedFooter{
-		Text: fmt.Sprintf("Total: %s • Page %d of %d", music.FormatDuration(totalDuration), page, totalPages),
+		Text: i18n.Globali18n.T(lang, "queue_footer", music.FormatDuration(totalDuration), page, totalPages),
 	}
 
 	return embed

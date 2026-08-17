@@ -98,6 +98,153 @@ console.log(generateDependencyReport());
     }
 })();
 
+const GITHUB_REPO = 'zidanaetrna/aetrna-music';
+const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+const RELEASES_PAGE_URL = `https://github.com/${GITHUB_REPO}/releases`;
+const DEFAULT_CHECK_INTERVAL_MS = 20 * 60 * 1000;
+const REQUEST_TIMEOUT_MS = 8 * 1000;
+let VOICE_SERVER_VERSION = 'v2.1.3';
+try {
+    const pkg = require('./package.json');
+    if (pkg && pkg.version) VOICE_SERVER_VERSION = `v${pkg.version}`;
+} catch (_) {}
+
+function parseSemver(raw) {
+    let s = String(raw || '').trim();
+    s = s.replace(/^[vV]/, '');
+    let pre = '';
+    const idx = s.search(/[-+]/);
+    if (idx !== -1) {
+        if (s[idx] === '-') pre = s.substring(idx + 1);
+        s = s.substring(0, idx);
+    }
+    const parts = s.split('.');
+    if (parts.length !== 3) return null;
+    const maj = parseInt(parts[0], 10);
+    const min = parseInt(parts[1], 10);
+    const pat = parseInt(parts[2], 10);
+    if (isNaN(maj) || isNaN(min) || isNaN(pat)) return null;
+    return { major: maj, minor: min, patch: pat, pre };
+}
+
+function compareSemver(a, b) {
+    const sa = parseSemver(a);
+    const sb = parseSemver(b);
+    if (!sa || !sb) return 0;
+    if (sa.major < sb.major) return -1;
+    if (sa.major > sb.major) return 1;
+    if (sa.minor < sb.minor) return -1;
+    if (sa.minor > sb.minor) return 1;
+    if (sa.patch < sb.patch) return -1;
+    if (sa.patch > sb.patch) return 1;
+    if (sa.pre === '' && sb.pre !== '') return 1;
+    if (sa.pre !== '' && sb.pre === '') return -1;
+    return 0;
+}
+
+function getenvBool(key, def) {
+    const v = String(process.env[key] || '').trim();
+    if (v === '') return def;
+    try { return JSON.parse(v.toLowerCase()); } catch (_) { return def; }
+}
+
+async function getRemoteLatest() {
+    if (getenvBool('DISABLE_VERSION_CHECK', false)) {
+        return { tag: VOICE_SERVER_VERSION, changelogURL: RELEASES_PAGE_URL, err: null };
+    }
+    return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+            resolve({ tag: VOICE_SERVER_VERSION, changelogURL: RELEASES_PAGE_URL, err: new Error('request timeout') });
+        }, REQUEST_TIMEOUT_MS);
+        const req = http.request(GITHUB_RELEASES_URL, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+                'User-Agent': `aetrna-music/${VOICE_SERVER_VERSION}`,
+                ...(process.env.GITHUB_TOKEN ? { 'Authorization': `Bearer ${process.env.GITHUB_TOKEN.trim()}` } : {})
+            }
+        }, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                clearTimeout(timeout);
+                if (res.statusCode === 404) {
+                    resolve({ tag: VOICE_SERVER_VERSION, changelogURL: RELEASES_PAGE_URL, err: null });
+                    return;
+                }
+                if (res.statusCode >= 400) {
+                    resolve({ tag: VOICE_SERVER_VERSION, changelogURL: RELEASES_PAGE_URL, err: new Error(`github http ${res.statusCode}`) });
+                    return;
+                }
+                try {
+                    const rel = JSON.parse(data);
+                    if (rel.draft) {
+                        resolve({ tag: VOICE_SERVER_VERSION, changelogURL: RELEASES_PAGE_URL, err: null });
+                        return;
+                    }
+                    if (rel.prerelease && !getenvBool('VERSION_CHECK_PRERELEASE', false)) {
+                        resolve({ tag: VOICE_SERVER_VERSION, changelogURL: RELEASES_PAGE_URL, err: null });
+                        return;
+                    }
+                    const tag = String(rel.tag_name || '').trim();
+                    if (!tag) {
+                        resolve({ tag: VOICE_SERVER_VERSION, changelogURL: RELEASES_PAGE_URL, err: null });
+                        return;
+                    }
+                    resolve({
+                        tag,
+                        changelogURL: rel.html_url || `${RELEASES_PAGE_URL}/tag/${tag}`,
+                        err: null
+                    });
+                } catch (e) {
+                    resolve({ tag: VOICE_SERVER_VERSION, changelogURL: RELEASES_PAGE_URL, err: e });
+                }
+            });
+        });
+        req.on('error', (e) => {
+            clearTimeout(timeout);
+            resolve({ tag: VOICE_SERVER_VERSION, changelogURL: RELEASES_PAGE_URL, err: e });
+        });
+        req.end();
+    });
+}
+
+let voiceVersionCache = { tag: null, changelogURL: RELEASES_PAGE_URL, checkedAt: 0 };
+async function runVoiceVersionCheck() {
+    if (getenvBool('DISABLE_VERSION_CHECK', false)) return;
+    const now = Date.now();
+    let latest, changelogURL, err;
+    if (voiceVersionCache.tag && (now - voiceVersionCache.checkedAt) < DEFAULT_CHECK_INTERVAL_MS) {
+        latest = voiceVersionCache.tag;
+        changelogURL = voiceVersionCache.changelogURL;
+        err = null;
+    } else {
+        const res = await getRemoteLatest();
+        latest = res.tag;
+        changelogURL = res.changelogURL;
+        err = res.err;
+        voiceVersionCache = { tag: latest, changelogURL, checkedAt: now };
+    }
+    if (err) {
+        console.warn(`[WARN] [VoiceServer] [VersionCheck] Remote latest lookup failed: ${err.message}`);
+        return;
+    }
+    const cmp = compareSemver(VOICE_SERVER_VERSION, latest);
+    if (cmp < 0) {
+        console.warn(`[WARN] [VoiceServer] [VersionCheck] This instance: ${VOICE_SERVER_VERSION} — latest published release: ${latest}. Upgrade recommended: ${changelogURL}`);
+    } else {
+        console.log(`[INFO] [VoiceServer] [VersionCheck] Running ${VOICE_SERVER_VERSION}. Latest published release: ${latest}.`);
+    }
+}
+
+if (!getenvBool('DISABLE_VERSION_CHECK', false)) {
+    setTimeout(() => { runVoiceVersionCheck().catch(() => {}); }, 2000);
+    setInterval(() => { runVoiceVersionCheck().catch(() => {}); }, DEFAULT_CHECK_INTERVAL_MS);
+} else {
+    console.log('[INFO] [VoiceServer] [VersionCheck] Version checking is disabled via DISABLE_VERSION_CHECK.');
+}
+
 const commands = [
     new SlashCommandBuilder()
         .setName('play')
@@ -172,7 +319,13 @@ const discordClient = new Client({
 });
 
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
+const INTERNAL_IPC_TOKEN = process.env.INTERNAL_IPC_TOKEN || 'aetrna-internal-ipc-token-dev-2026';
 const GO_BACKEND = 'http://127.0.0.1:47392/internal/interaction';
+const GO_TRACK_END = 'http://127.0.0.1:47392/internal/track-end';
+const GO_IPC_HEADERS = {
+    'Content-Type': 'application/json',
+    'X-Internal-IPC-Token': INTERNAL_IPC_TOKEN
+};
 
 if (!BOT_TOKEN) {
     console.error('[ERROR] [VoiceServer] DISCORD_TOKEN is missing!');
@@ -185,37 +338,102 @@ discordClient.on('raw', (packet) => {
     }
 });
 
+function commandsEqual(a, b) {
+    try {
+        return JSON.stringify(a) === JSON.stringify(b);
+    } catch (_) { return false; }
+}
+
+async function syncSlashCommands(client) {
+    const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
+    const appId = client.user.id;
+    try {
+        // 1) Fetch existing global commands and compare — only PUT if changed
+        let globalChanged = false;
+        try {
+            const existingGlobal = await rest.get(Routes.applicationCommands(appId));
+            if (!Array.isArray(existingGlobal) || existingGlobal.length !== commands.length) {
+                globalChanged = true;
+            } else {
+                const normalizedExisting = existingGlobal.map(c => ({
+                    name: c.name,
+                    type: c.type,
+                    description: c.description,
+                    options: c.options || [],
+                    default_member_permissions: c.default_member_permissions ?? null,
+                    nsfw: !!c.nsfw,
+                    dm_permission: c.dm_permission ?? true
+                })).sort((x, y) => x.name.localeCompare(y.name));
+                const normalizedDesired = commands.map(c => ({
+                    name: c.name,
+                    type: c.type,
+                    description: c.description,
+                    options: c.options || [],
+                    default_member_permissions: c.default_member_permissions ?? null,
+                    nsfw: !!c.nsfw,
+                    dm_permission: c.dm_permission ?? true
+                })).sort((x, y) => x.name.localeCompare(y.name));
+                globalChanged = !commandsEqual(normalizedExisting, normalizedDesired);
+            }
+        } catch (_) {
+            globalChanged = true;
+        }
+        if (globalChanged) {
+            await rest.put(Routes.applicationCommands(appId), { body: commands });
+            console.log('[INFO] [VoiceServer] Global slash commands UPDATED successfully');
+        } else {
+            console.log('[INFO] [VoiceServer] Global slash commands already up-to-date — skipped registration');
+        }
+
+        // 2) Cleanup ALL guild-level commands (duplicates) — we rely ONLY on global commands
+        const cleanupGuild = async (guildId, guildName) => {
+            try {
+                const existingGuild = await rest.get(Routes.applicationGuildCommands(appId, guildId));
+                if (Array.isArray(existingGuild) && existingGuild.length > 0) {
+                    console.log(`[INFO] [VoiceServer] Cleaning up ${existingGuild.length} stale/duplicate guild-level commands in ${guildName || guildId}`);
+                    for (const cmd of existingGuild) {
+                        try {
+                            await rest.delete(Routes.applicationGuildCommand(appId, guildId, cmd.id));
+                        } catch (_) {}
+                    }
+                }
+            } catch (e) {
+                console.error(`[WARN] [VoiceServer] Guild command cleanup failed for ${guildId}:`, e.message);
+            }
+        };
+        const cleanups = [];
+        for (const [gId, guild] of client.guilds.cache) {
+            cleanups.push(cleanupGuild(gId, guild.name));
+        }
+        if (cleanups.length) await Promise.all(cleanups);
+    } catch (e) {
+        console.error('[WARN] [VoiceServer] Failed to sync slash commands:', e.message);
+    }
+}
+
 discordClient.login(BOT_TOKEN).then(async () => {
     console.log(`[INFO] [VoiceServer] discord.js Client logged in as ${discordClient.user.tag}`);
-    try {
-        const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
-        
-        await rest.put(Routes.applicationCommands(discordClient.user.id), { body: commands });
-        console.log('[INFO] [VoiceServer] Registered global slash commands successfully');
-
-        for (const [gId, guild] of discordClient.guilds.cache) {
-            try {
-                await rest.put(Routes.applicationGuildCommands(discordClient.user.id, gId), { body: commands });
-                console.log(`[INFO] [VoiceServer] Instant-registered guild slash commands for ${guild.name} (${gId})`);
-            } catch (e) {
-                console.error(`[WARN] [VoiceServer] Failed to register guild commands for ${gId}:`, e.message);
-            }
-        }
-    } catch (e) {
-        console.error('[WARN] [VoiceServer] Failed to register slash commands:', e.message);
-    }
+    await syncSlashCommands(discordClient);
 }).catch(err => {
     console.error('[ERROR] [VoiceServer] Login failed:', err.message);
     process.exit(1);
 });
 
 discordClient.on('guildCreate', async (guild) => {
+    const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
+    // Cleanup any orphan guild commands immediately for new guild
     try {
-        const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
-        await rest.put(Routes.applicationGuildCommands(discordClient.user.id, guild.id), { body: commands });
-        console.log(`[INFO] [VoiceServer] Instant-registered guild slash commands for new guild ${guild.name} (${guild.id})`);
+        const existingGuild = await rest.get(Routes.applicationGuildCommands(discordClient.user.id, guild.id));
+        if (Array.isArray(existingGuild) && existingGuild.length > 0) {
+            for (const cmd of existingGuild) {
+                try { await rest.delete(Routes.applicationGuildCommand(discordClient.user.id, guild.id, cmd.id)); } catch (_) {}
+            }
+            console.log(`[INFO] [VoiceServer] Cleaned up stale guild commands for new guild ${guild.name} (${guild.id})`);
+        } else {
+            console.log(`[INFO] [VoiceServer] New guild ${guild.name} (${guild.id}) joined — global commands sync automatically (no guild-level override needed)`);
+        }
     } catch (e) {
-        console.error(`[WARN] [VoiceServer] Failed to register commands for new guild ${guild.id}:`, e.message);
+        console.error(`[WARN] [VoiceServer] Guild ${guild.id} initial cleanup failed:`, e.message);
     }
 });
 
@@ -237,7 +455,7 @@ function sendToGoBot(payload) {
         console.log(`[INFO] [VoiceServer] Forwarding ${payload.command_name || payload.custom_id || 'interaction'} to Go Bot`);
         const req = http.request(GO_BACKEND, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+            headers: Object.assign({}, GO_IPC_HEADERS, { 'Content-Length': Buffer.byteLength(body) }),
             timeout: 12000,
         }, (res) => {
             console.log(`[INFO] [VoiceServer] Go Bot responded HTTP ${res.statusCode} for ${payload.command_name || payload.custom_id}`);
@@ -258,11 +476,55 @@ function sendToGoBot(payload) {
     });
 }
 
+function resolveIsAdmin(interaction) {
+    try {
+        if (interaction.memberPermissions && typeof interaction.memberPermissions.has === 'function') {
+            if (interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) return true;
+        }
+        if (interaction.member && interaction.member.permissions) {
+            const p = interaction.member.permissions;
+            if (typeof p.has === 'function' && p.has(PermissionFlagsBits.Administrator)) return true;
+            if (typeof p === 'string') {
+                const ADMIN_BIT = 1n << 3n;
+                try { if ((BigInt(p) & ADMIN_BIT) !== 0n) return true; } catch (_) {}
+            } else if (typeof p === 'bigint') {
+                const ADMIN_BIT = 1n << 3n;
+                if ((p & ADMIN_BIT) !== 0n) return true;
+            }
+        }
+    } catch (_) {}
+    return false;
+}
+
+const LOCALE_LANG_NAMES = {
+    en: 'English 🇬🇧',
+    id: 'Bahasa Indonesia 🇮🇩',
+    jp: 'Japanese 🇯🇵'
+};
+
 // Receive ALL interactions from Discord Gateway.
 // Node.js ALWAYS defers first (guarantees Discord ack within 3s).
 // Go Bot then edits the deferred message via REST (has 15 minutes).
 discordClient.on('interactionCreate', async (interaction) => {
     if (!interaction.guildId) return;
+
+    // ── Pre-flight permission enforcement for admin-only commands ────────
+    if (interaction.isChatInputCommand()) {
+        const cmd = interaction.commandName;
+        if (cmd === 'language') {
+            const isAdmin = resolveIsAdmin(interaction);
+            if (!isAdmin) {
+                try {
+                    await interaction.reply({
+                        content: '❌ Hanya Administrator Server yang dapat mengubah bahasa bot! (Only Server Administrators can change the bot language!)',
+                        flags: 64 // Ephemeral
+                    });
+                } catch (_) {}
+                console.warn(`[WARN] [VoiceServer] Non-admin user ${interaction.user.tag} (${interaction.user.id}) blocked from /language in guild ${interaction.guildId}`);
+                return;
+            }
+        }
+    }
 
     try {
         // Immediately acknowledge to Discord (prevents "application did not respond")
@@ -283,6 +545,21 @@ discordClient.on('interactionCreate', async (interaction) => {
     const voiceChannelId = voiceChannel?.id || null;
     const voiceChannelMembers = voiceChannel ? voiceChannel.members.filter(m => !m.user.bot).size : 0;
 
+    const isAdmin = resolveIsAdmin(interaction);
+
+    // Extra: sanitize /language option value — only allow known codes
+    let options = interaction.isChatInputCommand() ? serializeOptions(interaction.options.data) : [];
+    if (interaction.isChatInputCommand() && interaction.commandName === 'language') {
+        options = options.map(opt => {
+            if (opt && opt.name === 'lang' && typeof opt.value === 'string') {
+                const val = String(opt.value).trim().toLowerCase();
+                if (LOCALE_LANG_NAMES[val]) return { ...opt, value: val };
+                return { ...opt, value: 'en' }; // fallback safe
+            }
+            return opt;
+        });
+    }
+
     const payload = {
         id: interaction.id,
         token: interaction.token,
@@ -295,11 +572,11 @@ discordClient.on('interactionCreate', async (interaction) => {
         member_voice_channel_id: voiceChannelId,
         voice_channel_members: voiceChannelMembers,
         command_name: interaction.isChatInputCommand() ? interaction.commandName : null,
-        options: interaction.isChatInputCommand() ? serializeOptions(interaction.options.data) : [],
+        options,
         custom_id: (interaction.isButton() || interaction.isStringSelectMenu()) ? interaction.customId : null,
         message_id: (interaction.isButton() || interaction.isStringSelectMenu()) ? interaction.message?.id : null,
         values: interaction.isStringSelectMenu() ? interaction.values : [],
-        is_admin: interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) || false,
+        is_admin: isAdmin,
     };
 
     // Fire and forget — Go Bot has 15 minutes to edit the deferred message
@@ -319,9 +596,9 @@ function cleanupStreams(guildId) {
 // Notify Go Bot of track end
 function notifyBotTrackEnd(guildId, reason) {
     const data = JSON.stringify({ guildId, reason });
-    const req = http.request('http://127.0.0.1:47392/internal/track-end', {
+    const req = http.request(GO_TRACK_END, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+        headers: Object.assign({}, GO_IPC_HEADERS, { 'Content-Length': Buffer.byteLength(data) }),
     });
     req.on('error', () => {});
     req.write(data);
@@ -401,7 +678,18 @@ function createVoiceConnection(guildId, channelId) {
 // Express API for Go Bot to trigger audio playback
 const app = express();
 app.use(express.json());
-const PORT = process.env.PORT || 3005;
+const PORT = process.env.VOICE_PORT || 3005;
+
+const requireIPCToken = (req, res, next) => {
+    const reqToken = req.headers['x-internal-ipc-token'];
+    if (INTERNAL_IPC_TOKEN && reqToken !== INTERNAL_IPC_TOKEN) {
+        console.warn(`[WARN] [VoiceServer] Rejected IPC request from ${req.socket.remoteAddress}: invalid token`);
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+};
+
+app.use(requireIPCToken);
 
 app.post('/join-and-play', async (req, res) => {
     const { guildId, channelId, streamUrl, songUrl, nextSongUrl, volume = 1.0, filter = 'none' } = req.body;
@@ -556,6 +844,13 @@ app.post('/join-and-play', async (req, res) => {
                         const ytdlpClients = process.env.YTDLP_CLIENTS || 'tv';
                         const cookiesPath = getAbsoluteCookiesPath();
                         const cacheDir = getCacheDir();
+                        let cookiesValid = false;
+                        try {
+                            if (cookiesPath) {
+                                const st = fs.statSync(cookiesPath);
+                                cookiesValid = st.size > 100;
+                            }
+                        } catch (_) {}
                         const ytdlpArgs = [
                             '-4',
                             '--js-runtimes', 'node',
@@ -571,7 +866,7 @@ app.post('/join-and-play', async (req, res) => {
                             videoInputUrl
                         ];
                         if (cacheDir) ytdlpArgs.unshift('--cache-dir', cacheDir);
-                        if (cookiesPath) ytdlpArgs.unshift('--cookies', cookiesPath);
+                        if (cookiesValid) ytdlpArgs.unshift('--cookies', cookiesPath);
 
                         ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
                         ffmpeg = spawn('ffmpeg', [

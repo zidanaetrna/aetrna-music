@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -9,10 +10,16 @@ import (
 	"aetrna-music/config"
 	"aetrna-music/db"
 	"aetrna-music/internal/bot"
+	"aetrna-music/internal/version"
 )
 
 func main() {
-	log.Println("[INFO] Starting aetrna-music (Golang Modular Engine v2.0)...")
+	bot.InitLogCapture()
+	log.Printf("[INFO] Starting aetrna-music %s (Golang Modular Engine v2.0)...", version.AppVersion)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	version.StartBackgroundChecker(ctx)
 
 	cfg := config.Load()
 	if cfg.DiscordToken == "" {

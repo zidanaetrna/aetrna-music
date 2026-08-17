@@ -10,15 +10,21 @@ import (
 
 type Client struct {
 	baseURL    string
+	ipcToken   string
 	httpClient *http.Client
 }
 
-func NewClient(baseURL string) *Client {
+func NewClient(baseURL string, ipcToken ...string) *Client {
 	if baseURL == "" {
 		baseURL = "http://127.0.0.1:3005"
 	}
+	token := ""
+	if len(ipcToken) > 0 {
+		token = ipcToken[0]
+	}
 	return &Client{
-		baseURL: baseURL,
+		baseURL:  baseURL,
+		ipcToken: token,
 		httpClient: &http.Client{
 			Timeout: 45 * time.Second,
 		},
@@ -100,6 +106,9 @@ func (c *Client) post(endpoint string, payload interface{}) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if c.ipcToken != "" {
+		req.Header.Set("X-Internal-IPC-Token", c.ipcToken)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

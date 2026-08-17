@@ -34,9 +34,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
             onLoginSuccess(data.token);
             showToast(t('toast_auth_success'), 'success');
         } catch (err) {
-            // Local dev mode fallback
-            onLoginSuccess('local_dev_token');
-            showToast(t('toast_auth_success'), 'success');
+            setErrorMsg('Network error — unable to reach the server. Please try again.');
         }
     };
 

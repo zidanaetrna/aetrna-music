@@ -5,36 +5,39 @@ import (
 	"runtime"
 	"time"
 
+	"aetrna-music/internal/i18n"
+
 	"github.com/bwmarrin/discordgo"
 )
 
 var startTime = time.Now()
 
 func (h *Handler) HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	lang := h.GetGuildLang(i.GuildID)
 	embed := &discordgo.MessageEmbed{
-		Title:       "🎵 aetrna-music Commands & Guide",
-		Description: "Prefix: `/` (Slash Commands) & `!` (Legacy Prefix)",
+		Title:       i18n.Globali18n.T(lang, "help_title"),
+		Description: i18n.Globali18n.T(lang, "help_description"),
 		Color:       0x0099FF,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:  "🎶 Playback Commands",
-				Value: "`/play <query>` - Play / queue lagu dari YouTube/Spotify\n`/pause` - Pause lagu\n`/resume` - Resume lagu\n`/skip` - Skip ke lagu berikutnya\n`/previous` - Play lagu sebelumnya\n`/stop` - Stop & clear queue",
+				Name:  i18n.Globali18n.T(lang, "help_section_playback"),
+				Value: i18n.Globali18n.T(lang, "help_section_playback_value"),
 			},
 			{
-				Name:  "📜 Queue & Collections",
-				Value: "`/queue` - Lihat daftar queue berhalaman\n`/nowplaying` (`/np`) - Lihat lagu yang diputar\n`/shuffle` - Shuffle queue\n`/collection save <name>` - Simpan queue ke SQLite collection\n`/collection load <name>` - Load collection ke queue",
+				Name:  i18n.Globali18n.T(lang, "help_section_queue"),
+				Value: i18n.Globali18n.T(lang, "help_section_queue_value"),
 			},
 			{
-				Name:  "🎛️ Audio DSP Filters",
-				Value: "`/filter <bassboost/nightcore/vaporwave/8d/pop/off>` - Dynamic FFmpeg audio equalizer",
+				Name:  i18n.Globali18n.T(lang, "help_section_filters"),
+				Value: i18n.Globali18n.T(lang, "help_section_filters_value"),
 			},
 			{
-				Name:  "⭐ Favorites & Info",
-				Value: "`/favorite` - Tambahkan lagu sekarang ke favorites\n`/favorites` - Lihat favorite songs\n`/stats` - Performance & system metrics\n`/ping` - Check latency",
+				Name:  i18n.Globali18n.T(lang, "help_section_info"),
+				Value: i18n.Globali18n.T(lang, "help_section_info_value"),
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "aetrna-music v2.0 • Ultra-fast Go Music Engine",
+			Text: i18n.Globali18n.T(lang, "help_footer"),
 		},
 	}
 
@@ -47,11 +50,12 @@ func (h *Handler) HandleHelp(s *discordgo.Session, i *discordgo.InteractionCreat
 }
 
 func (h *Handler) HandleStats(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	lang := h.GetGuildLang(i.GuildID)
 	if !h.IsAdmin(i.Member.User.ID) {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Command ini hanya dapat diakses oleh Bot Owner!",
+				Content: i18n.Globali18n.T(lang, "stats_owner_only"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -64,26 +68,26 @@ func (h *Handler) HandleStats(s *discordgo.Session, i *discordgo.InteractionCrea
 	uptime := time.Since(startTime).Round(time.Second)
 
 	embed := &discordgo.MessageEmbed{
-		Title: "📊 Bot Performance & Statistics",
+		Title: i18n.Globali18n.T(lang, "stats_title"),
 		Color: 0x00FF00,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "⏱️ Uptime",
+				Name:   i18n.Globali18n.T(lang, "stats_uptime"),
 				Value:  uptime.String(),
 				Inline: true,
 			},
 			{
-				Name:   "💾 Memory Alloc (RAM)",
+				Name:   i18n.Globali18n.T(lang, "stats_ram"),
 				Value:  fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024),
 				Inline: true,
 			},
 			{
-				Name:   "⚡ Goroutines",
+				Name:   i18n.Globali18n.T(lang, "stats_goroutines"),
 				Value:  fmt.Sprintf("%d", runtime.NumGoroutine()),
 				Inline: true,
 			},
 			{
-				Name:   "🖥️ Go Version",
+				Name:   i18n.Globali18n.T(lang, "stats_go_version"),
 				Value:  runtime.Version(),
 				Inline: true,
 			},
@@ -99,12 +103,13 @@ func (h *Handler) HandleStats(s *discordgo.Session, i *discordgo.InteractionCrea
 }
 
 func (h *Handler) HandlePing(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	lang := h.GetGuildLang(i.GuildID)
 	apiLatency := s.HeartbeatLatency().Milliseconds()
 
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("🏓 Pong!\n📡 Heartbeat API Latency: **%dms**", apiLatency),
+			Content: i18n.Globali18n.T(lang, "ping_response", apiLatency),
 		},
 	})
 }

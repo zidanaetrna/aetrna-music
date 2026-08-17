@@ -105,6 +105,11 @@ func (a *AuthManager) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 
+		// 3. Fallback to query param ?token=<token> (for EventSource/SSE which can't set custom headers)
+		if token == "" {
+			token = r.URL.Query().Get("token")
+		}
+
 		if !a.ValidateToken(token) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)

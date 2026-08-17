@@ -22,6 +22,7 @@ type Config struct {
 	MaxCacheSizeMB      int64
 	YtdlpClients        string
 	CookiesPath         string
+	InternalIPCToken    string
 }
 
 func Load() *Config {
@@ -31,7 +32,7 @@ func Load() *Config {
 		DiscordToken:        getEnv("DISCORD_TOKEN", ""),
 		SpotifyClientID:     getEnv("SPOTIFY_CLIENT_ID", ""),
 		SpotifyClientSecret: getEnv("SPOTIFY_CLIENT_SECRET", ""),
-		AdminKey:            getEnv("ADMIN_KEY", ""),
+		AdminKey:            getEnv("ADMIN_KEY", getEnv("DASHBOARD_PASSWORD", "")),
 		OwnerID:             getEnv("OWNER_ID", ""),
 		Prefix:              getEnv("PREFIX", "!"),
 		MaxQueueSize:        getEnvAsInt("MAX_QUEUE_SIZE", 100),
@@ -42,6 +43,7 @@ func Load() *Config {
 		MaxCacheSizeMB:      int64(getEnvAsInt("MAX_CACHE_SIZE_MB", 5120)), // Default 5GB
 		YtdlpClients:        getEnv("YTDLP_CLIENTS", "ios,web,android,tv"),
 		CookiesPath:         getEnv("COOKIES_PATH", "./cookies.txt"),
+		InternalIPCToken:    getEnv("INTERNAL_IPC_TOKEN", "aetrna-internal-ipc-token-dev-2026"),
 	}
 }
 

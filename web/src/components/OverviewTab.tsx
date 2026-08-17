@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 import { useI18n } from '../context/I18nContext';
 import { useToast } from '../context/ToastContext';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { StatusData } from '../hooks/useStatus';
 
-interface OverviewTabProps {
+export interface OverviewTabProps {
     selectedGuild: string;
+    token?: string | null;
+    status?: StatusData | null;
 }
 
-export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
+export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild, token = null, status = null }) => {
     const { t } = useI18n();
     const { showToast } = useToast();
     const { connected, telemetry } = useWebSocket();
@@ -17,7 +20,10 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
         try {
             await fetch('/api/control', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + (token ?? ''),
+                },
                 body: JSON.stringify({ action, guildId: selectedGuild })
             });
         } catch (e) {}
@@ -45,7 +51,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
                         <span className="stat-badge green">Live Sync</span>
                     </div>
                     <div className="stat-value-row">
-                        <span className="stat-value">{telemetry.activeGuilds ?? 14}</span>
+                        <span className="stat-value">{telemetry.activeGuilds ?? '—'}</span>
                         <span style={{ color: 'var(--cf-text-muted)', fontSize: '0.75rem' }}>{t('sub_guilds')}</span>
                     </div>
                 </div>
@@ -56,7 +62,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
                         <span className="stat-badge blue">Sub-ms</span>
                     </div>
                     <div className="stat-value-row">
-                        <span className="stat-value">{telemetry.memoryUsage ?? '142 MB'}</span>
+                        <span className="stat-value">{telemetry.memoryUsage ?? '—'}</span>
                         <span style={{ color: 'var(--cf-text-muted)', fontSize: '0.75rem' }}>{t('sub_ram')}</span>
                     </div>
                 </div>
@@ -67,7 +73,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
                         <span className="stat-badge green">100%</span>
                     </div>
                     <div className="stat-value-row">
-                        <span className="stat-value">48h 12m</span>
+                        <span className="stat-value">{status?.uptime ?? '—'}</span>
                         <span style={{ color: 'var(--cf-text-muted)', fontSize: '0.75rem' }}>{t('sub_uptime')}</span>
                     </div>
                 </div>
@@ -82,15 +88,27 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
                             <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
                             Live Stream Engine
                         </span>
-                        <span className="stat-badge green">YouTube Cookies Loaded</span>
+                        {status?.hasCookies === true
+                            ? <span className="stat-badge green">YouTube Cookies Loaded</span>
+                            : <span className="stat-badge">No Cookies</span>
+                        }
                     </div>
 
                     <div className="now-playing-body">
-                        <img src="artwork.png" alt="Track Cover" className="track-thumb" />
+                        <img src={status?.nowPlaying?.thumbnail || 'artwork.png'} alt="Track Cover" className="track-thumb" />
                         <div className="track-meta">
-                            <h3>Aetrna — Echoes of Eternity (Official Audio)</h3>
-                            <p>Aetrna Project • Audio Stream 320kbps Opus</p>
-                            <span className="requested-badge">Requested by @zidanaetrna</span>
+                            {status?.nowPlaying ? (
+                                <>
+                                    <h3>{status.nowPlaying.title}</h3>
+                                    <p>{status.nowPlaying.author}</p>
+                                    <span className="requested-badge">Requested by {status.nowPlaying.requested}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <h3>No Track Playing</h3>
+                                    <p style={{ color: 'var(--cf-text-muted)' }}>Idle — Waiting for queue</p>
+                                </>
+                            )}
                         </div>
                     </div>
 
@@ -160,7 +178,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
             <div className="glass-card queue-table-card">
                 <div className="table-header-row">
                     <h3>{t('title_queue')}</h3>
-                    <span className="stat-badge blue">3 Enqueued</span>
+                    <span className="stat-badge blue">{status?.queue?.length ?? 0} Enqueued</span>
                 </div>
 
                 <table className="queue-table">
@@ -175,32 +193,26 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild }) => {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>1</td>
-                            <td>
-                                <div className="track-row-cell">
-                                    <img src="artwork.png" alt="Thumb" className="row-thumb" />
-                                    <strong>Continuous — Celestial Resonance</strong>
-                                </div>
-                            </td>
-                            <td>YouTube Opus</td>
-                            <td>03:50</td>
-                            <td>@br_lie</td>
-                            <td><span className="status-pill playing">Playing</span></td>
-                        </tr>
-                        <tr>
-                            <td>2</td>
-                            <td>
-                                <div className="track-row-cell">
-                                    <img src="artwork.png" alt="Thumb" className="row-thumb" />
-                                    <strong>Synthwave Horizon — Midnight Drift</strong>
-                                </div>
-                            </td>
-                            <td>Spotify HQ</td>
-                            <td>05:14</td>
-                            <td>@alex_dev</td>
-                            <td><span className="status-pill queued">Queued</span></td>
-                        </tr>
+                        {status?.queue && status.queue.length > 0 ? (
+                            status.queue.map((song, i) => (
+                                <tr key={i}>
+                                    <td>{i + 1}</td>
+                                    <td>
+                                        <div className="track-row-cell">
+                                            <strong>{song.title}</strong>
+                                        </div>
+                                    </td>
+                                    <td>{song.author}</td>
+                                    <td>{song.duration}</td>
+                                    <td>{song.requested}</td>
+                                    <td><span className="status-pill queued">Queued</span></td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={6} style={{ textAlign: 'center', color: 'var(--cf-text-muted)' }}>No tracks in queue</td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>

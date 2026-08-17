@@ -1,8 +1,6 @@
 package commands
 
 import (
-	"fmt"
-
 	"aetrna-music/internal/i18n"
 	"aetrna-music/internal/music"
 
@@ -10,7 +8,7 @@ import (
 )
 
 func (h *Handler) HandleCollectionSave(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
-	lang := h.database.GetGuildLanguage(i.GuildID)
+	lang := h.GetGuildLang(i.GuildID)
 	queue := h.store.Get(i.GuildID)
 	if len(queue.Songs) == 0 && queue.NowPlaying == nil {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -28,7 +26,7 @@ func (h *Handler) HandleCollectionSave(s *discordgo.Session, i *discordgo.Intera
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: fmt.Sprintf("❌ Error membuat collection '%s': %v", name, err),
+				Content: i18n.Globali18n.T(lang, "collection_create_error", name, err),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -48,18 +46,19 @@ func (h *Handler) HandleCollectionSave(s *discordgo.Session, i *discordgo.Intera
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("📁 Collection **%s** berhasil dibuat dengan %d lagu!", name, count),
+			Content: i18n.Globali18n.T(lang, "collection_created", name, count),
 		},
 	})
 }
 
 func (h *Handler) HandleCollectionLoad(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
+	lang := h.GetGuildLang(i.GuildID)
 	voiceState, err := getVoiceState(s, i.GuildID, i.Member.User.ID)
 	if err != nil || voiceState == nil {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Lu harus masuk voice channel dulu!",
+				Content: i18n.Globali18n.T(lang, "must_join_voice"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -71,7 +70,7 @@ func (h *Handler) HandleCollectionLoad(s *discordgo.Session, i *discordgo.Intera
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Lu belum punya collection!",
+				Content: i18n.Globali18n.T(lang, "no_collections"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -87,7 +86,6 @@ func (h *Handler) HandleCollectionLoad(s *discordgo.Session, i *discordgo.Intera
 	}
 
 	if targetCollID == -1 {
-		lang := h.database.GetGuildLanguage(i.GuildID)
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -103,7 +101,7 @@ func (h *Handler) HandleCollectionLoad(s *discordgo.Session, i *discordgo.Intera
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Collection kosong!",
+				Content: i18n.Globali18n.T(lang, "collection_empty"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -132,7 +130,7 @@ func (h *Handler) HandleCollectionLoad(s *discordgo.Session, i *discordgo.Intera
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("✅ Loaded **%d lagu** dari collection **%s** ke queue!", len(items), name),
+			Content: i18n.Globali18n.T(lang, "collection_loaded", len(items), name),
 		},
 	})
 }

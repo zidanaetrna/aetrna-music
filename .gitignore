@@ -32,6 +32,7 @@ cache/
 Thumbs.db
 .vscode/
 .idea/
+.kiro
 
 # Test
 test_*.js

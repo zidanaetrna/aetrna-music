@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"fmt"
+	"aetrna-music/internal/i18n"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -11,12 +11,13 @@ func (h *Handler) IsAdmin(userID string) bool {
 }
 
 func (h *Handler) HandleYtAuth(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	lang := h.GetGuildLang(i.GuildID)
 	userID := i.Member.User.ID
 	if !h.IsAdmin(userID) {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "❌ Command ini hanya dapat diakses oleh Bot Owner!",
+				Content: i18n.Globali18n.T(lang, "yt_auth_owner_only"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -24,21 +25,21 @@ func (h *Handler) HandleYtAuth(s *discordgo.Session, i *discordgo.InteractionCre
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       "🔧 YouTube Authentication & Cookies Setup Guide",
-		Description: "Jika YouTube memblokir video 18+ (Age-Restricted) atau IP VPS kamu, pasang `cookies.txt` di server:",
+		Title:       i18n.Globali18n.T(lang, "ytauth_title"),
+		Description: i18n.Globali18n.T(lang, "ytauth_description"),
 		Color:       0xFF0000,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:  "1️⃣ Export Cookies",
-				Value: "Install extension Chrome/Firefox **'Get cookies.txt LOCALLY'** dan export cookies YouTube dari akun tumbal.",
+				Name:  i18n.Globali18n.T(lang, "ytauth_step1_name"),
+				Value: i18n.Globali18n.T(lang, "ytauth_step1_value"),
 			},
 			{
-				Name:  "2️⃣ Save to Root Project",
-				Value: fmt.Sprintf("Simpan file hasil export dengan nama `cookies.txt` di folder root project bot (`%s`).", h.cfg.CookiesPath),
+				Name:  i18n.Globali18n.T(lang, "ytauth_step2_name"),
+				Value: i18n.Globali18n.T(lang, "ytauth_step2_value", h.cfg.CookiesPath),
 			},
 			{
-				Name:  "3️⃣ Restart Bot",
-				Value: "Restart bot. Audio stream engine akan otomatis mendeteksi dan menggunakan `cookies.txt` untuk bypass age check!",
+				Name:  i18n.Globali18n.T(lang, "ytauth_step3_name"),
+				Value: i18n.Globali18n.T(lang, "ytauth_step3_value"),
 			},
 		},
 	}

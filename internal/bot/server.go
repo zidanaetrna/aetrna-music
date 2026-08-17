@@ -1,24 +1,115 @@
 package bot
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"aetrna-music/internal/music"
+	"aetrna-music/internal/version"
 	"aetrna-music/web"
 
 	"github.com/gorilla/websocket"
 )
 
+const MaxLogBufferSize = 500
+
+type LogRingBuffer struct {
+	mu       sync.RWMutex
+	entries  []string
+	capacity int
+	channels []chan string
+}
+
+func NewLogRingBuffer(capacity int) *LogRingBuffer {
+	return &LogRingBuffer{entries: make([]string, 0, capacity), capacity: capacity}
+}
+
+func (lb *LogRingBuffer) Write(p []byte) (n int, err error) {
+	line := strings.TrimRight(string(p), "\n")
+	lb.mu.Lock()
+	if len(lb.entries) >= lb.capacity {
+		lb.entries = lb.entries[1:]
+	}
+	lb.entries = append(lb.entries, line)
+	chans := make([]chan string, len(lb.channels))
+	copy(chans, lb.channels)
+	lb.mu.Unlock()
+	for _, ch := range chans {
+		select {
+		case ch <- line:
+		default:
+		}
+	}
+	return len(p), nil
+}
+
+func (lb *LogRingBuffer) Subscribe() (<-chan string, []string) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	ch := make(chan string, 100)
+	lb.channels = append(lb.channels, ch)
+	snapshot := make([]string, len(lb.entries))
+	copy(snapshot, lb.entries)
+	return ch, snapshot
+}
+
+func (lb *LogRingBuffer) Unsubscribe(ch <-chan string) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	for i, c := range lb.channels {
+		if c == ch {
+			lb.channels = append(lb.channels[:i], lb.channels[i+1:]...)
+			close(c)
+			return
+		}
+	}
+}
+
+var globalLogBuffer = NewLogRingBuffer(MaxLogBufferSize)
+
+func InitLogCapture() {
+	mw := io.MultiWriter(os.Stderr, globalLogBuffer)
+	log.SetOutput(mw)
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+}
+
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		if strings.HasPrefix(origin, "http://localhost") ||
+			strings.HasPrefix(origin, "http://127.0.0.1") ||
+			strings.HasPrefix(origin, "https://localhost") ||
+			strings.HasPrefix(origin, "https://127.0.0.1") {
+			return true
+		}
+		host := r.Host
+		if idx := strings.Index(host, ":"); idx != -1 {
+			host = host[:idx]
+		}
+		originHost := origin
+		if strings.HasPrefix(originHost, "http://") {
+			originHost = originHost[7:]
+		} else if strings.HasPrefix(originHost, "https://") {
+			originHost = originHost[8:]
+		}
+		if idx := strings.Index(originHost, ":"); idx != -1 {
+			originHost = originHost[:idx]
+		}
+		return originHost == host
+	},
 }
 
 // getClientIP extracts real client IP respecting reverse proxy headers
@@ -123,6 +214,8 @@ func (b *Bot) StartDashboardServer(port string) {
 			}
 		}
 
+		versionInfo := version.GetInfo(r.Context())
+
 		resp := map[string]interface{}{
 			"status":     "ok",
 			"guildCount": len(guildIDs),
@@ -132,13 +225,54 @@ func (b *Bot) StartDashboardServer(port string) {
 			"nowPlaying": nowPlaying,
 			"queue":      queueItems,
 			"clientIP":   getClientIP(r),
+			"version":    versionInfo,
 		}
 
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
 
-	// 3. SSE Real-Time Event Stream Endpoint
-	mux.HandleFunc("/api/events", func(w http.ResponseWriter, r *http.Request) {
+	// 2b. Version Info Endpoint
+	mux.HandleFunc("/api/version", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		info := version.GetInfo(context.Background())
+		_ = json.NewEncoder(w).Encode(info)
+	}))
+
+	// 3. Active Guilds Endpoint
+	mux.HandleFunc("/api/guilds", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		guildIDs := b.store.GetAllGuildIDs()
+
+		type guildInfo struct {
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			MemberCount int    `json:"memberCount"`
+			Status      string `json:"status"`
+		}
+
+		guilds := make([]guildInfo, 0, len(guildIDs))
+		for _, id := range guildIDs {
+			q := b.store.Get(id)
+
+			status := "idle"
+			if q.IsPlaying {
+				status = "playing"
+			}
+
+			guilds = append(guilds, guildInfo{
+				ID:          id,
+				Name:        id,
+				MemberCount: 0,
+				Status:      status,
+			})
+		}
+
+		_ = json.NewEncoder(w).Encode(guilds)
+	}))
+
+	// 4. SSE Real-Time Event Stream Endpoint
+	mux.HandleFunc("/api/events", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
@@ -169,9 +303,51 @@ func (b *Bot) StartDashboardServer(port string) {
 				flusher.Flush()
 			}
 		}
-	})
+	}))
 
-	// 4. Queue & Controls API Endpoint
+	// 5. System Logs SSE Real-Time Stream Endpoint
+	mux.HandleFunc("/api/logs", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		ch, snapshot := globalLogBuffer.Subscribe()
+		defer globalLogBuffer.Unsubscribe(ch)
+
+		// Send historical snapshot first
+		initial := map[string]interface{}{
+			"type":    "snapshot",
+			"entries": snapshot,
+		}
+		if initBytes, err := json.Marshal(initial); err == nil {
+			fmt.Fprintf(w, "data: %s\n\n", initBytes)
+			flusher.Flush()
+		}
+
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case line := <-ch:
+				evt := map[string]interface{}{
+					"type":      "line",
+					"entry":     line,
+					"timestamp": time.Now().Format("15:04:05"),
+				}
+				evtBytes, _ := json.Marshal(evt)
+				fmt.Fprintf(w, "data: %s\n\n", evtBytes)
+				flusher.Flush()
+			}
+		}
+	}))
+
+	// 6. Queue & Controls API Endpoint
 	mux.HandleFunc("/api/control", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method != "POST" {
@@ -215,7 +391,7 @@ func (b *Bot) StartDashboardServer(port string) {
 	}))
 
 	// 5. Real-Time Telemetry WebSocket Endpoint
-	mux.HandleFunc("/api/ws", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/ws", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			return
@@ -234,7 +410,7 @@ func (b *Bot) StartDashboardServer(port string) {
 				"data": map[string]interface{}{
 					"activeGuilds": b.store.GetActiveCount(),
 					"memoryUsage":  fmt.Sprintf("%d MB", m.Alloc/1024/1024),
-					"uptime":       fmt.Sprintf("%d MB", m.Sys/1024/1024),
+					"uptime":       time.Since(b.startedAt).Round(time.Second).String(),
 					"timestamp":    time.Now().Unix(),
 				},
 			}
@@ -243,7 +419,7 @@ func (b *Bot) StartDashboardServer(port string) {
 				break
 			}
 		}
-	})
+	}))
 
 	// 6. Static Files Web Dashboard Server
 	subFS, err := fs.Sub(web.FS, "dist")
