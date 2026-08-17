@@ -68,11 +68,17 @@ func (b *Bot) Start() error {
 	log.Printf("[INFO] [GoBot] Backend Microservice starting on :47392")
 
 	playCb := func(guildID string, song music.Song) error {
+		// Extract fresh stream URL for fast playback (instant first track!)
+		log.Printf("[INFO] [Bot] Extracting stream URL for '%s'...", song.Title)
+		streamURL, err := commands.GetStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+		if err != nil {
+			return err
+		}
+		log.Printf("[INFO] [Bot] yt-dlp stream URL resolved for '%s'", song.Title)
 		q := b.store.Get(guildID)
 		nextSongURL := q.GetNextSongURL()
 
-		log.Printf("[INFO] [Bot] Delegating playback of '%s' directly to voice-server", song.Title)
-		err := b.voice.PlayStream(guildID, song.ChannelID, song.URL, song.URL, nextSongURL, q.Filter, 1.0)
+		err = b.voice.PlayStream(guildID, song.ChannelID, streamURL, song.URL, nextSongURL, q.Filter, 1.0)
 		if err == nil && song.TextChannelID != "" && song.IsAutoTransition {
 			go func() {
 				lang := b.db.GetGuildLanguage(guildID)
@@ -88,9 +94,9 @@ func (b *Bot) Start() error {
 	}
 	stopCb := func(guildID string) error { return b.voice.Stop(guildID) }
 	preFetchCb := func(guildID, songURL string) (string, error) {
-		log.Printf("[INFO] [Bot] Triggering voice-server background prefetch for '%s' in guild %s", songURL, guildID)
+		log.Printf("[INFO] [Bot] Pre-fetching stream URL in background for '%s'", songURL)
 		_ = b.voice.Prefetch(guildID, songURL)
-		return songURL, nil
+		return commands.GetStreamURL(songURL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 	}
 
 	spotifyCl := spotify.NewClient(b.cfg.SpotifyClientID, b.cfg.SpotifyClientSecret)
