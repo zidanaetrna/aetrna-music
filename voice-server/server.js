@@ -19,7 +19,10 @@ function getAbsoluteCookiesPath() {
 
         for (const p of possiblePaths) {
             if (fs.existsSync(p)) {
-                return p;
+                try {
+                    const st = fs.statSync(p);
+                    if (st.size > 100) return p;
+                } catch (_) {}
             }
         }
     } catch (_) {}
@@ -447,7 +450,7 @@ function createVoiceConnection(guildId, channelId) {
 // Express API for Go Bot to trigger audio playback
 const app = express();
 app.use(express.json());
-const PORT = process.env.PORT || 3005;
+const PORT = process.env.VOICE_PORT || 3005;
 
 app.post('/join-and-play', async (req, res) => {
     const { guildId, channelId, streamUrl, songUrl, nextSongUrl, volume = 1.0, filter = 'none' } = req.body;

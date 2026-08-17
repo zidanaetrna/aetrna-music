@@ -82,8 +82,8 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 		"--no-check-certificates",
 	}
 
-	if _, err := os.Stat(cookiesPath); err == nil {
-		log.Printf("[INFO] [SearchYouTube] Found cookies file at: %s", cookiesPath)
+	if fi, err := os.Stat(cookiesPath); err == nil && fi.Size() > 100 {
+		log.Printf("[INFO] [SearchYouTube] Found valid cookies file at: %s (%d bytes)", cookiesPath, fi.Size())
 		args = append([]string{"--cookies", cookiesPath}, args...)
 	}
 
@@ -164,6 +164,7 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 
 	args := []string{
 		"-4",
+		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"--default-search", "ytsearch",
 		"--flat-playlist",
 		"--dump-json",
@@ -171,8 +172,8 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 		"--no-check-certificates",
 	}
 
-	if _, err := os.Stat(cookiesPath); err == nil {
-		log.Printf("[INFO] [SearchYouTubeFallback] Found cookies file at: %s", cookiesPath)
+	if fi, err := os.Stat(cookiesPath); err == nil && fi.Size() > 100 {
+		log.Printf("[INFO] [SearchYouTubeFallback] Found valid cookies file at: %s (%d bytes)", cookiesPath, fi.Size())
 		args = append([]string{"--cookies", cookiesPath}, args...)
 	}
 
@@ -397,7 +398,7 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 		query,
 	}
 
-	if _, err := os.Stat(cookiesPath); err == nil {
+	if fi, err := os.Stat(cookiesPath); err == nil && fi.Size() > 100 {
 		args = append([]string{"--cookies", cookiesPath}, args...)
 	}
 
