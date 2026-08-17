@@ -392,7 +392,7 @@ function createVoiceConnection(guildId, channelId) {
         throw new Error(`Guild ${guildId} missing or invalid voiceAdapterCreator`);
     }
 
-    console.log(`🎙️ [VoiceServer] Creating fresh voice connection for channel ${channelId} in guild ${guild.name}...`);
+    console.log(`[INFO] [VoiceServer] Creating fresh voice connection for channel ${channelId} in guild ${guild.name}...`);
     connection = joinVoiceChannel({
         channelId: String(channelId),
         guildId: String(guildId),
@@ -404,28 +404,28 @@ function createVoiceConnection(guildId, channelId) {
     connections.set(guildId, connection);
 
     connection.on('stateChange', (oldState, newState) => {
-        console.log(`🔄 [VoiceServer] VoiceConnection ${guildId}: ${oldState.status} ➔ ${newState.status}`);
+        console.log(`[INFO] [VoiceServer] VoiceConnection ${guildId}: ${oldState.status} -> ${newState.status}`);
 
         const net = newState.networking || (oldState && oldState.networking);
         if (net && !net._listenersAttached) {
             net._listenersAttached = true;
 
             net.on('stateChange', (oldNetState, newNetState) => {
-                console.log(`🌐 [VoiceServer NetState ${guildId}] ${oldNetState.code} (${oldNetState.status}) ➔ ${newNetState.code} (${newNetState.status})`);
+                console.log(`[DEBUG] [VoiceServer NetState ${guildId}] ${oldNetState.code} (${oldNetState.status}) -> ${newNetState.code} (${newNetState.status})`);
                 if (newNetState.ws) {
                     newNetState.ws.on('close', (eventOrCode, reason) => {
                         const code = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.code : eventOrCode;
                         const rsn = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.reason : reason;
-                        console.log(`🔌 [VoiceServer WS Closed ${guildId}] Code: ${code}, Reason: "${rsn}"`, JSON.stringify(eventOrCode));
+                        console.log(`[DEBUG] [VoiceServer WS Closed ${guildId}] Code: ${code}, Reason: "${rsn}"`, JSON.stringify(eventOrCode));
                     });
                     newNetState.ws.on('error', (err) => {
-                        console.log(`❌ [VoiceServer WS Error ${guildId}]`, err.message);
+                        console.error(`[ERROR] [VoiceServer WS Error ${guildId}]`, err.message);
                     });
                 }
             });
 
-            net.on('debug', (msg) => console.log(`🔍 [VoiceServer Debug ${guildId}]`, msg));
-            net.on('error', (err) => console.log(`❌ [VoiceServer Error ${guildId}]`, err));
+            net.on('debug', (msg) => console.log(`[DEBUG] [VoiceServer Network ${guildId}]`, msg));
+            net.on('error', (err) => console.error(`[ERROR] [VoiceServer Network ${guildId}]`, err));
         }
     });
 
@@ -703,7 +703,7 @@ app.get('/test-voice', async (req, res) => {
     const channel = guild.channels.cache.find(c => c.isVoiceBased());
     if (!channel) return res.json({ error: `No voice channels in guild ${guild.name}` });
 
-    console.log(`🧪 [/test-voice] Starting diagnostic for guild ${guild.name} (${guild.id}) channel ${channel.name}...`);
+    console.log(`[INFO] [/test-voice] Starting diagnostic for guild ${guild.name} (${guild.id}) channel ${channel.name}...`);
 
     try {
         const connection = joinVoiceChannel({
@@ -714,41 +714,41 @@ app.get('/test-voice', async (req, res) => {
         });
 
         connection.on('stateChange', (oldState, newState) => {
-            console.log(`🔄 [/test-voice State] ${oldState.status} ➔ ${newState.status}`);
+            console.log(`[INFO] [/test-voice State] ${oldState.status} -> ${newState.status}`);
 
             const net = newState.networking || (oldState && oldState.networking);
             if (net && !net._listenersAttached) {
                 net._listenersAttached = true;
 
                 net.on('stateChange', (oldNetState, newNetState) => {
-                    console.log(`🌐 [/test-voice NetState] ${oldNetState.code} (${oldNetState.status}) ➔ ${newNetState.code} (${newNetState.status})`);
+                    console.log(`[DEBUG] [/test-voice NetState] ${oldNetState.code} (${oldNetState.status}) -> ${newNetState.code} (${newNetState.status})`);
                     if (newNetState.ws) {
                         newNetState.ws.on('close', (eventOrCode, reason) => {
                             const code = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.code : eventOrCode;
                             const rsn = (typeof eventOrCode === 'object' && eventOrCode !== null) ? eventOrCode.reason : reason;
-                            console.log(`🔌 [/test-voice Voice WS Closed!] Code: ${code}, Reason: "${rsn}"`, JSON.stringify(eventOrCode));
+                            console.log(`[DEBUG] [/test-voice Voice WS Closed] Code: ${code}, Reason: "${rsn}"`, JSON.stringify(eventOrCode));
                         });
                         newNetState.ws.on('error', (err) => {
-                            console.log(`❌ [/test-voice Voice WS Error!]`, err.message);
+                            console.error(`[ERROR] [/test-voice Voice WS Error]`, err.message);
                         });
                     }
                 });
 
-                net.on('debug', (msg) => console.log('🔍 [Networking Debug]', msg));
-                net.on('error', (err) => console.log('❌ [Networking Error]', err));
+                net.on('debug', (msg) => console.log('[DEBUG] [Networking Debug]', msg));
+                net.on('error', (err) => console.error('[ERROR] [Networking Error]', err));
             }
 
             if (oldState.status === 'connecting' && newState.status === 'signalling') {
-                console.log(`⚠️ [/test-voice Reset!] Connecting ➔ Signalling reset detected!`);
+                console.warn(`[WARN] [/test-voice] Connecting -> Signalling reset detected`);
             }
         });
 
         connection.on('error', (err) => {
-            console.error(`❌ [/test-voice Error]`, err);
+            console.error(`[ERROR] [/test-voice Error]`, err);
         });
 
         connection.on('debug', (msg) => {
-            console.log(`🔍 [/test-voice Debug]`, typeof msg === 'object' ? JSON.stringify(msg) : msg);
+            console.log(`[DEBUG] [/test-voice Debug]`, typeof msg === 'object' ? JSON.stringify(msg) : msg);
         });
 
         res.json({ status: 'initiated', guild: guild.name, channel: channel.name });
@@ -758,5 +758,5 @@ app.get('/test-voice', async (req, res) => {
 });
 
 app.listen(PORT, '127.0.0.1', () => {
-    console.log(`✅ Voice Server listening on http://127.0.0.1:${PORT}`);
+    console.log(`[INFO] [VoiceServer] Voice Server listening on http://127.0.0.1:${PORT}`);
 });
