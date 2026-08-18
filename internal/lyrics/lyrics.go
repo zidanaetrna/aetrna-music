@@ -39,6 +39,12 @@ var (
 	httpClient        = &http.Client{Timeout: 6 * time.Second}
 )
 
+func cleanStandaloneTags(q string) string {
+	reStandalone := regexp.MustCompile(`(?i)\b(official\s+music\s+video|official\s+video|music\s+video|lyric\s+video|official|audio|mv|pv|full\s+ver|full\s+version)\b`)
+	q = reStandalone.ReplaceAllString(q, "")
+	return strings.TrimSpace(q)
+}
+
 // FetchLyrics attempts to fetch synced/plain lyrics from LRCLIB API.
 func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, error) {
 	title, artist := extractTitleAndArtist(trackName)
@@ -55,14 +61,33 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 		}
 	}
 
-	// 2. Try search with title only
+	// 2. If artist has Japanese + Romaji like "美波 (Minami)", try title + Romaji or title + Japanese
+	if title != "" && artist != "" && strings.Contains(artist, "(") {
+		reParen := regexp.MustCompile(`\((.*?)\)`)
+		romaji := reParen.ReplaceAllString(artist, "$1")
+		romaji = strings.TrimSpace(romaji)
+		if romaji != "" {
+			if resp, err := queryLRCLIBSubSearch(fmt.Sprintf("%s %s", title, romaji)); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
+				return parseResponse(resp), nil
+			}
+		}
+		japaneseOnly := reParen.ReplaceAllString(artist, "")
+		japaneseOnly = strings.TrimSpace(japaneseOnly)
+		if japaneseOnly != "" {
+			if resp, err := queryLRCLIBSubSearch(fmt.Sprintf("%s %s", title, japaneseOnly)); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
+				return parseResponse(resp), nil
+			}
+		}
+	}
+
+	// 3. Try search with title only
 	if title != "" {
 		if resp, err := queryLRCLIBSubSearch(title); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
 			return parseResponse(resp), nil
 		}
 	}
 
-	// 3. Fallback search with Netease Cloud Music API (Over 10M Synced LRC Lyrics)
+	// 4. Fallback search with Netease Cloud Music API (Over 10M Synced LRC Lyrics)
 	if title != "" {
 		if resp, err := queryNeteaseLyrics(title, artist); err == nil && resp != nil && resp.SyncedLyrics != "" {
 			log.Printf("[INFO] [Lyrics] Synced lyrics found on Netease Cloud Music fallback!")
@@ -70,7 +95,7 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 		}
 	}
 
-	// 4. Fallback search with full cleaned trackName on LRCLIB
+	// 5. Fallback search with full cleaned trackName on LRCLIB
 	cleanFull := cleanQuery(trackName)
 	if resp, err := queryLRCLIBSubSearch(cleanFull); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
 		return parseResponse(resp), nil
@@ -141,14 +166,16 @@ func extractTitleAndArtist(rawQuery string) (string, string) {
 	cleaned = reTags.ReplaceAllString(cleaned, "")
 	cleaned = strings.TrimSpace(cleaned)
 
-	// Check Japanese quote brackets 「Title」 or 『Title』
-	reBracket := regexp.MustCompile(`^(.*?)[「『](.*?)[」』](.*)$`)
-	matches := reBracket.FindStringSubmatch(cleaned)
+	// Check English, Japanese, and curly quotes: "Title", “Title”, 「Title」, 『Title』
+	reQuotes := regexp.MustCompile(`(?i)(.*?)[“"「『](.*?)[”"」』](.*)`)
+	matches := reQuotes.FindStringSubmatch(cleaned)
 	if len(matches) >= 3 {
-		artistCandidate := strings.TrimSpace(matches[1])
-		titleCandidate := strings.TrimSpace(matches[2])
-		if artistCandidate != "" && titleCandidate != "" {
-			return titleCandidate, artistCandidate
+		titleCand := strings.TrimSpace(matches[2])
+		artistCand := strings.TrimSpace(matches[1] + " " + matches[3])
+		artistCand = cleanStandaloneTags(artistCand)
+		artistCand = strings.Trim(artistCand, "-/| ")
+		if titleCand != "" {
+			return titleCand, artistCand
 		}
 	}
 
@@ -160,10 +187,12 @@ func extractTitleAndArtist(rawQuery string) (string, string) {
 
 	if strings.Contains(cleaned, " - ") {
 		parts := strings.SplitN(cleaned, " - ", 2)
-		return strings.TrimSpace(parts[1]), strings.TrimSpace(parts[0])
+		part0 := cleanStandaloneTags(strings.TrimSpace(parts[0]))
+		part1 := cleanStandaloneTags(strings.TrimSpace(parts[1]))
+		return part1, part0
 	}
 
-	return cleaned, ""
+	return cleanStandaloneTags(cleaned), ""
 }
 
 func queryLRCLIBGet(trackName, artistName string, durationSec int) (*lrclibResponse, error) {
