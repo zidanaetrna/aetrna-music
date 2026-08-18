@@ -7,9 +7,11 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -428,10 +430,34 @@ func (b *Bot) StartDashboardServer(port string) {
 		mux.Handle("/", fileServer)
 	}
 
-	addr := fmt.Sprintf("0.0.0.0:%s", port)
+	initialPort, err := strconv.Atoi(port)
+	if err != nil {
+		initialPort = 8080
+	}
+
+	var listener net.Listener
+	selectedPort := initialPort
+
+	for p := initialPort; p <= initialPort+10; p++ {
+		l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", p))
+		if err == nil {
+			listener = l
+			selectedPort = p
+			break
+		}
+	}
+
+	if listener == nil {
+		log.Printf("[WARN] [WebDashboard] Unable to bind Web Dashboard to any port between %d and %d", initialPort, initialPort+10)
+		return
+	}
+
+	addr := fmt.Sprintf("0.0.0.0:%d", selectedPort)
 	log.Printf("[INFO] [WebDashboard] Self-Hosted Web Dashboard listening on http://%s", addr)
+
+	srv := &http.Server{Handler: mux}
 	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
 			log.Printf("[WARN] [WebDashboard] Dashboard HTTP server warning: %v", err)
 		}
 	}()
