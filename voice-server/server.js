@@ -288,6 +288,7 @@ const commands = [
 const connections = new Map();
 const players = new Map();
 const activeStreams = new Map();
+const audioResources = new Map(); // guildId -> AudioResource
 const playSessions = new Map(); // guildId -> sessionId (integer)
 
 function getFFmpegAudioFilter(filterName) {
@@ -585,6 +586,7 @@ discordClient.on('interactionCreate', async (interaction) => {
 
 // Clean up streams for a guild
 function cleanupStreams(guildId) {
+    audioResources.delete(guildId);
     if (activeStreams.has(guildId)) {
         const stream = activeStreams.get(guildId);
         try { if (stream.ytdlp) stream.ytdlp.kill('SIGKILL'); } catch (e) {}
@@ -886,6 +888,7 @@ app.post('/join-and-play', async (req, res) => {
                         activeStreams.set(guildId, { ffmpeg, ytdlp });
                         const fbResource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.Raw, inlineVolume: true });
                         fbResource.volume.setVolume(volume);
+                        audioResources.set(guildId, fbResource);
                         player.play(fbResource);
                     }
                 });
@@ -898,6 +901,7 @@ app.post('/join-and-play', async (req, res) => {
 
                 const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.Raw, inlineVolume: true });
                 resource.volume.setVolume(volume);
+                audioResources.set(guildId, resource);
 
                 connection.subscribe(player);
                 player.play(resource);
@@ -942,6 +946,17 @@ app.post('/pause', (req, res) => {
 app.post('/resume', (req, res) => {
     const player = players.get(req.body.guildId);
     if (player) player.unpause();
+    res.json({ status: 'ok' });
+});
+
+app.post('/volume', (req, res) => {
+    const { guildId, volume } = req.body;
+    const resource = audioResources.get(guildId);
+    if (resource && resource.volume) {
+        const volVal = parseFloat(volume);
+        resource.volume.setVolume(isNaN(volVal) ? 1.0 : volVal);
+        console.log(`[INFO] [VoiceServer] Audio volume dynamically adjusted to ${(volVal * 100).toFixed(0)}% for guild ${guildId}`);
+    }
     res.json({ status: 'ok' });
 });
 

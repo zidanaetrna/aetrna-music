@@ -95,6 +95,14 @@ func (c *Client) Resume(guildID string) error {
 	return c.post("/resume", payload)
 }
 
+func (c *Client) SetVolume(guildID string, volume float64) error {
+	payload := map[string]interface{}{
+		"guildId": guildID,
+		"volume":  volume,
+	}
+	return c.post("/volume", payload)
+}
+
 func (c *Client) post(endpoint string, payload interface{}) error {
 	data, err := json.Marshal(payload)
 	if err != nil {

@@ -386,6 +386,11 @@ func (b *Bot) StartDashboardServer(port string) {
 				q.Shuffle()
 			case "set_filter":
 				q.SetFilter(body.Value)
+			case "volume", "set_volume":
+				if body.Volume >= 0 {
+					q.Volume = body.Volume
+					_ = b.voice.SetVolume(body.GuildID, q.Volume)
+				}
 			}
 		}
 

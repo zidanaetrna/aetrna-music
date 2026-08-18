@@ -774,6 +774,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		if q.Volume < 0 {
 			q.Volume = 0
 		}
+		_ = b.voice.SetVolume(p.GuildID, q.Volume)
 		volPct := int(q.Volume * 100)
 		content = fmt.Sprintf("🔉 Volume decreased to **%d%%**", volPct)
 		flags = discordgo.MessageFlagsEphemeral
@@ -784,6 +785,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		if q.Volume > 2.0 {
 			q.Volume = 2.0
 		}
+		_ = b.voice.SetVolume(p.GuildID, q.Volume)
 		volPct := int(q.Volume * 100)
 		content = fmt.Sprintf("🔊 Volume increased to **%d%%**", volPct)
 		flags = discordgo.MessageFlagsEphemeral
