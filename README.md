@@ -11,7 +11,7 @@
 [![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![NodeJS](https://img.shields.io/badge/Node.js-22+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Web Dashboard](https://img.shields.io/badge/Web_Dashboard-v2.1.3_React_TS-10B981?style=for-the-badge&logo=react&logoColor=white)](#web-control-panel--dashboard)
+[![Web Dashboard](https://img.shields.io/badge/Web_Dashboard-v2.1.4_React_TS-10B981?style=for-the-badge&logo=react&logoColor=white)](#web-control-panel--dashboard)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
 
@@ -130,10 +130,14 @@ npx aetrna-music init
 | `/search <query>` | Playback | Search tracks with interactive dropdown menu |
 | `/pause` / `/resume` | Playback | Pause or resume audio playback |
 | `/skip` | Playback | Skip to the next track in queue |
+| `/previous` | Playback | Play previous song from history |
 | `/stop` | Playback | Stop playback, clear queue, and leave voice channel |
 | `/queue` | Queue | View paginated queue table with progress bar |
 | `/nowplaying` | Queue | View Now Playing card with interactive control buttons |
 | `/lyrics` | Playback | Fetch synced line-by-line LRC lyrics for current track |
+| `/shuffle` | Queue | Shuffle current track queue |
+| `/loop` | Queue | Toggle loop mode (Off / Song / Queue) |
+| `/volume <level>` | Playback | Set playback volume level (0 – 200%) |
 | `/favorite` | Favorites | Save current song to your personal SQLite favorites |
 | `/favorites` | Favorites | View and play your saved favorite songs |
 | `/collection` | Collection | Save or load custom user playlists (`save <name>`, `load <name>`) |
