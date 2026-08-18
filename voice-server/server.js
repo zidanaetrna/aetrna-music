@@ -921,6 +921,15 @@ app.post('/stop', (req, res) => {
     if (player) { player.stop(); players.delete(guildId); }
     const connection = connections.get(guildId);
     if (connection) { try { connection.destroy(); } catch (e) {} connections.delete(guildId); }
+    
+    // Force disconnect fallback via Discord.js guild voice state (guarantees leaving voice channel)
+    try {
+        const guild = discordClient.guilds.cache.get(String(guildId));
+        if (guild && guild.members.me && guild.members.me.voice) {
+            guild.members.me.voice.disconnect().catch(() => {});
+        }
+    } catch (_) {}
+
     res.json({ status: 'ok' });
 });
 

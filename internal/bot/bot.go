@@ -704,7 +704,6 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		apiLatency := b.session.HeartbeatLatency().Milliseconds()
 		content = i18n.Globali18n.T(lang, "ping_response", apiLatency)
 
-	// ── Buttons ───────────────────────────────────────────────
 	case "btn_pause":
 		q := b.store.Get(p.GuildID)
 		if q.IsPaused {
@@ -734,6 +733,59 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		} else {
 			content = i18n.Globali18n.T(lang, "no_song_playing")
 		}
+		flags = discordgo.MessageFlagsEphemeral
+
+	case "btn_prev":
+		q := b.store.Get(p.GuildID)
+		if q.NowPlaying == nil {
+			content = i18n.Globali18n.T(lang, "no_song_playing")
+		} else {
+			content = "⏮️ " + i18n.Globali18n.T(lang, "btn_prev")
+		}
+		flags = discordgo.MessageFlagsEphemeral
+
+	case "btn_loop":
+		q := b.store.Get(p.GuildID)
+		if q.Loop == music.LoopOff {
+			q.Loop = music.LoopSong
+			content = "🔁 Loop mode set to: **Song**"
+		} else if q.Loop == music.LoopSong {
+			q.Loop = music.LoopQueue
+			content = "🔁 Loop mode set to: **Queue**"
+		} else {
+			q.Loop = music.LoopOff
+			content = "🔁 Loop mode set to: **Off**"
+		}
+		flags = discordgo.MessageFlagsEphemeral
+
+	case "btn_shuffle":
+		q := b.store.Get(p.GuildID)
+		if len(q.Songs) == 0 {
+			content = i18n.Globali18n.T(lang, "queue_empty")
+		} else {
+			q.Shuffle()
+			content = "🔀 " + i18n.Globali18n.T(lang, "shuffle")
+		}
+		flags = discordgo.MessageFlagsEphemeral
+
+	case "btn_vol_down":
+		q := b.store.Get(p.GuildID)
+		q.Volume -= 0.1
+		if q.Volume < 0 {
+			q.Volume = 0
+		}
+		volPct := int(q.Volume * 100)
+		content = fmt.Sprintf("🔉 Volume decreased to **%d%%**", volPct)
+		flags = discordgo.MessageFlagsEphemeral
+
+	case "btn_vol_up":
+		q := b.store.Get(p.GuildID)
+		q.Volume += 0.1
+		if q.Volume > 2.0 {
+			q.Volume = 2.0
+		}
+		volPct := int(q.Volume * 100)
+		content = fmt.Sprintf("🔊 Volume increased to **%d%%**", volPct)
 		flags = discordgo.MessageFlagsEphemeral
 
 	default:
