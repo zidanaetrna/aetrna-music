@@ -260,6 +260,13 @@ const commands = [
     new SlashCommandBuilder().setName('resume').setDescription('Resume playback'),
     new SlashCommandBuilder().setName('queue').setDescription('Show upcoming queue'),
     new SlashCommandBuilder().setName('nowplaying').setDescription('Show interactive Now Playing card'),
+    new SlashCommandBuilder().setName('lyrics').setDescription('Show synced or plain text lyrics for current song'),
+    new SlashCommandBuilder().setName('shuffle').setDescription('Shuffle the current song queue'),
+    new SlashCommandBuilder().setName('loop').setDescription('Toggle loop mode (Off / Song / Queue)'),
+    new SlashCommandBuilder()
+        .setName('volume')
+        .setDescription('Set playback volume level (0 - 200%)')
+        .addIntegerOption(opt => opt.setName('level').setDescription('Volume level percentage (0 - 200)').setMinValue(0).setMaxValue(200).setRequired(true)),
     new SlashCommandBuilder().setName('favorite').setDescription('Add current song to favorites'),
     new SlashCommandBuilder().setName('favorites').setDescription('List your favorite songs'),
     new SlashCommandBuilder()

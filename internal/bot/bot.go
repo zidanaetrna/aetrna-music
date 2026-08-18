@@ -652,6 +652,58 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			content = i18n.Globali18n.T(lang, "filter_changed", filterName)
 		}
 
+	case "volume", "vol":
+		var volVal int = -1
+		var opts []*discordgo.ApplicationCommandInteractionDataOption
+		if len(p.Options) > 0 {
+			_ = json.Unmarshal(p.Options, &opts)
+		}
+		for _, opt := range opts {
+			if opt.Name == "level" || opt.Name == "value" {
+				if v, ok := opt.Value.(float64); ok {
+					volVal = int(v)
+				} else if v, ok := opt.Value.(int64); ok {
+					volVal = int(v)
+				}
+			}
+		}
+
+		q := b.store.Get(p.GuildID)
+		if volVal >= 0 {
+			volFloat := float64(volVal) / 100.0
+			if volFloat > 2.0 {
+				volFloat = 2.0
+			}
+			q.Volume = volFloat
+			_ = b.voice.SetVolume(p.GuildID, q.Volume)
+			content = fmt.Sprintf("🔊 Volume set to **%d%%**", int(q.Volume*100))
+		} else {
+			content = fmt.Sprintf("🔊 Current volume: **%d%%**", int(q.Volume*100))
+			flags = discordgo.MessageFlagsEphemeral
+		}
+
+	case "shuffle":
+		q := b.store.Get(p.GuildID)
+		if len(q.Songs) == 0 {
+			content = i18n.Globali18n.T(lang, "queue_empty")
+		} else {
+			q.Shuffle()
+			content = "🔀 " + i18n.Globali18n.T(lang, "shuffle")
+		}
+
+	case "loop":
+		q := b.store.Get(p.GuildID)
+		if q.Loop == music.LoopOff {
+			q.Loop = music.LoopSong
+			content = "🔁 Loop mode set to: **Song**"
+		} else if q.Loop == music.LoopSong {
+			q.Loop = music.LoopQueue
+			content = "🔁 Loop mode set to: **Queue**"
+		} else {
+			q.Loop = music.LoopOff
+			content = "🔁 Loop mode set to: **Off**"
+		}
+
 	case "help":
 		embeds = []*discordgo.MessageEmbed{{
 			Title:       i18n.Globali18n.T(lang, "help_title"),

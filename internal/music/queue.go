@@ -415,9 +415,12 @@ func (q *GuildQueue) PlayNext() {
 		q.lyricsCancel = nil
 	}
 
+	failReason := q.TrackFailReason
+	q.TrackFailReason = ""
+
 	isAutoTransition := (q.NowPlaying != nil)
 
-	if q.NowPlaying != nil {
+	if q.NowPlaying != nil && q.Loop != LoopSong {
 		q.History = append(q.History, *q.NowPlaying)
 		if len(q.History) > 50 {
 			q.History = q.History[1:]
@@ -456,7 +459,7 @@ func (q *GuildQueue) PlayNext() {
 	}
 
 	var song Song
-	if q.Loop == LoopSong && q.NowPlaying != nil {
+	if q.Loop == LoopSong && q.NowPlaying != nil && failReason != "skip" {
 		song = *q.NowPlaying
 	} else {
 		song = q.Songs[0]
@@ -496,7 +499,7 @@ func (q *GuildQueue) PlayNext() {
 
 	q.mu.Lock()
 	isPlaying := q.IsPlaying
-	failReason := q.TrackFailReason
+	failReason = q.TrackFailReason
 	q.TrackFailReason = ""
 	q.isLooping = false
 	q.mu.Unlock()
