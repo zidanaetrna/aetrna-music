@@ -1,6 +1,6 @@
 {
   "name": "aetrna-music",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "description": "A fast, self-hosted Discord music platform",
   "main": "bin/cli.js",
   "bin": {

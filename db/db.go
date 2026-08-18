@@ -279,18 +279,38 @@ func (db *DB) GetSearchCache(query string) (string, bool) {
 }
 
 func (db *DB) SetGuildLanguage(guildID, lang string) error {
+	if db == nil || db.DB == nil {
+		return fmt.Errorf("database connection is nil")
+	}
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	// Ensure guild_settings table exists (resilient check for legacy SQLite databases)
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS guild_settings (
+		guild_id TEXT PRIMARY KEY,
+		language TEXT DEFAULT 'en',
+		prefix TEXT DEFAULT '!',
+		default_volume INTEGER DEFAULT 100
+	);`)
 
 	_, err := db.Exec(
 		`INSERT INTO guild_settings (guild_id, language) VALUES (?, ?) 
 		 ON CONFLICT(guild_id) DO UPDATE SET language=excluded.language`,
 		guildID, lang,
 	)
+	if err != nil {
+		_, err = db.Exec(
+			`INSERT OR REPLACE INTO guild_settings (guild_id, language) VALUES (?, ?)`,
+			guildID, lang,
+		)
+	}
 	return err
 }
 
 func (db *DB) GetGuildLanguage(guildID string) string {
+	if db == nil || db.DB == nil {
+		return "en"
+	}
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 

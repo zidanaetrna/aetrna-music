@@ -599,7 +599,11 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 				content = i18n.Globali18n.T(currentLang, "language_invalid_code", selectedLang)
 				flags = discordgo.MessageFlagsEphemeral
 			} else {
-				if err := b.db.SetGuildLanguage(p.GuildID, selectedLang); err != nil {
+				if b.db == nil {
+					log.Printf("[ERROR] [Bot] Cannot change guild language: DB instance is nil")
+					content = i18n.Globali18n.T(currentLang, "language_db_error")
+					flags = discordgo.MessageFlagsEphemeral
+				} else if err := b.db.SetGuildLanguage(p.GuildID, selectedLang); err != nil {
 					log.Printf("[ERROR] [Bot] Failed to set guild language for %s: %v", p.GuildID, err)
 					content = i18n.Globali18n.T(currentLang, "language_db_error")
 					flags = discordgo.MessageFlagsEphemeral
