@@ -150,7 +150,18 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 		return searchYouTubeFallback(query, limit, cookiesPath, ytdlpClients)
 	}
 
-	log.Printf("[INFO] [SearchYouTube] Primary search succeeded. Found %d songs for query '%s'", len(songs), query)
+	if !strings.HasPrefix(query, "http://") && !strings.HasPrefix(query, "https://") && len(songs) > 1 {
+		scored := RankCandidates(query, songs)
+		rankedSongs := make([]music.Song, len(scored))
+		for i, sc := range scored {
+			rankedSongs[i] = sc.Song
+		}
+		songs = rankedSongs
+		log.Printf("[INFO] [SearchYouTube] Deterministically ranked %d candidates for query '%s' (top winner: '%s')", len(songs), query, songs[0].Title)
+	} else {
+		log.Printf("[INFO] [SearchYouTube] Primary search succeeded. Found %d songs for query '%s'", len(songs), query)
+	}
+
 	return songs, nil
 }
 
@@ -262,7 +273,7 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	queue := h.store.Get(i.GuildID)
 
-	songs, err := SearchYouTube(query, 1, h.cfg.CookiesPath, h.cfg.YtdlpClients)
+	songs, err := SearchYouTube(query, 5, h.cfg.CookiesPath, h.cfg.YtdlpClients)
 	if err != nil || len(songs) == 0 {
 		log.Printf("[WARN] [HandlePlay] Search returned 0 songs for query '%s'. Err: %v", query, err)
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{

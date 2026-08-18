@@ -103,7 +103,7 @@ const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/release
 const RELEASES_PAGE_URL = `https://github.com/${GITHUB_REPO}/releases`;
 const DEFAULT_CHECK_INTERVAL_MS = 20 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 8 * 1000;
-let VOICE_SERVER_VERSION = 'v2.1.4';
+let VOICE_SERVER_VERSION = 'v2.1.5';
 try {
     const pkg = require('./package.json');
     if (pkg && pkg.version) VOICE_SERVER_VERSION = `v${pkg.version}`;

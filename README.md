@@ -11,7 +11,7 @@
 [![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![NodeJS](https://img.shields.io/badge/Node.js-22+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Web Dashboard](https://img.shields.io/badge/Web_Dashboard-v2.1.4_React_TS-10B981?style=for-the-badge&logo=react&logoColor=white)](#web-control-panel--dashboard)
+[![Web Dashboard](https://img.shields.io/badge/Web_Dashboard-v2.1.5_React_TS-10B981?style=for-the-badge&logo=react&logoColor=white)](#web-control-panel--dashboard)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
 
@@ -33,8 +33,7 @@
 - **Audio Filters**: On-the-fly FFmpeg DSP filters (`bassboost`, `nightcore`, `vaporwave`, `8d`, `pop`).
 - **Synced LRC Lyrics**: Live line-by-line synchronized lyrics directly in Discord embeds (`/lyrics`).
 - **Docker-Ready**: Instant containerized setup without assembling dependencies manually.
-
----
+- **Smart YouTube Search Ranker**: Deterministic 5-candidate ranking in Go (< 0.05ms) with zero network overhead. Solve broadcaster TV-size clip traps for anime/J-Pop queries without query manipulation. [Read full documentation in docs/search-ranking.md](docs/search-ranking.md).
 
 ## Try the Bot
 

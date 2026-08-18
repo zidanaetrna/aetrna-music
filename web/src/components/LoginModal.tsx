@@ -100,7 +100,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
                     
                         <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
                             <span style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 500 }}>
-                                Aetrna's Music v2.1.4
+                                Aetrna's Music v2.1.5
                             </span>
                         </div>
                     </form>
