@@ -84,7 +84,7 @@ func (b *Bot) Start() error {
 		}
 
 		nextSongURL := q.GetNextSongURL()
-		err = b.voice.PlayStream(guildID, song.ChannelID, streamURL, song.URL, nextSongURL, q.Filter, 1.0)
+		err = b.voice.PlayStream(guildID, song.ChannelID, streamURL, song.URL, nextSongURL, q.Filter, q.Volume)
 		if err == nil && song.TextChannelID != "" && song.IsAutoTransition {
 			go func() {
 				lang := b.db.GetGuildLanguage(guildID)
@@ -791,8 +791,10 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		q := b.store.Get(p.GuildID)
 		if q.NowPlaying == nil {
 			content = i18n.Globali18n.T(lang, "no_song_playing")
+		} else if ok := q.PlayPrev(); ok {
+			content = "⏮️ Playing previous track!"
 		} else {
-			content = "⏮️ " + i18n.Globali18n.T(lang, "btn_prev")
+			content = "⏮️ No previous track in history!"
 		}
 		flags = discordgo.MessageFlagsEphemeral
 

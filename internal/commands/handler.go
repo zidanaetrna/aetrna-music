@@ -47,9 +47,6 @@ func (h *Handler) GetGuildLang(guildID string) string {
 // CreateNowPlayingEmbed constructs the custom Now Playing UI card with full-width album cover banner
 func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue, lang string) *discordgo.MessageEmbed {
 	volPct := int(queue.Volume * 100)
-	if queue.Volume > 1.0 {
-		volPct = int(queue.Volume)
-	}
 	if volPct <= 0 {
 		volPct = 100
 	}

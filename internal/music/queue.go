@@ -238,6 +238,26 @@ func (q *GuildQueue) Skip() {
 	q.SignalTrackEndWithReason("skip")
 }
 
+// PlayPrev moves the last song from History back to front of queue and skips current.
+func (q *GuildQueue) PlayPrev() bool {
+	q.mu.Lock()
+	if len(q.History) == 0 {
+		q.mu.Unlock()
+		return false
+	}
+	prev := q.History[len(q.History)-1]
+	q.History = q.History[:len(q.History)-1]
+	// Put current song back at front of queue so it plays after prev
+	if q.NowPlaying != nil {
+		q.Songs = append([]Song{*q.NowPlaying}, q.Songs...)
+	}
+	// Put prev song at front
+	q.Songs = append([]Song{prev}, q.Songs...)
+	q.mu.Unlock()
+	q.SignalTrackEndWithReason("skip")
+	return true
+}
+
 func (q *GuildQueue) SignalTrackEnd() {
 	q.SignalTrackEndWithReason("finished")
 }
