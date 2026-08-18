@@ -1,0 +1,1 @@
+# Keep web/dist directory in git so go embed never fails
