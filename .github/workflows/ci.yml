@@ -37,6 +37,12 @@ jobs:
           node --check voice-server/server.js
           node --check bin/cli.js
 
+      - name: Build Web Dashboard Frontend
+        run: |
+          cd web
+          npm ci
+          npm run build
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
