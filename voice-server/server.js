@@ -255,6 +255,7 @@ const commands = [
         .setDescription('Search for a song on YouTube')
         .addStringOption(opt => opt.setName('query').setDescription('Song name').setRequired(true)),
     new SlashCommandBuilder().setName('skip').setDescription('Skip the current song'),
+    new SlashCommandBuilder().setName('previous').setDescription('Play previous song from history'),
     new SlashCommandBuilder().setName('stop').setDescription('Stop playback and clear queue'),
     new SlashCommandBuilder().setName('pause').setDescription('Pause playback'),
     new SlashCommandBuilder().setName('resume').setDescription('Resume playback'),

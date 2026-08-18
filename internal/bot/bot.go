@@ -787,16 +787,20 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		}
 		flags = discordgo.MessageFlagsEphemeral
 
-	case "btn_prev":
+	case "previous", "prev", "btn_prev":
 		q := b.store.Get(p.GuildID)
 		if q.NowPlaying == nil {
 			content = i18n.Globali18n.T(lang, "no_song_playing")
+			flags = discordgo.MessageFlagsEphemeral
 		} else if ok := q.PlayPrev(); ok {
 			content = "⏮️ Playing previous track!"
 		} else {
 			content = "⏮️ No previous track in history!"
+			flags = discordgo.MessageFlagsEphemeral
 		}
-		flags = discordgo.MessageFlagsEphemeral
+		if cmd == "btn_prev" {
+			flags = discordgo.MessageFlagsEphemeral
+		}
 
 	case "btn_loop":
 		q := b.store.Get(p.GuildID)

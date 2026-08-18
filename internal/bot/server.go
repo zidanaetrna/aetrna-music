@@ -374,14 +374,21 @@ func (b *Bot) StartDashboardServer(port string) {
 			switch body.Action {
 			case "pause":
 				q.Pause()
+				if b.voice != nil {
+					_ = b.voice.Pause(body.GuildID)
+				}
 			case "resume":
 				q.Resume()
+				if b.voice != nil {
+					_ = b.voice.Resume(body.GuildID)
+				}
 			case "skip":
 				q.Skip()
-			case "stop", "disconnect":
+			case "stop", "disconnect", "clear":
 				q.Stop()
-			case "clear":
-				q.Stop()
+				if b.voice != nil {
+					_ = b.voice.Stop(body.GuildID)
+				}
 			case "shuffle":
 				q.Shuffle()
 			case "set_filter":
@@ -389,7 +396,9 @@ func (b *Bot) StartDashboardServer(port string) {
 			case "volume", "set_volume":
 				if body.Volume >= 0 {
 					q.Volume = body.Volume
-					_ = b.voice.SetVolume(body.GuildID, q.Volume)
+					if b.voice != nil {
+						_ = b.voice.SetVolume(body.GuildID, q.Volume)
+					}
 				}
 			}
 		}
