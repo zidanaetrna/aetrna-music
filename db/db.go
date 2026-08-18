@@ -126,6 +126,11 @@ func (db *DB) migrate() error {
 			return err
 		}
 	}
+	// Auto-migrate legacy SQLite databases: ensure missing columns in guild_settings are added
+	_, _ = db.Exec(`ALTER TABLE guild_settings ADD COLUMN language TEXT DEFAULT 'en';`)
+	_, _ = db.Exec(`ALTER TABLE guild_settings ADD COLUMN prefix TEXT DEFAULT '!';`)
+	_, _ = db.Exec(`ALTER TABLE guild_settings ADD COLUMN default_volume INTEGER DEFAULT 100;`)
+
 	return nil
 }
 
@@ -285,13 +290,14 @@ func (db *DB) SetGuildLanguage(guildID, lang string) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	// Ensure guild_settings table exists (resilient check for legacy SQLite databases)
+	// Ensure guild_settings table and 'language' column exist (resilient check for legacy SQLite databases)
 	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS guild_settings (
 		guild_id TEXT PRIMARY KEY,
 		language TEXT DEFAULT 'en',
 		prefix TEXT DEFAULT '!',
 		default_volume INTEGER DEFAULT 100
 	);`)
+	_, _ = db.Exec(`ALTER TABLE guild_settings ADD COLUMN language TEXT DEFAULT 'en';`)
 
 	_, err := db.Exec(
 		`INSERT INTO guild_settings (guild_id, language) VALUES (?, ?) 
