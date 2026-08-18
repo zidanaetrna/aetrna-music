@@ -677,8 +677,10 @@ function createVoiceConnection(guildId, channelId) {
                 entersState(connection, VoiceConnectionStatus.Connecting, 3_000),
             ]);
         } catch {
+            cleanupStreams(guildId);
             try { connection.destroy(); } catch (e) {}
             connections.delete(guildId);
+            notifyBotTrackEnd(guildId, 'disconnected');
         }
     });
 
