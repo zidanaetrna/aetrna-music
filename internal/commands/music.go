@@ -317,10 +317,14 @@ func (h *Handler) HandleSearch(s *discordgo.Session, i *discordgo.InteractionCre
 		if len(label) > 100 {
 			label = label[:97] + "..."
 		}
+		descLabel := fmt.Sprintf("%s • %s", song.Author, music.FormatDuration(song.Duration))
+		if len(descLabel) > 100 {
+			descLabel = descLabel[:97] + "..."
+		}
 		selectOptions = append(selectOptions, discordgo.SelectMenuOption{
 			Label:       label,
 			Value:       song.URL,
-			Description: fmt.Sprintf("%s • %s", song.Author, music.FormatDuration(song.Duration)),
+			Description: descLabel,
 			Emoji:       &discordgo.ComponentEmoji{Name: "🎵"},
 		})
 	}

@@ -47,7 +47,7 @@
   "collection_created": "📁 コレクション **%s** が %d 曲で正常に作成されました！",
   "no_collections": "❌ まだコレクションがありません！",
   "collection_empty": "❌ コレクションが空です！",
-  "collection_loaded": "✅ コレクション **%s** から **%d 曲** をキューに読み込みました！",
+  "collection_loaded": "✅ **%d 曲** をコレクション **%s** からキューに読み込みました！",
   "search_results_title": "🔍 検索結果: \"%s\"",
   "search_select_placeholder": "再生するトラックを選択...",
   "help_title": "🎵 aetrna-music コマンド & ガイド",
