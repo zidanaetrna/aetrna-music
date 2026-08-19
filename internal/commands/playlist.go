@@ -26,17 +26,19 @@ func sendPlaylistResponse(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		flags = discordgo.MessageFlagsEphemeral
 	}
 
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: content,
-			Flags:   flags,
-		},
+	// Node.js pre-defers interactions before proxying to Go Bot.
+	// FollowupMessageCreate sends the response directly into the deferred reply slot.
+	_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Content: content,
+		Flags:   flags,
 	})
 	if err != nil {
-		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: content,
-			Flags:   flags,
+		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: content,
+				Flags:   flags,
+			},
 		})
 	}
 }
@@ -187,10 +189,6 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 		return
 	}
 
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-	})
-
 	queue := h.store.Get(i.GuildID)
 	validCount := 0
 	skippedCount := 0
@@ -229,9 +227,7 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 		msg = fmt.Sprintf("✅ Loaded and enqueued **%d tracks** from saved playlist **'%s'**!", validCount, name)
 	}
 
-	_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Content: msg,
-	})
+	sendPlaylistResponse(s, i, msg, false)
 }
 
 func (h *Handler) HandlePlaylistListTracks(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
