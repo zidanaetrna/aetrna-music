@@ -34,9 +34,9 @@ Analytics overview, live audio stream telemetry, memory consumption metrics, act
 
 <br />
 
-| 🎵 Rich Hybrid Embed Playlist Preview | 🎤 Live Synced LRC Lyrics (`/lyrics`) |
-| :---: | :---: |
-| <img src="docs/screenshots/playlist.png" width="480" alt="Rich Hybrid Embed Playlist Preview" /> | <img src="docs/screenshots/lyrics.png" width="480" alt="Live Synced Lyrics" /> |
+| 🎧 Interactive Now Playing Card (`/nowplaying`) | 🎵 Rich Hybrid Embed Playlist (`/playlist play`) | 🎤 Live Synced LRC Lyrics (`/lyrics`) |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/nowplaying.png" width="320" alt="Interactive Now Playing Card" /> | <img src="docs/screenshots/playlist.png" width="320" alt="Rich Hybrid Embed Playlist Preview" /> | <img src="docs/screenshots/lyrics.png" width="320" alt="Live Synced Lyrics" /> |
 
 ---
 
