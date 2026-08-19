@@ -396,6 +396,11 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 			ytdlpClients = "ios,android"
 		}
 	}
+	target := query
+	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") && !strings.HasPrefix(target, "ytsearch:") {
+		target = "ytsearch1:" + target
+	}
+
 	args := []string{
 		"-4",
 		"--no-cache-dir",
@@ -408,7 +413,7 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 		"--no-warnings",
 		"--user-agent", userAgent,
 		"-g",
-		query,
+		target,
 	}
 
 	if fi, err := os.Stat(cookiesPath); err == nil && fi.Size() > 100 {
