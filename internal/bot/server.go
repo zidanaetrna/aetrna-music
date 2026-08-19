@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -182,7 +183,7 @@ func (b *Bot) StartDashboardServer(port string) {
 
 		var mem runtime.MemStats
 		runtime.ReadMemStats(&mem)
-		ramMB := mem.Alloc / 1024 / 1024
+		ramMB := mem.Sys / 1024 / 1024
 
 		uptime := time.Since(b.startedAt).Round(time.Second).String()
 
@@ -279,46 +280,41 @@ func (b *Bot) StartDashboardServer(port string) {
 		}
 
 		var guilds []guildInfo
-
-		if b.session != nil && b.session.State != nil && len(b.session.State.Guilds) > 0 {
-			for _, g := range b.session.State.Guilds {
-				q := b.store.Get(g.ID)
-				status := "idle"
-				if q != nil && q.IsPlaying {
-					status = "playing"
-				}
-
-				guilds = append(guilds, guildInfo{
-					ID:          g.ID,
-					Name:        g.Name,
-					MemberCount: g.MemberCount,
-					Status:      status,
-				})
+		guildIDs := b.store.GetAllGuildIDs()
+		for _, id := range guildIDs {
+			q := b.store.Get(id)
+			status := "idle"
+			if q != nil && q.IsPlaying {
+				status = "playing"
 			}
-		} else {
-			guildIDs := b.store.GetAllGuildIDs()
-			for _, id := range guildIDs {
-				q := b.store.Get(id)
-				status := "idle"
-				if q != nil && q.IsPlaying {
-					status = "playing"
-				}
 
-				guildName := id
-				if b.session != nil && b.session.State != nil {
-					if g, err := b.session.State.Guild(id); err == nil && g != nil && g.Name != "" {
-						guildName = g.Name
-					}
+			guildName := id
+			memberCount := 0
+			if b.session != nil {
+				if g, err := b.session.Guild(id); err == nil && g != nil && g.Name != "" {
+					guildName = g.Name
+					memberCount = g.ApproximateMemberCount
 				}
-
-				guilds = append(guilds, guildInfo{
-					ID:          id,
-					Name:        guildName,
-					MemberCount: 0,
-					Status:      status,
-				})
 			}
+
+			guilds = append(guilds, guildInfo{
+				ID:          id,
+				Name:        guildName,
+				MemberCount: memberCount,
+				Status:      status,
+			})
 		}
+
+		// Sort guilds so playing servers appear at top
+		sort.Slice(guilds, func(i, j int) bool {
+			if guilds[i].Status == "playing" && guilds[j].Status != "playing" {
+				return true
+			}
+			if guilds[i].Status != "playing" && guilds[j].Status == "playing" {
+				return false
+			}
+			return guilds[i].Name < guilds[j].Name
+		})
 
 		_ = json.NewEncoder(w).Encode(guilds)
 	}))
@@ -576,7 +572,7 @@ func (b *Bot) StartDashboardServer(port string) {
 				"type": "telemetry",
 				"data": map[string]interface{}{
 					"activeGuilds": b.store.GetActiveCount(),
-					"memoryUsage":  fmt.Sprintf("%d MB", m.Alloc/1024/1024),
+					"memoryUsage":  fmt.Sprintf("%d MB", m.Sys/1024/1024),
 					"uptime":       time.Since(b.startedAt).Round(time.Second).String(),
 					"timestamp":    time.Now().Unix(),
 				},

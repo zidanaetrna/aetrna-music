@@ -67,12 +67,12 @@ export const useStatus = (token: string | null, selectedGuild?: string): {
 
     fetchStatus();
 
-    const intervalId = setInterval(fetchStatus, 10_000);
+    const intervalId = setInterval(fetchStatus, 2_000);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [token]);
+  }, [token, selectedGuild]);
 
   return { status, loading, error };
 };

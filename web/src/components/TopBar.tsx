@@ -21,8 +21,13 @@ export const TopBar: React.FC<TopBarProps> = ({
     const { showToast } = useToast();
 
     useEffect(() => {
-        if (guilds.length > 0 && (!selectedGuild || !guilds.some(g => g.id === selectedGuild))) {
-            setSelectedGuild(guilds[0].id);
+        if (guilds.length > 0) {
+            const playingGuild = guilds.find(g => g.status === 'playing');
+            if (playingGuild && (!selectedGuild || !guilds.some(g => g.id === selectedGuild))) {
+                setSelectedGuild(playingGuild.id);
+            } else if (!selectedGuild || !guilds.some(g => g.id === selectedGuild)) {
+                setSelectedGuild(guilds[0].id);
+            }
         }
     }, [guilds, selectedGuild, setSelectedGuild]);
 
