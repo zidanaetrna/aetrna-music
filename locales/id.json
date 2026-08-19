@@ -123,5 +123,6 @@
   "playlist_created": "✅ Berhasil membuat playlist tersimpan **'%s'**! Gunakan `/playlist add-track %s <lagu/url>` untuk menambah lagu.",
   "playlist_track_added": "✅ Berhasil menambahkan **'%s'** ke playlist **'%s'**!",
   "playlist_spotify_added": "✅ Berhasil menambahkan **%d lagu** dari Spotify playlist ke **'%s'**!",
-  "playlist_deleted": "🗑️ Berhasil menghapus playlist tersimpan **'%s'**."
+  "playlist_deleted": "🗑️ Berhasil menghapus playlist tersimpan **'%s'**.",
+  "playlist_already_exists": "❌ Playlist **'%s'** sudah ada! Gunakan nama lain atau lihat lagunya dengan `/playlist list-tracks name:%s`."
 }

@@ -123,5 +123,6 @@
   "playlist_created": "✅ Created saved playlist **'%s'**! Use `/playlist add-track %s <song/url>` to add songs.",
   "playlist_track_added": "✅ Added **'%s'** to playlist **'%s'**!",
   "playlist_spotify_added": "✅ Added **%d tracks** from Spotify playlist to **'%s'**!",
-  "playlist_deleted": "🗑️ Deleted saved playlist **'%s'**."
+  "playlist_deleted": "🗑️ Deleted saved playlist **'%s'**.",
+  "playlist_already_exists": "❌ Playlist **'%s'** already exists! Choose a different name or view it with `/playlist list-tracks name:%s`."
 }

@@ -76,6 +76,10 @@ func (h *Handler) HandlePlaylistCreate(s *discordgo.Session, i *discordgo.Intera
 
 	coll, err := h.database.CreateCollection(userID, cleanName)
 	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "constraint failed") {
+			sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "playlist_already_exists", cleanName, cleanName), true)
+			return
+		}
 		sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "collection_create_error", cleanName, err), true)
 		return
 	}

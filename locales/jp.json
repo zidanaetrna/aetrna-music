@@ -123,5 +123,6 @@
   "playlist_created": "✅ 保存されたプレイリスト **'%s'** を作成しました！楽曲を追加するには `/playlist add-track %s <曲名/URL>` を使用してください。",
   "playlist_track_added": "✅ **'%s'** をプレイリスト **'%s'** に追加しました！",
   "playlist_spotify_added": "✅ Spotifyプレイリストから **%d 曲** を **'%s'** に追加しました！",
-  "playlist_deleted": "🗑️ プレイリスト **'%s'** を削除しました。"
+  "playlist_deleted": "🗑️ プレイリスト **'%s'** を削除しました。",
+  "playlist_already_exists": "❌ プレイリスト **'%s'** は既に存在します！別の名前を指定するか `/playlist list-tracks name:%s` で確認してください。"
 }
