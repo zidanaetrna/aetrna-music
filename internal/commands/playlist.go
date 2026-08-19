@@ -53,7 +53,7 @@ func (h *Handler) HandlePlaylistCreate(s *discordgo.Session, i *discordgo.Intera
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
-				Content: "Playlist name cannot be empty.",
+				Content: i18n.Globali18n.T(lang, "playlist_empty_name"),
 				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
@@ -75,7 +75,7 @@ func (h *Handler) HandlePlaylistCreate(s *discordgo.Session, i *discordgo.Intera
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("✅ Created saved playlist **'%s'** (ID: %d). Use `/playlist add-track %s <song/url>` to add songs!", coll.Name, coll.ID, coll.Name),
+			Content: i18n.Globali18n.T(lang, "playlist_created", coll.Name, coll.Name),
 		},
 	})
 }
@@ -120,7 +120,7 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 		}
 
 		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: fmt.Sprintf("✅ Added **%d tracks** from Spotify playlist to **'%s'**!", added, coll.Name),
+			Content: i18n.Globali18n.T(lang, "playlist_spotify_added", added, coll.Name),
 		})
 		return
 	}
@@ -133,7 +133,7 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 			searchQuery := title
 			_ = h.database.AddToCollectionWithSource(coll.ID, title, searchQuery, "spotify", 0, "", track.Artist)
 			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-				Content: fmt.Sprintf("✅ Added track **'%s'** to playlist **'%s'**!", title, coll.Name),
+				Content: i18n.Globali18n.T(lang, "playlist_track_added", title, coll.Name),
 			})
 			return
 		}
@@ -153,7 +153,7 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 	_ = h.database.AddToCollectionWithSource(coll.ID, best.Title, best.URL, "youtube", best.Duration, best.Thumbnail, best.Author)
 
 	_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Content: fmt.Sprintf("✅ Added **'%s'** (%ds) to playlist **'%s'**!", best.Title, best.Duration, coll.Name),
+		Content: i18n.Globali18n.T(lang, "playlist_track_added", best.Title, coll.Name),
 	})
 }
 
@@ -296,6 +296,7 @@ func (h *Handler) HandlePlaylistListTracks(s *discordgo.Session, i *discordgo.In
 }
 
 func (h *Handler) HandlePlaylistDelete(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
+	lang := h.GetGuildLang(i.GuildID)
 	userID := i.Member.User.ID
 
 	err := h.database.DeleteCollection(userID, name)
@@ -313,7 +314,7 @@ func (h *Handler) HandlePlaylistDelete(s *discordgo.Session, i *discordgo.Intera
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: fmt.Sprintf("🗑️ Playlist **'%s'** has been deleted.", name),
+			Content: i18n.Globali18n.T(lang, "playlist_deleted", name),
 		},
 	})
 }

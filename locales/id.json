@@ -117,5 +117,11 @@
   "spotify_not_configured": "❌ Spotify API belum dikonfigurasi! Pastikan `SPOTIFY_CLIENT_ID` & `SPOTIFY_CLIENT_SECRET` diset di `.env`.",
   "spotify_playlist_error": "❌ Gagal mengambil playlist Spotify: %v",
   "spotify_first_track_error": "❌ Gagal mencari lagu pertama dari playlist Spotify!",
-  "spotify_track_error": "❌ Gagal mengambil lagu Spotify: %v"
+  "spotify_track_error": "❌ Gagal mengambil lagu Spotify: %v",
+  "saved_playlists": "Daftar Playlist Tersimpan",
+  "playlist_empty_name": "❌ Nama playlist tidak boleh kosong!",
+  "playlist_created": "✅ Berhasil membuat playlist tersimpan **'%s'**! Gunakan `/playlist add-track %s <lagu/url>` untuk menambah lagu.",
+  "playlist_track_added": "✅ Berhasil menambahkan **'%s'** ke playlist **'%s'**!",
+  "playlist_spotify_added": "✅ Berhasil menambahkan **%d lagu** dari Spotify playlist ke **'%s'**!",
+  "playlist_deleted": "🗑️ Berhasil menghapus playlist tersimpan **'%s'**."
 }

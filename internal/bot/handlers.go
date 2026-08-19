@@ -88,6 +88,42 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 			if len(data.Options) > 0 {
 				b.handler.HandleFilter(s, i, data.Options[0].StringValue())
 			}
+		case "playlist":
+			if len(data.Options) > 0 {
+				subCmd := data.Options[0]
+				switch subCmd.Name {
+				case "list":
+					b.handler.HandlePlaylistList(s, i)
+				case "create":
+					if len(subCmd.Options) > 0 {
+						b.handler.HandlePlaylistCreate(s, i, subCmd.Options[0].StringValue())
+					}
+				case "add-track":
+					var plName, query string
+					for _, opt := range subCmd.Options {
+						if opt.Name == "playlist" {
+							plName = opt.StringValue()
+						} else if opt.Name == "query" {
+							query = opt.StringValue()
+						}
+					}
+					if plName != "" && query != "" {
+						b.handler.HandlePlaylistAddTrack(s, i, plName, query)
+					}
+				case "list-tracks":
+					if len(subCmd.Options) > 0 {
+						b.handler.HandlePlaylistListTracks(s, i, subCmd.Options[0].StringValue())
+					}
+				case "play":
+					if len(subCmd.Options) > 0 {
+						b.handler.HandlePlaylistPlay(s, i, subCmd.Options[0].StringValue())
+					}
+				case "delete":
+					if len(subCmd.Options) > 0 {
+						b.handler.HandlePlaylistDelete(s, i, subCmd.Options[0].StringValue())
+					}
+				}
+			}
 		case "help":
 			b.handler.HandleHelp(s, i)
 		case "stats":

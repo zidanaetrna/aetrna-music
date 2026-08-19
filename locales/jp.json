@@ -117,5 +117,11 @@
   "spotify_not_configured": "❌ Spotify APIが設定されていません！`.env`に`SPOTIFY_CLIENT_ID`と`SPOTIFY_CLIENT_SECRET`を設定してください。",
   "spotify_playlist_error": "❌ Spotifyプレイリストの取得に失敗しました: %v",
   "spotify_first_track_error": "❌ Spotifyプレイリストから最初のトラックが見つかりませんでした！",
-  "spotify_track_error": "❌ Spotifyトラックの取得に失敗しました: %v"
+  "spotify_track_error": "❌ Spotifyトラックの取得に失敗しました: %v",
+  "saved_playlists": "保存されたプレイリスト",
+  "playlist_empty_name": "❌ プレイリスト名を空にすることはできません！",
+  "playlist_created": "✅ 保存されたプレイリスト **'%s'** を作成しました！楽曲を追加するには `/playlist add-track %s <曲名/URL>` を使用してください。",
+  "playlist_track_added": "✅ **'%s'** をプレイリスト **'%s'** に追加しました！",
+  "playlist_spotify_added": "✅ Spotifyプレイリストから **%d 曲** を **'%s'** に追加しました！",
+  "playlist_deleted": "🗑️ プレイリスト **'%s'** を削除しました。"
 }

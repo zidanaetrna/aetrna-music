@@ -117,5 +117,11 @@
   "spotify_not_configured": "❌ Spotify API is not configured! Set `SPOTIFY_CLIENT_ID` & `SPOTIFY_CLIENT_SECRET` in `.env`.",
   "spotify_playlist_error": "❌ Failed to fetch Spotify playlist: %v",
   "spotify_first_track_error": "❌ Failed to find the first track from Spotify playlist!",
-  "spotify_track_error": "❌ Failed to fetch Spotify track: %v"
+  "spotify_track_error": "❌ Failed to fetch Spotify track: %v",
+  "saved_playlists": "Saved Playlists",
+  "playlist_empty_name": "❌ Playlist name cannot be empty!",
+  "playlist_created": "✅ Created saved playlist **'%s'**! Use `/playlist add-track %s <song/url>` to add songs.",
+  "playlist_track_added": "✅ Added **'%s'** to playlist **'%s'**!",
+  "playlist_spotify_added": "✅ Added **%d tracks** from Spotify playlist to **'%s'**!",
+  "playlist_deleted": "🗑️ Deleted saved playlist **'%s'**."
 }
