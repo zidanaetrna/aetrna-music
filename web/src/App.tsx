@@ -5,6 +5,7 @@ import { LoginModal } from './components/LoginModal';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { OverviewTab } from './components/OverviewTab';
+import { PlaylistsModal } from './components/PlaylistsModal';
 import { useStatus } from './hooks/useStatus';
 import { useLogs } from './hooks/useLogs';
 import '../assets/css/style.css';
@@ -72,6 +73,8 @@ const DashboardContent: React.FC = () => {
 
                 <main className="main-content">
                     {activeTab === 'overview' && <OverviewTab token={token} status={status} selectedGuild={selectedGuild} />}
+
+                    {activeTab === 'playlists' && <PlaylistsModal token={token} selectedGuild={selectedGuild} />}
 
                     {activeTab === 'logs' && (
                         <section className="tab-page active">

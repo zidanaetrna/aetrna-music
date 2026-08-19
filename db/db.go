@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -38,6 +39,7 @@ type CollectionItem struct {
 	CollectionID int64  `json:"collection_id"`
 	Title        string `json:"title"`
 	URL          string `json:"url"`
+	Source       string `json:"source"`
 	Duration     int    `json:"duration"`
 	Thumbnail    string `json:"thumbnail"`
 	Author       string `json:"author"`
@@ -102,6 +104,7 @@ func (db *DB) migrate() error {
 			collection_id INTEGER NOT NULL,
 			title TEXT NOT NULL,
 			url TEXT NOT NULL,
+			source TEXT DEFAULT 'youtube',
 			duration INTEGER NOT NULL,
 			thumbnail TEXT DEFAULT '',
 			author TEXT DEFAULT '',
@@ -119,6 +122,21 @@ func (db *DB) migrate() error {
 			prefix TEXT DEFAULT '!',
 			default_volume INTEGER DEFAULT 100
 		);`,
+		`CREATE TABLE IF NOT EXISTS queue_snapshots (
+			guild_id TEXT PRIMARY KEY,
+			voice_channel_id TEXT NOT NULL,
+			text_channel_id TEXT NOT NULL,
+			now_playing_title TEXT DEFAULT '',
+			now_playing_url TEXT DEFAULT '',
+			now_playing_author TEXT DEFAULT '',
+			now_playing_thumbnail TEXT DEFAULT '',
+			now_playing_duration INTEGER DEFAULT 0,
+			position_ms INTEGER DEFAULT 0,
+			position_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			generation INTEGER DEFAULT 1,
+			songs_json TEXT NOT NULL,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`,
 	}
 
 	for _, query := range queries {
@@ -126,7 +144,8 @@ func (db *DB) migrate() error {
 			return err
 		}
 	}
-	// Auto-migrate legacy SQLite databases: ensure missing columns in guild_settings are added
+	// Auto-migrate legacy SQLite databases: ensure missing columns in collection_items & guild_settings are added
+	_, _ = db.Exec(`ALTER TABLE collection_items ADD COLUMN source TEXT DEFAULT 'youtube';`)
 	_, _ = db.Exec(`ALTER TABLE guild_settings ADD COLUMN language TEXT DEFAULT 'en';`)
 	_, _ = db.Exec(`ALTER TABLE guild_settings ADD COLUMN prefix TEXT DEFAULT '!';`)
 	_, _ = db.Exec(`ALTER TABLE guild_settings ADD COLUMN default_volume INTEGER DEFAULT 100;`)
@@ -216,11 +235,23 @@ func (db *DB) GetUserCollections(userID string) ([]Collection, error) {
 	return collections, nil
 }
 
+func (db *DB) GetCollectionByName(userID, name string) (*Collection, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var c Collection
+	err := db.QueryRow(`SELECT id, user_id, name, COALESCE(share_code, '') FROM collections WHERE user_id = ? AND name = ?`, userID, name).Scan(&c.ID, &c.UserID, &c.Name, &c.ShareCode)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
 func (db *DB) GetCollectionItems(collectionID int64) ([]CollectionItem, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	rows, err := db.Query(`SELECT id, collection_id, title, url, duration, thumbnail, author, position FROM collection_items WHERE collection_id = ? ORDER BY position ASC`, collectionID)
+	rows, err := db.Query(`SELECT id, collection_id, title, url, COALESCE(source, 'youtube'), duration, thumbnail, author, position FROM collection_items WHERE collection_id = ? ORDER BY position ASC`, collectionID)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +260,7 @@ func (db *DB) GetCollectionItems(collectionID int64) ([]CollectionItem, error) {
 	var items []CollectionItem
 	for rows.Next() {
 		var item CollectionItem
-		if err := rows.Scan(&item.ID, &item.CollectionID, &item.Title, &item.URL, &item.Duration, &item.Thumbnail, &item.Author, &item.Position); err != nil {
+		if err := rows.Scan(&item.ID, &item.CollectionID, &item.Title, &item.URL, &item.Source, &item.Duration, &item.Thumbnail, &item.Author, &item.Position); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -238,17 +269,58 @@ func (db *DB) GetCollectionItems(collectionID int64) ([]CollectionItem, error) {
 }
 
 func (db *DB) AddToCollection(collectionID int64, title, url string, duration int, thumbnail, author string) error {
+	return db.AddToCollectionWithSource(collectionID, title, url, "youtube", duration, thumbnail, author)
+}
+
+func (db *DB) AddToCollectionWithSource(collectionID int64, title, url, source string, duration int, thumbnail, author string) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	if source == "" {
+		source = "youtube"
+	}
 
 	var maxPos int
 	_ = db.QueryRow(`SELECT COALESCE(MAX(position), 0) FROM collection_items WHERE collection_id = ?`, collectionID).Scan(&maxPos)
 
 	_, err := db.Exec(
-		`INSERT INTO collection_items (collection_id, title, url, duration, thumbnail, author, position) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		collectionID, title, url, duration, thumbnail, author, maxPos+1,
+		`INSERT INTO collection_items (collection_id, title, url, source, duration, thumbnail, author, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		collectionID, title, url, source, duration, thumbnail, author, maxPos+1,
 	)
 	return err
+}
+
+func (db *DB) RemoveFromCollectionItem(collectionID int64, itemID int64) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	_, err := db.Exec(`DELETE FROM collection_items WHERE collection_id = ? AND id = ?`, collectionID, itemID)
+	return err
+}
+
+func (db *DB) ReorderCollectionItems(collectionID int64, itemIDs []int64) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.Prepare(`UPDATE collection_items SET position = ? WHERE collection_id = ? AND id = ?`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for pos, id := range itemIDs {
+		if _, err := stmt.Exec(pos+1, collectionID, id); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (db *DB) DeleteCollection(userID, name string) error {
@@ -326,4 +398,99 @@ func (db *DB) GetGuildLanguage(guildID string) string {
 		return "en"
 	}
 	return lang
+}
+
+type QueueSnapshot struct {
+	GuildID             string    `json:"guild_id"`
+	VoiceChannelID      string    `json:"voice_channel_id"`
+	TextChannelID       string    `json:"text_channel_id"`
+	NowPlayingTitle     string    `json:"now_playing_title"`
+	NowPlayingURL       string    `json:"now_playing_url"`
+	NowPlayingAuthor    string    `json:"now_playing_author"`
+	NowPlayingThumbnail string    `json:"now_playing_thumbnail"`
+	NowPlayingDuration  int       `json:"now_playing_duration"`
+	PositionMs          int64     `json:"position_ms"`
+	PositionAt          time.Time `json:"position_at"`
+	Generation          uint64    `json:"generation"`
+	SongsJSON           string    `json:"songs_json"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
+func (db *DB) SaveQueueSnapshot(s QueueSnapshot) error {
+	if db == nil || db.DB == nil {
+		return nil
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	posAtStr := s.PositionAt.Format(time.RFC3339)
+	if s.PositionAt.IsZero() {
+		posAtStr = time.Now().Format(time.RFC3339)
+	}
+
+	_, err := db.Exec(
+		`INSERT INTO queue_snapshots (
+			guild_id, voice_channel_id, text_channel_id, 
+			now_playing_title, now_playing_url, now_playing_author, now_playing_thumbnail, now_playing_duration,
+			position_ms, position_at, generation, songs_json, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(guild_id) DO UPDATE SET
+			voice_channel_id=excluded.voice_channel_id,
+			text_channel_id=excluded.text_channel_id,
+			now_playing_title=excluded.now_playing_title,
+			now_playing_url=excluded.now_playing_url,
+			now_playing_author=excluded.now_playing_author,
+			now_playing_thumbnail=excluded.now_playing_thumbnail,
+			now_playing_duration=excluded.now_playing_duration,
+			position_ms=excluded.position_ms,
+			position_at=excluded.position_at,
+			generation=excluded.generation,
+			songs_json=excluded.songs_json,
+			updated_at=CURRENT_TIMESTAMP`,
+		s.GuildID, s.VoiceChannelID, s.TextChannelID,
+		s.NowPlayingTitle, s.NowPlayingURL, s.NowPlayingAuthor, s.NowPlayingThumbnail, s.NowPlayingDuration,
+		s.PositionMs, posAtStr, s.Generation, s.SongsJSON,
+	)
+	return err
+}
+
+func (db *DB) GetAllQueueSnapshots() ([]QueueSnapshot, error) {
+	if db == nil || db.DB == nil {
+		return nil, nil
+	}
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	rows, err := db.Query(`SELECT guild_id, voice_channel_id, text_channel_id, now_playing_title, now_playing_url, now_playing_author, now_playing_thumbnail, now_playing_duration, position_ms, position_at, generation, songs_json FROM queue_snapshots ORDER BY generation DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []QueueSnapshot
+	for rows.Next() {
+		var s QueueSnapshot
+		var posAt string
+		if err := rows.Scan(
+			&s.GuildID, &s.VoiceChannelID, &s.TextChannelID,
+			&s.NowPlayingTitle, &s.NowPlayingURL, &s.NowPlayingAuthor, &s.NowPlayingThumbnail, &s.NowPlayingDuration,
+			&s.PositionMs, &posAt, &s.Generation, &s.SongsJSON,
+		); err != nil {
+			return nil, err
+		}
+		s.PositionAt, _ = time.Parse(time.RFC3339, posAt)
+		list = append(list, s)
+	}
+	return list, nil
+}
+
+func (db *DB) DeleteQueueSnapshot(guildID string) error {
+	if db == nil || db.DB == nil {
+		return nil
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	_, err := db.Exec(`DELETE FROM queue_snapshots WHERE guild_id = ?`, guildID)
+	return err
 }

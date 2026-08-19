@@ -278,6 +278,39 @@ const commands = [
     new SlashCommandBuilder().setName('stats').setDescription('Show bot system statistics'),
     new SlashCommandBuilder().setName('ping').setDescription('Check bot latency'),
     new SlashCommandBuilder()
+        .setName('playlist')
+        .setDescription('Manage your custom saved playlists')
+        .addSubcommand(sub =>
+            sub.setName('list')
+               .setDescription('List all your saved playlists')
+        )
+        .addSubcommand(sub =>
+            sub.setName('play')
+               .setDescription('Play a saved playlist into your voice channel')
+               .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true))
+        )
+        .addSubcommand(sub =>
+            sub.setName('create')
+               .setDescription('Create a new custom saved playlist')
+               .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true))
+        )
+        .addSubcommand(sub =>
+            sub.setName('add-track')
+               .setDescription('Add a song, YouTube link, or Spotify link to a saved playlist')
+               .addStringOption(opt => opt.setName('playlist').setDescription('Playlist name').setRequired(true))
+               .addStringOption(opt => opt.setName('query').setDescription('Song name, YouTube link, or Spotify link').setRequired(true))
+        )
+        .addSubcommand(sub =>
+            sub.setName('list-tracks')
+               .setDescription('View tracks in a saved playlist')
+               .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true))
+        )
+        .addSubcommand(sub =>
+            sub.setName('delete')
+               .setDescription('Delete a saved playlist')
+               .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true))
+        ),
+    new SlashCommandBuilder()
         .setName('language')
         .setDescription('Set bot language for this server (Admin only)')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)

@@ -34,5 +34,9 @@ Thumbs.db
 .idea/
 .kiro
 
+# Local Planning
+docs/v2.1.6-roadmap.md
+
 # Test
 test_*.js
+pp_bot_musijk*.png

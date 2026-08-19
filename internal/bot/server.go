@@ -273,6 +273,107 @@ func (b *Bot) StartDashboardServer(port string) {
 		_ = json.NewEncoder(w).Encode(guilds)
 	}))
 
+	// 3b. Playlists Management Endpoint
+	mux.HandleFunc("/api/playlists", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		userID := r.URL.Query().Get("userId")
+		if userID == "" {
+			userID = "default_user"
+		}
+
+		if r.Method == "GET" {
+			colls, err := b.db.GetUserCollections(userID)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(colls)
+			return
+		}
+
+		if r.Method == "POST" {
+			var body struct {
+				UserID string `json:"userId"`
+				Name   string `json:"name"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid playlist payload"})
+				return
+			}
+			if body.UserID == "" {
+				body.UserID = userID
+			}
+			coll, err := b.db.CreateCollection(body.UserID, body.Name)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(coll)
+			return
+		}
+	}))
+
+	// 3c. Playlist Items Management Endpoint
+	mux.HandleFunc("/api/playlists/items", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		collIDStr := r.URL.Query().Get("collectionId")
+		var collID int64
+		_, _ = fmt.Sscanf(collIDStr, "%d", &collID)
+
+		if r.Method == "GET" {
+			items, err := b.db.GetCollectionItems(collID)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(items)
+			return
+		}
+
+		if r.Method == "POST" {
+			var body struct {
+				CollectionID int64  `json:"collectionId"`
+				Title        string `json:"title"`
+				URL          string `json:"url"`
+				Source       string `json:"source"`
+				Duration     int    `json:"duration"`
+				Thumbnail    string `json:"thumbnail"`
+				Author       string `json:"author"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Title == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid item payload"})
+				return
+			}
+			err := b.db.AddToCollectionWithSource(body.CollectionID, body.Title, body.URL, body.Source, body.Duration, body.Thumbnail, body.Author)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+			return
+		}
+
+		if r.Method == "DELETE" {
+			itemIDStr := r.URL.Query().Get("itemId")
+			var itemID int64
+			_, _ = fmt.Sscanf(itemIDStr, "%d", &itemID)
+			err := b.db.RemoveFromCollectionItem(collID, itemID)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+			return
+		}
+	}))
+
 	// 4. SSE Real-Time Event Stream Endpoint
 	mux.HandleFunc("/api/events", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)

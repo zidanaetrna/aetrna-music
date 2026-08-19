@@ -56,6 +56,9 @@ type GuildQueue struct {
 	// TrackFailReason holds the failure reason from the last track-end signal.
 	TrackFailReason string
 
+	Dirty      bool
+	Generation uint64
+
 	idleTimer    *time.Timer
 	lyricsCancel func()
 	SkipVotes    map[string]bool
@@ -463,7 +466,7 @@ func (q *GuildQueue) PlayNext() {
 			q.idleTimer = time.AfterFunc(3*time.Minute, func() {
 				q.mu.Lock()
 				defer q.mu.Unlock()
-				if !q.IsPlaying && len(q.Songs) == 0 {
+				if !q.IsPlaying && len(q.Songs) == 0 && q.NowPlaying == nil {
 					log.Printf("[INFO] [GuildQueue %s] 3-minute idle timer expired. Auto-disconnecting...", gid)
 					if stopCb != nil {
 						_ = stopCb(gid)
@@ -488,6 +491,11 @@ func (q *GuildQueue) PlayNext() {
 			song.IsAutoTransition = true
 		}
 		q.NowPlaying = &song
+	}
+
+	if q.idleTimer != nil {
+		q.idleTimer.Stop()
+		q.idleTimer = nil
 	}
 
 	q.IsPlaying = true

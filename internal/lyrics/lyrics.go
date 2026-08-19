@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"aetrna-music/internal/ranking"
 )
 
 type LyricLine struct {
@@ -45,7 +47,7 @@ func cleanStandaloneTags(q string) string {
 	return strings.TrimSpace(q)
 }
 
-// FetchLyrics attempts to fetch synced/plain lyrics from LRCLIB API.
+// FetchLyrics attempts to fetch synced/plain lyrics from LRCLIB & Netease API and ranks candidates deterministically.
 func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, error) {
 	title, artist := extractTitleAndArtist(trackName)
 	if artist == "" {
@@ -54,54 +56,169 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 
 	log.Printf("[INFO] [Lyrics] Extracted title: '%s' | artist: '%s' from raw: '%s'", title, artist, trackName)
 
-	// 1. Try search with extracted title + artist
-	if title != "" && artist != "" {
-		if resp, err := queryLRCLIBSubSearch(fmt.Sprintf("%s %s", title, artist)); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
-			return parseResponse(resp), nil
+	trackMeta := ranking.TrackMeta{
+		Title:    title,
+		Artist:   artist,
+		Duration: durationSec,
+	}
+
+	type searchResult struct {
+		candidates []ranking.LyricsCandidate
+		err        error
+	}
+
+	ch := make(chan searchResult, 2)
+
+	// Fetch LRCLIB Top 5 Candidates
+	go func() {
+		searchQuery := title
+		if artist != "" {
+			searchQuery = fmt.Sprintf("%s %s", title, artist)
+		}
+		cands, err := queryLRCLIBMultiCandidates(searchQuery)
+		ch <- searchResult{candidates: cands, err: err}
+	}()
+
+	// Fetch Netease Top 5 Candidates
+	go func() {
+		searchQuery := title
+		if artist != "" {
+			searchQuery = fmt.Sprintf("%s %s", title, artist)
+		}
+		cands, err := queryNeteaseMultiCandidates(searchQuery)
+		ch <- searchResult{candidates: cands, err: err}
+	}()
+
+	var allCandidates []ranking.LyricsCandidate
+	for i := 0; i < 2; i++ {
+		res := <-ch
+		if res.err == nil && len(res.candidates) > 0 {
+			allCandidates = append(allCandidates, res.candidates...)
 		}
 	}
 
-	// 2. If artist has Japanese + Romaji like "美波 (Minami)", try title + Romaji or title + Japanese
-	if title != "" && artist != "" && strings.Contains(artist, "(") {
-		reParen := regexp.MustCompile(`\((.*?)\)`)
-		romaji := reParen.ReplaceAllString(artist, "$1")
-		romaji = strings.TrimSpace(romaji)
-		if romaji != "" {
-			if resp, err := queryLRCLIBSubSearch(fmt.Sprintf("%s %s", title, romaji)); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
-				return parseResponse(resp), nil
-			}
-		}
-		japaneseOnly := reParen.ReplaceAllString(artist, "")
-		japaneseOnly = strings.TrimSpace(japaneseOnly)
-		if japaneseOnly != "" {
-			if resp, err := queryLRCLIBSubSearch(fmt.Sprintf("%s %s", title, japaneseOnly)); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
-				return parseResponse(resp), nil
-			}
-		}
+	if len(allCandidates) == 0 {
+		return nil, fmt.Errorf("lyrics not found for '%s'", trackName)
 	}
 
-	// 3. Try search with title only
-	if title != "" {
-		if resp, err := queryLRCLIBSubSearch(title); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
-			return parseResponse(resp), nil
+	// Rank all candidates deterministically
+	best := ranking.RankLyricsCandidates(trackMeta, allCandidates)
+	if best == nil || !best.Accepted {
+		return nil, fmt.Errorf("lyrics candidate score below threshold for '%s'", trackName)
+	}
+
+	log.Printf("[INFO] [LyricsRanker] Selected candidate '%s' by '%s' (Score: %.1f, Source: %s)",
+		best.Candidate.Title, best.Candidate.Artist, best.TotalScore, best.Candidate.Source)
+
+	return parseResponse(&lrclibResponse{
+		TrackName:    best.Candidate.Title,
+		ArtistName:   best.Candidate.Artist,
+		PlainLyrics:  best.Candidate.PlainLyrics,
+		SyncedLyrics: best.Candidate.SyncedLyrics,
+	}), nil
+}
+
+func queryLRCLIBMultiCandidates(query string) ([]ranking.LyricsCandidate, error) {
+	endpoint := fmt.Sprintf("https://lrclib.net/api/search?q=%s", url.QueryEscape(query))
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "aetrna-music/2.1 (Discord Bot)")
+
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("lrclib status: %s", res.Status)
+	}
+
+	var items []lrclibResponse
+	if err := json.NewDecoder(res.Body).Decode(&items); err != nil || len(items) == 0 {
+		return nil, fmt.Errorf("no lrclib results")
+	}
+
+	var list []ranking.LyricsCandidate
+	for _, item := range items {
+		if item.SyncedLyrics != "" || item.PlainLyrics != "" {
+			list = append(list, ranking.LyricsCandidate{
+				Title:        item.TrackName,
+				Artist:       item.ArtistName,
+				Duration:     item.Duration,
+				PlainLyrics:  item.PlainLyrics,
+				SyncedLyrics: item.SyncedLyrics,
+				Source:       "LRCLIB",
+			})
 		}
 	}
+	return list, nil
+}
 
-	// 4. Fallback search with Netease Cloud Music API (Over 10M Synced LRC Lyrics)
-	if title != "" {
-		if resp, err := queryNeteaseLyrics(title, artist); err == nil && resp != nil && resp.SyncedLyrics != "" {
-			log.Printf("[INFO] [Lyrics] Synced lyrics found on Netease Cloud Music fallback!")
-			return parseResponse(resp), nil
+func queryNeteaseMultiCandidates(query string) ([]ranking.LyricsCandidate, error) {
+	searchURL := fmt.Sprintf("https://music.163.com/api/search/get/web?csrf_token=&type=1&offset=0&limit=5&s=%s", url.QueryEscape(query))
+	req, err := http.NewRequest("GET", searchURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	var searchResp struct {
+		Result struct {
+			Songs []struct {
+				ID       int64   `json:"id"`
+				Name     string  `json:"name"`
+				Duration float64 `json:"duration"` // ms
+				Artists  []struct {
+					Name string `json:"name"`
+				} `json:"artists"`
+			} `json:"songs"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&searchResp); err != nil || len(searchResp.Result.Songs) == 0 {
+		return nil, fmt.Errorf("netease empty")
+	}
+
+	var list []ranking.LyricsCandidate
+	for _, song := range searchResp.Result.Songs {
+		artistName := "Unknown"
+		if len(song.Artists) > 0 {
+			artistName = song.Artists[0].Name
+		}
+		lyricURL := fmt.Sprintf("https://music.163.com/api/song/lyric?id=%d&lv=-1&kv=-1&tv=-1", song.ID)
+		req2, _ := http.NewRequest("GET", lyricURL, nil)
+		req2.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+		res2, err := httpClient.Do(req2)
+		if err != nil {
+			continue
+		}
+
+		var lyricResp struct {
+			Lrc struct {
+				Lyric string `json:"lyric"`
+			} `json:"lrc"`
+		}
+		_ = json.NewDecoder(res2.Body).Decode(&lyricResp)
+		res2.Body.Close()
+
+		if lyricResp.Lrc.Lyric != "" {
+			list = append(list, ranking.LyricsCandidate{
+				Title:        song.Name,
+				Artist:       artistName,
+				Duration:     song.Duration / 1000.0,
+				SyncedLyrics: lyricResp.Lrc.Lyric,
+				Source:       "Netease",
+			})
 		}
 	}
-
-	// 5. Fallback search with full cleaned trackName on LRCLIB
-	cleanFull := cleanQuery(trackName)
-	if resp, err := queryLRCLIBSubSearch(cleanFull); err == nil && resp != nil && (resp.SyncedLyrics != "" || resp.PlainLyrics != "") {
-		return parseResponse(resp), nil
-	}
-
-	return nil, fmt.Errorf("lyrics not found for '%s'", trackName)
+	return list, nil
 }
 
 func queryNeteaseLyrics(title, artist string) (*lrclibResponse, error) {

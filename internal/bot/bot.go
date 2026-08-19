@@ -232,6 +232,9 @@ func (b *Bot) startInternalWebhookServer() {
 			case p.CommandName == "play" || (p.CustomID == "select_search_track" && len(p.Values) > 0):
 				b.handleProxiedPlay(i, p)
 
+			case p.CommandName == "playlist":
+				b.handleProxiedPlaylist(i, p)
+
 			case p.CommandName == "search":
 				var opts []*discordgo.ApplicationCommandInteractionDataOption
 				if len(p.Options) > 0 {
@@ -254,6 +257,69 @@ func (b *Bot) startInternalWebhookServer() {
 	log.Printf("[INFO] [GoBot] Starting HTTP webhook server on 127.0.0.1:47392...")
 	if err := (&http.Server{Addr: "127.0.0.1:47392", Handler: mux}).ListenAndServe(); err != nil {
 		log.Fatalf("[FATAL] [GoBot] HTTP webhook server failed on :47392: %v", err)
+	}
+}
+
+func (b *Bot) handleProxiedPlaylist(i *discordgo.InteractionCreate, p ProxiedInteraction) {
+	var opts []*discordgo.ApplicationCommandInteractionDataOption
+	if len(p.Options) > 0 {
+		_ = json.Unmarshal(p.Options, &opts)
+	}
+
+	if len(opts) == 0 {
+		b.handler.HandlePlaylistList(b.session, i)
+		return
+	}
+
+	subCmd := opts[0]
+	switch subCmd.Name {
+	case "list":
+		b.handler.HandlePlaylistList(b.session, i)
+	case "create":
+		name := ""
+		for _, opt := range subCmd.Options {
+			if opt.Name == "name" {
+				name = fmt.Sprintf("%v", opt.Value)
+			}
+		}
+		b.handler.HandlePlaylistCreate(b.session, i, name)
+	case "play":
+		name := ""
+		for _, opt := range subCmd.Options {
+			if opt.Name == "name" {
+				name = fmt.Sprintf("%v", opt.Value)
+			}
+		}
+		b.handler.HandlePlaylistPlay(b.session, i, name)
+	case "add-track":
+		playlistName := ""
+		query := ""
+		for _, opt := range subCmd.Options {
+			if opt.Name == "playlist" {
+				playlistName = fmt.Sprintf("%v", opt.Value)
+			} else if opt.Name == "query" {
+				query = fmt.Sprintf("%v", opt.Value)
+			}
+		}
+		b.handler.HandlePlaylistAddTrack(b.session, i, playlistName, query)
+	case "list-tracks":
+		name := ""
+		for _, opt := range subCmd.Options {
+			if opt.Name == "name" {
+				name = fmt.Sprintf("%v", opt.Value)
+			}
+		}
+		b.handler.HandlePlaylistListTracks(b.session, i, name)
+	case "delete":
+		name := ""
+		for _, opt := range subCmd.Options {
+			if opt.Name == "name" {
+				name = fmt.Sprintf("%v", opt.Value)
+			}
+		}
+		b.handler.HandlePlaylistDelete(b.session, i, name)
+	default:
+		b.handler.HandlePlaylistList(b.session, i)
 	}
 }
 
