@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"log"
+	"net/url"
 	"strings"
 
 	"aetrna-music/internal/i18n"
@@ -157,7 +158,8 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 		added := 0
 		for _, t := range tracks {
 			searchQuery := fmt.Sprintf("%s %s", t.Name, t.Artist)
-			_ = h.database.AddToCollectionWithSource(coll.ID, fmt.Sprintf("%s - %s", t.Name, t.Artist), searchQuery, "spotify", 0, "", t.Artist)
+			targetURL := "https://www.youtube.com/results?search_query=" + url.QueryEscape(searchQuery)
+			_ = h.database.AddToCollectionWithSource(coll.ID, fmt.Sprintf("%s - %s", t.Name, t.Artist), targetURL, "spotify", 0, "", t.Artist)
 			added++
 		}
 

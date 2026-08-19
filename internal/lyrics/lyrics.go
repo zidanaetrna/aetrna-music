@@ -56,9 +56,15 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 
 	log.Printf("[INFO] [Lyrics] Extracted title: '%s' | artist: '%s' from raw: '%s'", title, artist, trackName)
 
-	trackMeta := ranking.TrackMeta{
+	trackMeta1 := ranking.TrackMeta{
 		Title:    title,
 		Artist:   artist,
+		Duration: durationSec,
+	}
+	// Alternate orientation meta (swapped title/artist in case raw was Title - Artist)
+	trackMeta2 := ranking.TrackMeta{
+		Title:    artist,
+		Artist:   title,
 		Duration: durationSec,
 	}
 
@@ -71,20 +77,14 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 
 	// Fetch LRCLIB Top 5 Candidates
 	go func() {
-		searchQuery := title
-		if artist != "" {
-			searchQuery = fmt.Sprintf("%s %s", title, artist)
-		}
+		searchQuery := cleanQuery(trackName)
 		cands, err := queryLRCLIBMultiCandidates(searchQuery)
 		ch <- searchResult{candidates: cands, err: err}
 	}()
 
 	// Fetch Netease Top 5 Candidates
 	go func() {
-		searchQuery := title
-		if artist != "" {
-			searchQuery = fmt.Sprintf("%s %s", title, artist)
-		}
+		searchQuery := cleanQuery(trackName)
 		cands, err := queryNeteaseMultiCandidates(searchQuery)
 		ch <- searchResult{candidates: cands, err: err}
 	}()
@@ -101,8 +101,17 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 		return nil, fmt.Errorf("lyrics not found for '%s'", trackName)
 	}
 
-	// Rank all candidates deterministically
-	best := ranking.RankLyricsCandidates(trackMeta, allCandidates)
+	// Rank all candidates deterministically against both orientation metas
+	best1 := ranking.RankLyricsCandidates(trackMeta1, allCandidates)
+	best2 := ranking.RankLyricsCandidates(trackMeta2, allCandidates)
+
+	var best *ranking.CandidateScore
+	if best1 != nil && best1.Accepted && (best2 == nil || !best2.Accepted || best1.TotalScore >= best2.TotalScore) {
+		best = best1
+	} else if best2 != nil && best2.Accepted {
+		best = best2
+	}
+
 	if best == nil || !best.Accepted {
 		return nil, fmt.Errorf("lyrics candidate score below threshold for '%s'", trackName)
 	}

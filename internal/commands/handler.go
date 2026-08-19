@@ -51,9 +51,18 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue, lang strin
 		volPct = 100
 	}
 
+	songURL := song.URL
+	if !strings.HasPrefix(songURL, "http://") && !strings.HasPrefix(songURL, "https://") {
+		if songURL != "" {
+			songURL = "https://www.youtube.com/results?search_query=" + url.QueryEscape(songURL)
+		} else {
+			songURL = "https://youtube.com"
+		}
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Title:       i18n.Globali18n.T(lang, "now_playing"),
-		Description: fmt.Sprintf("**[%s](%s)**", song.Title, song.URL),
+		Description: fmt.Sprintf("**[%s](%s)**", song.Title, songURL),
 		Color:       0x5865F2, // Discord Blurple / Aesthetic HSL
 		Fields: []*discordgo.MessageEmbedField{
 			{
@@ -340,9 +349,18 @@ func CreateLyricsEmbed(song *music.Song, res interface{}, currentDur time.Durati
 }
 
 func CreateAddedToQueueEmbed(song *music.Song, queue *music.GuildQueue, lang string) *discordgo.MessageEmbed {
+	songURL := song.URL
+	if !strings.HasPrefix(songURL, "http://") && !strings.HasPrefix(songURL, "https://") {
+		if songURL != "" {
+			songURL = "https://www.youtube.com/results?search_query=" + url.QueryEscape(songURL)
+		} else {
+			songURL = "https://youtube.com"
+		}
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Title:       i18n.Globali18n.T(lang, "added_to_queue"),
-		Description: fmt.Sprintf("**[%s](%s)**", song.Title, song.URL),
+		Description: fmt.Sprintf("**[%s](%s)**", song.Title, songURL),
 		Color:       0x5865F2,
 		Fields: []*discordgo.MessageEmbedField{
 			{
