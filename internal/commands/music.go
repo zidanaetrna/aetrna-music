@@ -288,7 +288,6 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	queue.AddSong(song)
 	queue.VoiceChannelID = voiceState.ChannelID
-	_ = s.ChannelVoiceJoinManual(i.GuildID, voiceState.ChannelID, false, false)
 
 	if !queue.IsPlaying {
 		go queue.PlayNext()

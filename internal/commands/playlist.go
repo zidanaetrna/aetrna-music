@@ -222,7 +222,6 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 	}
 
 	queue.VoiceChannelID = voiceChannelID
-	_ = s.ChannelVoiceJoinManual(i.GuildID, voiceChannelID, false, false)
 	if !queue.IsPlaying {
 		go queue.PlayNext()
 	}
