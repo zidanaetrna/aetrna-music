@@ -715,6 +715,14 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			} else {
 				q.SetFilter(filterName)
 			}
+			if q.IsPlaying && q.NowPlaying != nil {
+				go func(guildID string, q *music.GuildQueue) {
+					streamURL, err := commands.GetStreamURL(q.NowPlaying.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+					if err == nil {
+						_ = b.voice.PlayStream(guildID, q.VoiceChannelID, streamURL, q.NowPlaying.URL, "", q.Filter, q.Volume)
+					}
+				}(p.GuildID, q)
+			}
 			content = i18n.Globali18n.T(lang, "filter_changed", filterName)
 		}
 

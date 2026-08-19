@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"aetrna-music/internal/commands"
 	"aetrna-music/internal/music"
 	"aetrna-music/internal/version"
 	"aetrna-music/web"
@@ -540,6 +541,14 @@ func (b *Bot) StartDashboardServer(port string) {
 				q.Shuffle()
 			case "set_filter":
 				q.SetFilter(body.Value)
+				if b.voice != nil && q.IsPlaying && q.NowPlaying != nil {
+					go func(guildID string, q *music.GuildQueue) {
+						streamURL, err := commands.GetStreamURL(q.NowPlaying.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+						if err == nil {
+							_ = b.voice.PlayStream(guildID, q.VoiceChannelID, streamURL, q.NowPlaying.URL, "", q.Filter, q.Volume)
+						}
+					}(body.GuildID, q)
+				}
 			case "volume", "set_volume":
 				if body.Volume >= 0 {
 					q.Volume = body.Volume
