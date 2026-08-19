@@ -25,16 +25,16 @@
 
 </div>
 
-## 📸 Showcase & Feature Demo
+## Showcase & Feature Demo
 
-### 🌐 Real-Time Web Control Panel
+### Real-Time Web Control Panel
 Analytics overview, live audio stream telemetry, memory consumption metrics, active queue inspector, and multi-guild server selector.
 
 ![aetrna-music Web Dashboard Overview](docs/screenshots/dashboard.png)
 
 <br />
 
-| 🎧 Interactive Now Playing Card (`/nowplaying`) | 🎵 Rich Hybrid Embed Playlist (`/playlist play`) | 🎤 Live Synced LRC Lyrics (`/lyrics`) |
+| Interactive Now Playing Card (`/nowplaying`) | Rich Hybrid Embed Playlist (`/playlist play`) | Live Synced LRC Lyrics (`/lyrics`) |
 | :---: | :---: | :---: |
 | <img src="docs/screenshots/nowplaying.png" width="320" alt="Interactive Now Playing Card" /> | <img src="docs/screenshots/playlist.png" width="320" alt="Rich Hybrid Embed Playlist Preview" /> | <img src="docs/screenshots/lyrics.png" width="320" alt="Live Synced Lyrics" /> |
 
@@ -45,7 +45,7 @@ Analytics overview, live audio stream telemetry, memory consumption metrics, act
 - **Lavalink-Free**: No separate Lavalink server or Java runtime required. Lightweight native Go + Node.js architecture.
 - **Self-Hosted**: Run everything on your own server with full control.
 - **Web Dashboard**: React 18 + TypeScript control panel with real-time stream status, active queue inspector, memory consumption telemetry, and multi-guild switcher.
-- **Rich Hybrid Embed UI**: Aesthetic Discord embed cards with full-width thumbnails, clickable track list previews (`1. 🟢 [Title](URL) (3:45)`), and 2-row interactive control button matrices (`[ Pause ]`, `[ Skip ]`, `[ Prev ]`, `[ Loop ]`, `[ Shuffle ]`, `[ Vol- ]`, `[ Vol+ ]`, `[ Lyrics ]`, `[ Favorite ]`, `[ Stop ]`).
+- **Rich Hybrid Embed UI**: Aesthetic Discord embed cards with full-width thumbnails, clickable track list previews (`1. [Title](URL) (3:45)`), and 2-row interactive control button matrices (`[ Pause ]`, `[ Skip ]`, `[ Prev ]`, `[ Loop ]`, `[ Shuffle ]`, `[ Vol- ]`, `[ Vol+ ]`, `[ Lyrics ]`, `[ Favorite ]`, `[ Stop ]`).
 - **Custom Saved Playlists**: Create, save, manage, and play custom user playlists (`/playlist create`, `/playlist add-track`, `/playlist play`, `/playlist list-tracks`). Supports YouTube links, Spotify URLs, and manual title searches (`query: FLOW Sign`).
 - **Synced LRC Lyrics**: Live line-by-line synchronized lyrics directly in Discord embeds with dual-orientation matching (`Title - Artist` vs `Artist - Title`) for Japanese/Anime/J-Pop tracks (`/lyrics`).
 - **Audio Filters**: On-the-fly FFmpeg DSP filters (`bassboost`, `nightcore`, `vaporwave`, `8d`, `pop`).
@@ -165,7 +165,7 @@ npx aetrna-music init
 | `/filter <name>` | DSP Filter | Apply FFmpeg audio filters (`bassboost`, `nightcore`, `vaporwave`, `8d`, `pop`) |
 | `/stats` | System | View bot performance & RAM usage |
 | `/ping` | System | Check bot heartbeat and WebSocket latency |
-| `/language <lang>` | Admin | Set server bot language (Admin only: English 🇬🇧, Indonesian 🇮🇩, Japanese 🇯🇵) |
+| `/language <lang>` | Admin | Set server bot language (Admin only: English, Indonesian, Japanese) |
 | `/ytauth` | Admin | YouTube authentication & cookie troubleshooting guide |
 
 ---
@@ -176,9 +176,9 @@ Full list of supported environment variables (see [`.env.example`](.env.example)
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
-| `DISCORD_TOKEN` | *unset* | ✅ **Yes** | Discord bot account token from the Developer Portal |
-| `ADMIN_KEY` | *unset* | ⚠️ Recommended | Web Dashboard login password. Falls back to `DASHBOARD_PASSWORD` for legacy configs |
-| `DASHBOARD_PASSWORD` | *unset* | 🟰 Alias | Legacy alias for `ADMIN_KEY` (still supported, not recommended for new installs) |
+| `DISCORD_TOKEN` | *unset* | **Yes** | Discord bot account token from the Developer Portal |
+| `ADMIN_KEY` | *unset* | Recommended | Web Dashboard login password. Falls back to `DASHBOARD_PASSWORD` for legacy configs |
+| `DASHBOARD_PASSWORD` | *unset* | Alias | Legacy alias for `ADMIN_KEY` (still supported, not recommended for new installs) |
 | `OWNER_ID` | *unset* | No | Discord User ID for `/leave-all` admin-only commands |
 | `PREFIX` | `ajg` | No | Legacy text command prefix (slash commands are recommended) |
 | `DB_PATH` | `./data/aetrna.db` | No | SQLite database path (WAL journal mode). Docker mount: `./data` → `/app/data` |
@@ -192,7 +192,7 @@ Full list of supported environment variables (see [`.env.example`](.env.example)
 | `COOKIES_PATH` | `./cookies.txt` | No | Path to Netscape-format YouTube cookies file. Size validation `> 100 bytes` enforced before use |
 | `YTDLP_CLIENTS` | `ios,web,android,tv` | No | Comma-separated player_client pool for yt-dlp `--extractor-args youtube:player_client=…`. Affects bot behavior for rate-limit evasion |
 | `VOICE_PORT` | `3005` | No | Node.js voice worker listener port (must match what Go side expects — avoid `PORT` env to prevent collision with Go dashboard `8080`) |
-| `INTERNAL_IPC_TOKEN` | dev-default | ⚠️ Strongly recommended | Shared secret for **bidirectional** IPC auth between Go (`:47392`) and Node (`:3005`). Requests without valid `X-Internal-IPC-Token` header are rejected `401 Unauthorized`. Change this in production. |
+| `INTERNAL_IPC_TOKEN` | dev-default | Strongly recommended | Shared secret for **bidirectional** IPC auth between Go (`:47392`) and Node (`:3005`). Requests without valid `X-Internal-IPC-Token` header are rejected `401 Unauthorized`. Change this in production. |
 
 ---
 
