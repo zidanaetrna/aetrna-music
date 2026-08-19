@@ -50,6 +50,40 @@ func sendPlaylistResponse(s *discordgo.Session, i *discordgo.InteractionCreate, 
 	}
 }
 
+func sendPlaylistEmbedResponse(s *discordgo.Session, i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed, components []discordgo.MessageComponent, content string) {
+	var comps []discordgo.MessageComponent
+	if len(components) > 0 {
+		comps = components
+	}
+
+	var embeds []*discordgo.MessageEmbed
+	if embed != nil {
+		embeds = []*discordgo.MessageEmbed{embed}
+	}
+
+	_, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Content:    content,
+		Embeds:     embeds,
+		Components: comps,
+	})
+	if err != nil {
+		log.Printf("[ERROR] [Playlist] sendPlaylistEmbedResponse FollowupMessageCreate failed: %v", err)
+		err2 := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content:    content,
+				Embeds:     embeds,
+				Components: comps,
+			},
+		})
+		if err2 != nil {
+			log.Printf("[ERROR] [Playlist] sendPlaylistEmbedResponse InteractionRespond fallback failed: %v", err2)
+		}
+	} else {
+		log.Printf("[INFO] [Playlist] sendPlaylistEmbedResponse succeeded!")
+	}
+}
+
 func (h *Handler) HandlePlaylistList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	lang := h.GetGuildLang(i.GuildID)
 	userID := getUserID(i)
@@ -116,9 +150,7 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 	if strings.Contains(query, "spotify.com/playlist/") && h.spotifyCl != nil && h.spotifyCl.IsEnabled() {
 		tracks, err := h.spotifyCl.GetPlaylistTracks(query, 100)
 		if err != nil || len(tracks) == 0 {
-			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-				Content: fmt.Sprintf("❌ Could not fetch Spotify playlist: %v", err),
-			})
+			sendPlaylistResponse(s, i, fmt.Sprintf("❌ Could not fetch Spotify playlist: %v", err), true)
 			return
 		}
 
@@ -129,9 +161,17 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 			added++
 		}
 
-		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: i18n.Globali18n.T(lang, "playlist_spotify_added", added, coll.Name),
-		})
+		allItems, _ := h.database.GetCollectionItems(coll.ID)
+		embed := &discordgo.MessageEmbed{
+			Title:       fmt.Sprintf("🟢 Imported Spotify Playlist → '%s'", coll.Name),
+			Description: fmt.Sprintf("Successfully added **%d tracks** from Spotify playlist into saved playlist **'%s'**!", added, coll.Name),
+			Color:       0x1DB954,
+			Footer: &discordgo.MessageEmbedFooter{
+				Text: fmt.Sprintf("Playlist '%s' now contains %d total tracks", coll.Name, len(allItems)),
+			},
+		}
+
+		sendPlaylistEmbedResponse(s, i, embed, nil, query)
 		return
 	}
 
@@ -142,29 +182,49 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 			title := fmt.Sprintf("%s - %s", track.Name, track.Artist)
 			searchQuery := title
 			_ = h.database.AddToCollectionWithSource(coll.ID, title, searchQuery, "spotify", 0, "", track.Artist)
-			_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-				Content: i18n.Globali18n.T(lang, "playlist_track_added", title, coll.Name),
-			})
+
+			allItems, _ := h.database.GetCollectionItems(coll.ID)
+			embed := &discordgo.MessageEmbed{
+				Title:       fmt.Sprintf("🟢 Added Track to Playlist '%s'", coll.Name),
+				Description: fmt.Sprintf("**[%s](%s)**\n\n👤 **Artist:** `%s`", title, query, track.Artist),
+				Color:       0x1DB954,
+				Footer: &discordgo.MessageEmbedFooter{
+					Text: fmt.Sprintf("Playlist '%s' now contains %d total tracks", coll.Name, len(allItems)),
+				},
+			}
+
+			sendPlaylistEmbedResponse(s, i, embed, nil, query)
 			return
 		}
 	}
 
-	// Case 3: YouTube Track or Search Query
-	// Resolve metadata lazily without downloading audio stream
+	// Case 3: YouTube Track or Manual Search Query (e.g. FLOW Sign, FLOW Colors)
 	res, err := SearchYouTube(query, 5, h.cfg.CookiesPath, h.cfg.YtdlpClients)
 	if err != nil || len(res) == 0 {
-		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: fmt.Sprintf("❌ Could not find track for query: `%s`", query),
-		})
+		sendPlaylistResponse(s, i, fmt.Sprintf("❌ Could not find track for query: `%s`", query), true)
 		return
 	}
 
 	best := res[0]
 	_ = h.database.AddToCollectionWithSource(coll.ID, best.Title, best.URL, "youtube", best.Duration, best.Thumbnail, best.Author)
 
-	_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-		Content: i18n.Globali18n.T(lang, "playlist_track_added", best.Title, coll.Name),
-	})
+	allItems, _ := h.database.GetCollectionItems(coll.ID)
+	author := best.Author
+	if author == "" {
+		author = "YouTube"
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       fmt.Sprintf("🔴 Added Track to Playlist '%s'", coll.Name),
+		Description: fmt.Sprintf("**[%s](%s)**\n\n👤 **Channel:** `%s`  •  ⏱️ **Duration:** `%dm %ds`", best.Title, best.URL, author, best.Duration/60, best.Duration%60),
+		Color:       0xFF0000,
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: best.Thumbnail},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("Playlist '%s' now contains %d total tracks", coll.Name, len(allItems)),
+		},
+	}
+
+	sendPlaylistEmbedResponse(s, i, embed, nil, "")
 }
 
 func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.InteractionCreate, name string, targetVoiceChannelID string) {
@@ -199,9 +259,9 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 	queue := h.store.Get(i.GuildID)
 	validCount := 0
 	skippedCount := 0
+	totalSecs := 0
 
 	for _, item := range items {
-		// Verify URL or query is valid before enqueuing (Fault-tolerant loading)
 		targetURL := item.URL
 		if targetURL == "" {
 			skippedCount++
@@ -219,6 +279,7 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 			TextChannelID: i.ChannelID,
 		})
 		validCount++
+		totalSecs += item.Duration
 	}
 
 	queue.VoiceChannelID = voiceChannelID
@@ -226,14 +287,67 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 		go queue.PlayNext()
 	}
 
-	var msg string
-	if skippedCount > 0 {
-		msg = fmt.Sprintf("⚠️ Skipped %d unavailable track(s). Enqueued **%d tracks** from playlist **'%s'**!", skippedCount, validCount, name)
-	} else {
-		msg = fmt.Sprintf("✅ Loaded and enqueued **%d tracks** from saved playlist **'%s'**!", validCount, name)
+	// Build Rich Hybrid Embed Preview
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Successfully loaded **%d tracks** into voice channel queue.\n\n**📜 Track List Preview:**\n", validCount))
+
+	maxPreview := 10
+	if len(items) < maxPreview {
+		maxPreview = len(items)
 	}
 
-	sendPlaylistResponse(s, i, msg, false)
+	hasSpotify := false
+	for idx := 0; idx < maxPreview; idx++ {
+		item := items[idx]
+		icon := "🎵"
+		if strings.Contains(item.URL, "spotify.com") || item.Source == "spotify" {
+			icon = "🟢"
+			hasSpotify = true
+		} else if strings.Contains(item.URL, "youtube.com") || strings.Contains(item.URL, "youtu.be") || item.Source == "youtube" {
+			icon = "🔴"
+		}
+
+		durStr := ""
+		if item.Duration > 0 {
+			durStr = fmt.Sprintf(" (`%dm %ds`)", item.Duration/60, item.Duration%60)
+		}
+
+		if item.URL != "" && strings.HasPrefix(item.URL, "http") {
+			sb.WriteString(fmt.Sprintf("`%d.` %s **[%s](%s)**%s\n", idx+1, icon, item.Title, item.URL, durStr))
+		} else {
+			sb.WriteString(fmt.Sprintf("`%d.` %s **%s**%s\n", idx+1, icon, item.Title, durStr))
+		}
+	}
+
+	if len(items) > maxPreview {
+		sb.WriteString(fmt.Sprintf("\n*...and %d more track(s) in queue.*", len(items)-maxPreview))
+	}
+
+	embedColor := 0xFF0000 // YouTube Red default
+	if hasSpotify {
+		embedColor = 0x1DB954 // Spotify Green
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title:       fmt.Sprintf("🎵 Saved Playlist Enqueued: '%s'", coll.Name),
+		Description: sb.String(),
+		Color:       embedColor,
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "📊 Enqueued", Value: fmt.Sprintf("`%d Tracks`", validCount), Inline: true},
+			{Name: "⏱️ Total Duration", Value: fmt.Sprintf("`%dm %ds`", totalSecs/60, totalSecs%60), Inline: true},
+			{Name: "👤 Requested By", Value: fmt.Sprintf("<@%s>", userID), Inline: true},
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Use control buttons below to pause, skip, or shuffle playback",
+		},
+	}
+
+	if len(items) > 0 && items[0].Thumbnail != "" {
+		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: items[0].Thumbnail}
+	}
+
+	ctrlButtons := CreateControlButtons(queue.IsPaused, lang)
+	sendPlaylistEmbedResponse(s, i, embed, ctrlButtons, "")
 }
 
 func (h *Handler) HandlePlaylistListTracks(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
