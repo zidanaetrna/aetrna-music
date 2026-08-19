@@ -158,11 +158,19 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 	})
 }
 
-func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
+func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.InteractionCreate, name string, targetVoiceChannelID string) {
 	lang := h.GetGuildLang(i.GuildID)
 	userID := getUserID(i)
-	voiceState, err := getVoiceState(s, i.GuildID, userID)
-	if err != nil || voiceState == nil {
+
+	voiceChannelID := targetVoiceChannelID
+	if voiceChannelID == "" {
+		voiceState, err := getVoiceState(s, i.GuildID, userID)
+		if err == nil && voiceState != nil {
+			voiceChannelID = voiceState.ChannelID
+		}
+	}
+
+	if voiceChannelID == "" {
 		sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "must_join_voice"), true)
 		return
 	}
@@ -202,14 +210,14 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 			Thumbnail:     item.Thumbnail,
 			Author:        item.Author,
 			RequestedBy:   userID,
-			ChannelID:     voiceState.ChannelID,
+			ChannelID:     voiceChannelID,
 			TextChannelID: i.ChannelID,
 		})
 		validCount++
 	}
 
-	queue.VoiceChannelID = voiceState.ChannelID
-	_ = s.ChannelVoiceJoinManual(i.GuildID, voiceState.ChannelID, false, false)
+	queue.VoiceChannelID = voiceChannelID
+	_ = s.ChannelVoiceJoinManual(i.GuildID, voiceChannelID, false, false)
 	if !queue.IsPlaying {
 		go queue.PlayNext()
 	}

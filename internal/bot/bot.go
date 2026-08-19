@@ -290,7 +290,7 @@ func (b *Bot) handleProxiedPlaylist(i *discordgo.InteractionCreate, p ProxiedInt
 				name = fmt.Sprintf("%v", opt.Value)
 			}
 		}
-		b.handler.HandlePlaylistPlay(b.session, i, name)
+		b.handler.HandlePlaylistPlay(b.session, i, name, p.MemberVoiceChannelID)
 	case "add-track":
 		playlistName := ""
 		query := ""

@@ -116,7 +116,7 @@ func (b *Bot) handleInteraction(s *discordgo.Session, i *discordgo.InteractionCr
 					}
 				case "play":
 					if len(subCmd.Options) > 0 {
-						b.handler.HandlePlaylistPlay(s, i, subCmd.Options[0].StringValue())
+						b.handler.HandlePlaylistPlay(s, i, subCmd.Options[0].StringValue(), "")
 					}
 				case "delete":
 					if len(subCmd.Options) > 0 {
