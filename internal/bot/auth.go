@@ -11,16 +11,19 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"aetrna-music/db"
 )
 
 type AuthManager struct {
 	password string
 	secret   []byte
+	database *db.DB
 	sessions map[string]time.Time
 	mu       sync.RWMutex
 }
 
-func NewAuthManager(configPassword string) *AuthManager {
+func NewAuthManager(configPassword string, database *db.DB) *AuthManager {
 	pwd := strings.TrimSpace(configPassword)
 	if pwd == "" || pwd == "your-super-secret-admin-key-12345" {
 		b := make([]byte, 8)
@@ -35,6 +38,7 @@ func NewAuthManager(configPassword string) *AuthManager {
 	return &AuthManager{
 		password: pwd,
 		secret:   secret,
+		database: database,
 		sessions: make(map[string]time.Time),
 	}
 }
@@ -53,9 +57,15 @@ func (a *AuthManager) GenerateToken(pwd string) (string, error) {
 	h.Write([]byte(timestamp))
 	token := hex.EncodeToString(h.Sum(nil))
 
+	expiresAt := time.Now().Add(30 * 24 * time.Hour) // Valid for 30 days
+
 	a.mu.Lock()
-	a.sessions[token] = time.Now().Add(30 * 24 * time.Hour) // Valid for 30 days
+	a.sessions[token] = expiresAt
 	a.mu.Unlock()
+
+	if a.database != nil {
+		_ = a.database.SaveWebSession(token, expiresAt)
+	}
 
 	return token, nil
 }
@@ -69,18 +79,27 @@ func (a *AuthManager) ValidateToken(token string) bool {
 	exp, exists := a.sessions[token]
 	a.mu.RUnlock()
 
-	if !exists {
-		return false
+	if exists {
+		if time.Now().After(exp) {
+			a.mu.Lock()
+			delete(a.sessions, token)
+			a.mu.Unlock()
+			if a.database != nil {
+				_ = a.database.DeleteWebSession(token)
+			}
+			return false
+		}
+		return true
 	}
 
-	if time.Now().After(exp) {
+	if a.database != nil && a.database.IsValidWebSession(token) {
 		a.mu.Lock()
-		delete(a.sessions, token)
+		a.sessions[token] = time.Now().Add(30 * 24 * time.Hour)
 		a.mu.Unlock()
-		return false
+		return true
 	}
 
-	return true
+	return false
 }
 
 func (a *AuthManager) RequireAuth(next http.HandlerFunc) http.HandlerFunc {

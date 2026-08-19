@@ -131,7 +131,7 @@ func (b *Bot) StartDashboardServer(port string) {
 		port = "8080"
 	}
 
-	auth := NewAuthManager(b.cfg.AdminKey)
+	auth := NewAuthManager(b.cfg.AdminKey, b.db)
 	mux := http.NewServeMux()
 
 	// 1. Authentication Endpoint

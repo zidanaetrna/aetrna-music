@@ -137,6 +137,10 @@ func (db *DB) migrate() error {
 			songs_json TEXT NOT NULL,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);`,
+		`CREATE TABLE IF NOT EXISTS web_sessions (
+			token TEXT PRIMARY KEY,
+			expires_at TIMESTAMP NOT NULL
+		);`,
 	}
 
 	for _, query := range queries {
@@ -492,5 +496,57 @@ func (db *DB) DeleteQueueSnapshot(guildID string) error {
 	defer db.mu.Unlock()
 
 	_, err := db.Exec(`DELETE FROM queue_snapshots WHERE guild_id = ?`, guildID)
+	return err
+}
+
+func (db *DB) SaveWebSession(token string, expiresAt time.Time) error {
+	if db == nil || db.DB == nil {
+		return nil
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	_, err := db.Exec(`INSERT OR REPLACE INTO web_sessions (token, expires_at) VALUES (?, ?)`, token, expiresAt.Format(time.RFC3339))
+	return err
+}
+
+func (db *DB) IsValidWebSession(token string) bool {
+	if db == nil || db.DB == nil || token == "" {
+		return false
+	}
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var expStr string
+	err := db.QueryRow(`SELECT expires_at FROM web_sessions WHERE token = ?`, token).Scan(&expStr)
+	if err != nil {
+		return false
+	}
+
+	exp, err := time.Parse(time.RFC3339, expStr)
+	if err != nil {
+		return false
+	}
+
+	if time.Now().After(exp) {
+		go func() {
+			db.mu.Lock()
+			defer db.mu.Unlock()
+			_, _ = db.Exec(`DELETE FROM web_sessions WHERE token = ?`, token)
+		}()
+		return false
+	}
+
+	return true
+}
+
+func (db *DB) DeleteWebSession(token string) error {
+	if db == nil || db.DB == nil {
+		return nil
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	_, err := db.Exec(`DELETE FROM web_sessions WHERE token = ?`, token)
 	return err
 }

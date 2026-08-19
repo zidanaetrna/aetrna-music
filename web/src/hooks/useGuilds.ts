@@ -30,7 +30,10 @@ export const useGuilds = (token: string | null): { guilds: GuildInfo[]; loading:
                 });
 
                 if (!response.ok) {
-                    // 401 or any other error — return empty array
+                    if (response.status === 401) {
+                        localStorage.removeItem('aetrna_token');
+                        window.location.reload();
+                    }
                     if (!cancelled) {
                         setGuilds([]);
                         setLoading(false);

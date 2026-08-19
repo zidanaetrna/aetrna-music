@@ -46,6 +46,10 @@ export const useStatus = (token: string | null, selectedGuild?: string): {
         });
 
         if (!response.ok) {
+          if (response.status === 401) {
+            localStorage.removeItem('aetrna_token');
+            window.location.reload();
+          }
           const text = await response.text().catch(() => response.statusText);
           setError(text || `Request failed with status ${response.status}`);
           return;
