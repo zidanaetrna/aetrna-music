@@ -25,13 +25,30 @@
 
 </div>
 
+## 📸 Showcase & Feature Demo
+
+### 🌐 Real-Time Web Control Panel
+Analytics overview, live audio stream telemetry, memory consumption metrics, active queue inspector, and multi-guild server selector.
+
+![aetrna-music Web Dashboard Overview](docs/screenshots/dashboard.png)
+
+<br />
+
+| 🎵 Rich Hybrid Embed Playlist Preview | 🎤 Live Synced LRC Lyrics (`/lyrics`) |
+| :---: | :---: |
+| <img src="docs/screenshots/playlist.png" width="480" alt="Rich Hybrid Embed Playlist Preview" /> | <img src="docs/screenshots/lyrics.png" width="480" alt="Live Synced Lyrics" /> |
+
+---
+
 ## Why aetrna-music?
 
 - **Lavalink-Free**: No separate Lavalink server or Java runtime required. Lightweight native Go + Node.js architecture.
 - **Self-Hosted**: Run everything on your own server with full control.
-- **Web Dashboard**: React 18 + TypeScript control panel to manage playback directly from your browser.
+- **Web Dashboard**: React 18 + TypeScript control panel with real-time stream status, active queue inspector, memory consumption telemetry, and multi-guild switcher.
+- **Rich Hybrid Embed UI**: Aesthetic Discord embed cards with full-width thumbnails, clickable track list previews (`1. 🟢 [Title](URL) (3:45)`), and 2-row interactive control button matrices (`[ Pause ]`, `[ Skip ]`, `[ Prev ]`, `[ Loop ]`, `[ Shuffle ]`, `[ Vol- ]`, `[ Vol+ ]`, `[ Lyrics ]`, `[ Favorite ]`, `[ Stop ]`).
+- **Custom Saved Playlists**: Create, save, manage, and play custom user playlists (`/playlist create`, `/playlist add-track`, `/playlist play`, `/playlist list-tracks`). Supports YouTube links, Spotify URLs, and manual title searches (`query: FLOW Sign`).
+- **Synced LRC Lyrics**: Live line-by-line synchronized lyrics directly in Discord embeds with dual-orientation matching (`Title - Artist` vs `Artist - Title`) for Japanese/Anime/J-Pop tracks (`/lyrics`).
 - **Audio Filters**: On-the-fly FFmpeg DSP filters (`bassboost`, `nightcore`, `vaporwave`, `8d`, `pop`).
-- **Synced LRC Lyrics**: Live line-by-line synchronized lyrics directly in Discord embeds (`/lyrics`).
 - **Docker-Ready**: Instant containerized setup without assembling dependencies manually.
 - **Smart YouTube Search Ranker**: Deterministic 5-candidate ranking in Go (< 0.05ms) with zero network overhead. Solve broadcaster TV-size clip traps for anime/J-Pop queries without query manipulation. [Read full documentation in docs/search-ranking.md](docs/search-ranking.md).
 
@@ -112,7 +129,7 @@ npx aetrna-music init
 `aetrna-music` comes with a modern React 18 + TypeScript Web Dashboard accessible at `http://localhost:8080`.
 
 - **React 18 + TypeScript + Vite**: Built with modern component architecture, strict type safety, and embedded into the Go executable (`//go:embed all:dist`).
-- **Real-Time Telemetry**: Live WebSocket status updates for RAM usage, active guild counts, and server uptime.
+- **Real-Time Telemetry & Audio Stream Inspector**: Live WebSocket status updates for active guild stream engine, RAM consumption, and current playing track artwork.
 - **System Logs Tab**: Real-time SSE-streamed Go process logs (500-entry ring buffer) with live color-highlighting for `[ERROR]`, `[WARN]`, `[INFO]`, and `[DEBUG]` — useful for diagnostics without SSHing into the container.
 - **Cloudflare Dark Charcoal UI**: Collapsible sidebar (`250px` vs `64px`), quick search shortcut (`Ctrl + K`), and unified Deep Emerald Green theme (`#10B981`).
 - **Multi-Guild Target Selector**: Switch between connected Discord servers to manage queues and playback controls.
@@ -127,22 +144,28 @@ npx aetrna-music init
 |---|---|---|
 | `/play <query>` | Playback | Search or queue track/playlist from YouTube or Spotify |
 | `/search <query>` | Playback | Search tracks with interactive dropdown menu |
+| `/playlist create <name>` | Playlist | Create a new custom saved playlist |
+| `/playlist add-track <playlist> <query>` | Playlist | Add a song, YouTube link, or Spotify link/playlist to a saved playlist |
+| `/playlist play <name>` | Playlist | Play a saved playlist into your voice channel with Rich Hybrid Embed & Control Buttons |
+| `/playlist list` | Playlist | List all your custom saved playlists |
+| `/playlist list-tracks <name>` | Playlist | View tracks in a saved playlist |
+| `/playlist delete <name>` | Playlist | Delete a saved playlist |
 | `/pause` / `/resume` | Playback | Pause or resume audio playback |
 | `/skip` | Playback | Skip to the next track in queue |
 | `/previous` | Playback | Play previous song from history |
 | `/stop` | Playback | Stop playback, clear queue, and leave voice channel |
 | `/queue` | Queue | View paginated queue table with progress bar |
 | `/nowplaying` | Queue | View Now Playing card with interactive control buttons |
-| `/lyrics` | Playback | Fetch synced line-by-line LRC lyrics for current track |
+| `/lyrics` | Playback | Fetch synced line-by-line LRC lyrics for current track with live time-offset adjustment |
 | `/shuffle` | Queue | Shuffle current track queue |
 | `/loop` | Queue | Toggle loop mode (Off / Song / Queue) |
 | `/volume <level>` | Playback | Set playback volume level (0 – 200%) |
 | `/favorite` | Favorites | Save current song to your personal SQLite favorites |
 | `/favorites` | Favorites | View and play your saved favorite songs |
-| `/collection` | Collection | Save or load custom user playlists (`save <name>`, `load <name>`) |
 | `/filter <name>` | DSP Filter | Apply FFmpeg audio filters (`bassboost`, `nightcore`, `vaporwave`, `8d`, `pop`) |
 | `/stats` | System | View bot performance & RAM usage |
 | `/ping` | System | Check bot heartbeat and WebSocket latency |
+| `/language <lang>` | Admin | Set server bot language (Admin only: English 🇬🇧, Indonesian 🇮🇩, Japanese 🇯🇵) |
 | `/ytauth` | Admin | YouTube authentication & cookie troubleshooting guide |
 
 ---
