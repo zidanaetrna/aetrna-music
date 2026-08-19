@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"aetrna-music/internal/i18n"
@@ -33,13 +34,19 @@ func sendPlaylistResponse(s *discordgo.Session, i *discordgo.InteractionCreate, 
 		Flags:   flags,
 	})
 	if err != nil {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		log.Printf("[ERROR] [Playlist] FollowupMessageCreate failed (appID=%s, tokenLen=%d): %v", i.AppID, len(i.Token), err)
+		err2 := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: content,
 				Flags:   flags,
 			},
 		})
+		if err2 != nil {
+			log.Printf("[ERROR] [Playlist] InteractionRespond fallback failed: %v", err2)
+		}
+	} else {
+		log.Printf("[INFO] [Playlist] sendPlaylistResponse FollowupMessageCreate succeeded!")
 	}
 }
 

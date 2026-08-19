@@ -272,6 +272,7 @@ func (b *Bot) handleProxiedPlaylist(i *discordgo.InteractionCreate, p ProxiedInt
 	}
 
 	subCmd := opts[0]
+	log.Printf("[INFO] [Bot] handleProxiedPlaylist subCmd=%s user=%s guild=%s", subCmd.Name, p.UserID, p.GuildID)
 	switch subCmd.Name {
 	case "list":
 		b.handler.HandlePlaylistList(b.session, i)
@@ -282,6 +283,7 @@ func (b *Bot) handleProxiedPlaylist(i *discordgo.InteractionCreate, p ProxiedInt
 				name = fmt.Sprintf("%v", opt.Value)
 			}
 		}
+		log.Printf("[INFO] [Bot] Playlist create name=%q", name)
 		b.handler.HandlePlaylistCreate(b.session, i, name)
 	case "play":
 		name := ""
@@ -290,6 +292,7 @@ func (b *Bot) handleProxiedPlaylist(i *discordgo.InteractionCreate, p ProxiedInt
 				name = fmt.Sprintf("%v", opt.Value)
 			}
 		}
+		log.Printf("[INFO] [Bot] Playlist play name=%q voiceChannel=%s", name, p.MemberVoiceChannelID)
 		b.handler.HandlePlaylistPlay(b.session, i, name, p.MemberVoiceChannelID)
 	case "add-track":
 		playlistName := ""
