@@ -20,19 +20,34 @@ func getUserID(i *discordgo.InteractionCreate) string {
 	return ""
 }
 
+func sendPlaylistResponse(s *discordgo.Session, i *discordgo.InteractionCreate, content string, ephemeral bool) {
+	flags := discordgo.MessageFlags(0)
+	if ephemeral {
+		flags = discordgo.MessageFlagsEphemeral
+	}
+
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: content,
+			Flags:   flags,
+		},
+	})
+	if err != nil {
+		_, _ = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: content,
+			Flags:   flags,
+		})
+	}
+}
+
 func (h *Handler) HandlePlaylistList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	lang := h.GetGuildLang(i.GuildID)
 	userID := getUserID(i)
 
 	colls, err := h.database.GetUserCollections(userID)
 	if err != nil || len(colls) == 0 {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: i18n.Globali18n.T(lang, "no_collections"),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "no_collections"), true)
 		return
 	}
 
@@ -46,12 +61,7 @@ func (h *Handler) HandlePlaylistList(s *discordgo.Session, i *discordgo.Interact
 
 	sb.WriteString("\n*Use `/playlist play <name>` to start playback or `/playlist list-tracks <name>` to view tracks.*")
 
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: sb.String(),
-		},
-	})
+	sendPlaylistResponse(s, i, sb.String(), false)
 }
 
 func (h *Handler) HandlePlaylistCreate(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
@@ -60,34 +70,17 @@ func (h *Handler) HandlePlaylistCreate(s *discordgo.Session, i *discordgo.Intera
 
 	cleanName := strings.TrimSpace(name)
 	if cleanName == "" {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: i18n.Globali18n.T(lang, "playlist_empty_name"),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "playlist_empty_name"), true)
 		return
 	}
 
 	coll, err := h.database.CreateCollection(userID, cleanName)
 	if err != nil {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: i18n.Globali18n.T(lang, "collection_create_error", cleanName, err),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "collection_create_error", cleanName, err), true)
 		return
 	}
 
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: i18n.Globali18n.T(lang, "playlist_created", coll.Name, coll.Name),
-		},
-	})
+	sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "playlist_created", coll.Name, coll.Name), false)
 }
 
 func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.InteractionCreate, playlistName, query string) {
@@ -96,13 +89,7 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 
 	coll, err := h.database.GetCollectionByName(userID, playlistName)
 	if err != nil || coll == nil {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: i18n.Globali18n.T(lang, "collection_not_found", playlistName),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "collection_not_found", playlistName), true)
 		return
 	}
 
@@ -172,37 +159,19 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 	userID := getUserID(i)
 	voiceState, err := getVoiceState(s, i.GuildID, userID)
 	if err != nil || voiceState == nil {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: i18n.Globali18n.T(lang, "must_join_voice"),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "must_join_voice"), true)
 		return
 	}
 
 	coll, err := h.database.GetCollectionByName(userID, name)
 	if err != nil || coll == nil {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: i18n.Globali18n.T(lang, "collection_not_found", name),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "collection_not_found", name), true)
 		return
 	}
 
 	items, err := h.database.GetCollectionItems(coll.ID)
 	if err != nil || len(items) == 0 {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: i18n.Globali18n.T(lang, "collection_empty"),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "collection_empty"), true)
 		return
 	}
 
@@ -259,25 +228,13 @@ func (h *Handler) HandlePlaylistListTracks(s *discordgo.Session, i *discordgo.In
 
 	coll, err := h.database.GetCollectionByName(userID, name)
 	if err != nil || coll == nil {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: i18n.Globali18n.T(lang, "collection_not_found", name),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "collection_not_found", name), true)
 		return
 	}
 
 	items, err := h.database.GetCollectionItems(coll.ID)
 	if err != nil || len(items) == 0 {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: i18n.Globali18n.T(lang, "collection_empty"),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "collection_empty"), true)
 		return
 	}
 
@@ -298,12 +255,7 @@ func (h *Handler) HandlePlaylistListTracks(s *discordgo.Session, i *discordgo.In
 		sb.WriteString(fmt.Sprintf("\n*...and %d more tracks.*", len(items)-15))
 	}
 
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: sb.String(),
-		},
-	})
+	sendPlaylistResponse(s, i, sb.String(), false)
 }
 
 func (h *Handler) HandlePlaylistDelete(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
@@ -312,20 +264,9 @@ func (h *Handler) HandlePlaylistDelete(s *discordgo.Session, i *discordgo.Intera
 
 	err := h.database.DeleteCollection(userID, name)
 	if err != nil {
-		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: fmt.Sprintf("❌ Could not delete playlist '%s': %v", name, err),
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		sendPlaylistResponse(s, i, fmt.Sprintf("❌ Could not delete playlist '%s': %v", name, err), true)
 		return
 	}
 
-	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: i18n.Globali18n.T(lang, "playlist_deleted", name),
-		},
-	})
+	sendPlaylistResponse(s, i, i18n.Globali18n.T(lang, "playlist_deleted", name), false)
 }

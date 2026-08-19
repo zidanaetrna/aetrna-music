@@ -726,6 +726,10 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			content = i18n.Globali18n.T(lang, "filter_changed", filterName)
 		}
 
+	case "playlist":
+		b.handleProxiedPlaylist(i, p)
+		return
+
 	case "volume", "vol":
 		var volVal int = -1
 		var opts []*discordgo.ApplicationCommandInteractionDataOption
