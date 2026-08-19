@@ -192,27 +192,54 @@ func (b *Bot) StartDashboardServer(port string) {
 		}
 
 		guildIDs := b.store.GetAllGuildIDs()
+		guildCount := len(guildIDs)
+		if b.session != nil && b.session.State != nil && len(b.session.State.Guilds) > 0 {
+			guildCount = len(b.session.State.Guilds)
+		}
+
+		targetGuildID := r.URL.Query().Get("guildId")
+		if targetGuildID == "" && len(guildIDs) > 0 {
+			targetGuildID = guildIDs[0]
+		}
+		if targetGuildID == "" && b.session != nil && b.session.State != nil && len(b.session.State.Guilds) > 0 {
+			targetGuildID = b.session.State.Guilds[0].ID
+		}
+
 		var nowPlaying map[string]interface{}
 		var queueItems []map[string]string
 
-		if len(guildIDs) > 0 {
-			q := b.store.Get(guildIDs[0])
-			if q.NowPlaying != nil {
-				nowPlaying = map[string]interface{}{
-					"title":     q.NowPlaying.Title,
-					"author":    q.NowPlaying.Author,
-					"duration":  music.FormatDuration(q.NowPlaying.Duration),
-					"thumbnail": q.NowPlaying.Thumbnail,
-					"requested": q.NowPlaying.RequestedBy,
+		if targetGuildID != "" {
+			q := b.store.Get(targetGuildID)
+			if q != nil {
+				if q.NowPlaying != nil {
+					reqUser := q.NowPlaying.RequestedBy
+					if b.session != nil && reqUser != "" {
+						if u, err := b.session.User(reqUser); err == nil && u != nil {
+							reqUser = u.Username
+						}
+					}
+					nowPlaying = map[string]interface{}{
+						"title":     q.NowPlaying.Title,
+						"author":    q.NowPlaying.Author,
+						"duration":  music.FormatDuration(q.NowPlaying.Duration),
+						"thumbnail": q.NowPlaying.Thumbnail,
+						"requested": reqUser,
+					}
 				}
-			}
-			for _, song := range q.Songs {
-				queueItems = append(queueItems, map[string]string{
-					"title":     song.Title,
-					"author":    song.Author,
-					"duration":  music.FormatDuration(song.Duration),
-					"requested": song.RequestedBy,
-				})
+				for _, song := range q.Songs {
+					reqUser := song.RequestedBy
+					if b.session != nil && reqUser != "" {
+						if u, err := b.session.User(reqUser); err == nil && u != nil {
+							reqUser = u.Username
+						}
+					}
+					queueItems = append(queueItems, map[string]string{
+						"title":     song.Title,
+						"author":    song.Author,
+						"duration":  music.FormatDuration(song.Duration),
+						"requested": reqUser,
+					})
+				}
 			}
 		}
 
@@ -220,7 +247,7 @@ func (b *Bot) StartDashboardServer(port string) {
 
 		resp := map[string]interface{}{
 			"status":     "ok",
-			"guildCount": len(guildIDs),
+			"guildCount": guildCount,
 			"ramMB":      ramMB,
 			"uptime":     uptime,
 			"hasCookies": hasCookies,
@@ -244,8 +271,6 @@ func (b *Bot) StartDashboardServer(port string) {
 	mux.HandleFunc("/api/guilds", auth.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		guildIDs := b.store.GetAllGuildIDs()
-
 		type guildInfo struct {
 			ID          string `json:"id"`
 			Name        string `json:"name"`
@@ -253,21 +278,46 @@ func (b *Bot) StartDashboardServer(port string) {
 			Status      string `json:"status"`
 		}
 
-		guilds := make([]guildInfo, 0, len(guildIDs))
-		for _, id := range guildIDs {
-			q := b.store.Get(id)
+		var guilds []guildInfo
 
-			status := "idle"
-			if q.IsPlaying {
-				status = "playing"
+		if b.session != nil && b.session.State != nil && len(b.session.State.Guilds) > 0 {
+			for _, g := range b.session.State.Guilds {
+				q := b.store.Get(g.ID)
+				status := "idle"
+				if q != nil && q.IsPlaying {
+					status = "playing"
+				}
+
+				guilds = append(guilds, guildInfo{
+					ID:          g.ID,
+					Name:        g.Name,
+					MemberCount: g.MemberCount,
+					Status:      status,
+				})
 			}
+		} else {
+			guildIDs := b.store.GetAllGuildIDs()
+			for _, id := range guildIDs {
+				q := b.store.Get(id)
+				status := "idle"
+				if q != nil && q.IsPlaying {
+					status = "playing"
+				}
 
-			guilds = append(guilds, guildInfo{
-				ID:          id,
-				Name:        id,
-				MemberCount: 0,
-				Status:      status,
-			})
+				guildName := id
+				if b.session != nil && b.session.State != nil {
+					if g, err := b.session.State.Guild(id); err == nil && g != nil && g.Name != "" {
+						guildName = g.Name
+					}
+				}
+
+				guilds = append(guilds, guildInfo{
+					ID:          id,
+					Name:        guildName,
+					MemberCount: 0,
+					Status:      status,
+				})
+			}
 		}
 
 		_ = json.NewEncoder(w).Encode(guilds)

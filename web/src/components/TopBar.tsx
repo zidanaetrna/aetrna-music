@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useI18n } from '../context/I18nContext';
 import { useToast } from '../context/ToastContext';
 import { useGuilds, GuildInfo } from '../hooks/useGuilds';
@@ -10,13 +10,6 @@ interface TopBarProps {
     token?: string | null;
 }
 
-const DEFAULT_GUILDS: GuildInfo[] = [
-    { id: '102938475610293847', name: 'Aetrna Lounge', memberCount: 0, status: 'playing' },
-    { id: '293847102938471029', name: 'Chill Vibes & Gaming', memberCount: 0, status: 'queued' },
-    { id: '384729103847291038', name: 'Code & Music Squad', memberCount: 0, status: 'idle' },
-    { id: '482910384729103847', name: 'Anime Music Hub', memberCount: 0, status: 'idle' },
-];
-
 export const TopBar: React.FC<TopBarProps> = ({
     activeTab,
     selectedGuild,
@@ -27,7 +20,11 @@ export const TopBar: React.FC<TopBarProps> = ({
     const { t } = useI18n();
     const { showToast } = useToast();
 
-    const displayGuilds = guilds.length > 0 ? guilds : DEFAULT_GUILDS;
+    useEffect(() => {
+        if (guilds.length > 0 && (!selectedGuild || !guilds.some(g => g.id === selectedGuild))) {
+            setSelectedGuild(guilds[0].id);
+        }
+    }, [guilds, selectedGuild, setSelectedGuild]);
 
     const handleGuildChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const val = e.target.value;
@@ -58,7 +55,8 @@ export const TopBar: React.FC<TopBarProps> = ({
                     className="cf-guild-dropdown"
                 >
                     {loading && guilds.length === 0 && <option value="" disabled>Loading guilds…</option>}
-                    {displayGuilds.map((g: GuildInfo) => (
+                    {guilds.length === 0 && !loading && <option value="" disabled>No active Discord servers</option>}
+                    {guilds.map((g: GuildInfo) => (
                         <option key={g.id} value={g.id}>
                             {g.status === 'playing' ? '🟢' : '⚪'} {g.name} ({g.status})
                         </option>

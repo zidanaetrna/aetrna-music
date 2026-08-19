@@ -21,7 +21,7 @@ export interface StatusData {
   clientIP: string;
 }
 
-export const useStatus = (token: string | null): {
+export const useStatus = (token: string | null, selectedGuild?: string): {
   status: StatusData | null;
   loading: boolean;
   error: string | null;
@@ -38,7 +38,8 @@ export const useStatus = (token: string | null): {
 
     const fetchStatus = async () => {
       try {
-        const response = await fetch('/api/status', {
+        const query = selectedGuild ? `?guildId=${encodeURIComponent(selectedGuild)}` : '';
+        const response = await fetch(`/api/status${query}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },

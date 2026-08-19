@@ -178,7 +178,9 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild, token =
             <div className="glass-card queue-table-card">
                 <div className="table-header-row">
                     <h3>{t('title_queue')}</h3>
-                    <span className="stat-badge blue">{status?.queue?.length ?? 0} Enqueued</span>
+                    <span className="stat-badge blue">
+                        {(status?.nowPlaying ? 1 : 0) + (status?.queue?.length ?? 0)} Active Tracks
+                    </span>
                 </div>
 
                 <table className="queue-table">
@@ -193,21 +195,37 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ selectedGuild, token =
                         </tr>
                     </thead>
                     <tbody>
-                        {status?.queue && status.queue.length > 0 ? (
-                            status.queue.map((song, i) => (
-                                <tr key={i}>
-                                    <td>{i + 1}</td>
-                                    <td>
-                                        <div className="track-row-cell">
-                                            <strong>{song.title}</strong>
-                                        </div>
-                                    </td>
-                                    <td>{song.author}</td>
-                                    <td>{song.duration}</td>
-                                    <td>{song.requested}</td>
-                                    <td><span className="status-pill queued">Queued</span></td>
-                                </tr>
-                            ))
+                        {status?.nowPlaying || (status?.queue && status.queue.length > 0) ? (
+                            <>
+                                {status?.nowPlaying && (
+                                    <tr style={{ background: 'rgba(16, 185, 129, 0.08)' }}>
+                                        <td>1</td>
+                                        <td>
+                                            <div className="track-row-cell">
+                                                <strong>{status.nowPlaying.title}</strong>
+                                            </div>
+                                        </td>
+                                        <td>{status.nowPlaying.author}</td>
+                                        <td>{status.nowPlaying.duration}</td>
+                                        <td>{status.nowPlaying.requested}</td>
+                                        <td><span className="status-pill playing">🟢 Playing</span></td>
+                                    </tr>
+                                )}
+                                {status?.queue && status.queue.map((song, i) => (
+                                    <tr key={i}>
+                                        <td>{(status?.nowPlaying ? 2 : 1) + i}</td>
+                                        <td>
+                                            <div className="track-row-cell">
+                                                <strong>{song.title}</strong>
+                                            </div>
+                                        </td>
+                                        <td>{song.author}</td>
+                                        <td>{song.duration}</td>
+                                        <td>{song.requested}</td>
+                                        <td><span className="status-pill queued">Queued</span></td>
+                                    </tr>
+                                ))}
+                            </>
                         ) : (
                             <tr>
                                 <td colSpan={6} style={{ textAlign: 'center', color: 'var(--cf-text-muted)' }}>No tracks in queue</td>

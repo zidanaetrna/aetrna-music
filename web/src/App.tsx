@@ -18,7 +18,7 @@ const DashboardContent: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const { t } = useI18n();
     const { showToast } = useToast();
-    const { status } = useStatus(token);
+    const { status } = useStatus(token, selectedGuild);
     const { lines, reconnecting } = useLogs(activeTab === 'logs', token);
 
     const handleLogout = () => {
