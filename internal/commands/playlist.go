@@ -10,9 +10,19 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+func getUserID(i *discordgo.InteractionCreate) string {
+	if i.Member != nil && i.Member.User != nil {
+		return i.Member.User.ID
+	}
+	if i.User != nil {
+		return i.User.ID
+	}
+	return ""
+}
+
 func (h *Handler) HandlePlaylistList(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	lang := h.GetGuildLang(i.GuildID)
-	userID := i.Member.User.ID
+	userID := getUserID(i)
 
 	colls, err := h.database.GetUserCollections(userID)
 	if err != nil || len(colls) == 0 {
@@ -46,7 +56,7 @@ func (h *Handler) HandlePlaylistList(s *discordgo.Session, i *discordgo.Interact
 
 func (h *Handler) HandlePlaylistCreate(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
 	lang := h.GetGuildLang(i.GuildID)
-	userID := i.Member.User.ID
+	userID := getUserID(i)
 
 	cleanName := strings.TrimSpace(name)
 	if cleanName == "" {
@@ -82,7 +92,7 @@ func (h *Handler) HandlePlaylistCreate(s *discordgo.Session, i *discordgo.Intera
 
 func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.InteractionCreate, playlistName, query string) {
 	lang := h.GetGuildLang(i.GuildID)
-	userID := i.Member.User.ID
+	userID := getUserID(i)
 
 	coll, err := h.database.GetCollectionByName(userID, playlistName)
 	if err != nil || coll == nil {
@@ -159,7 +169,8 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 
 func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
 	lang := h.GetGuildLang(i.GuildID)
-	voiceState, err := getVoiceState(s, i.GuildID, i.Member.User.ID)
+	userID := getUserID(i)
+	voiceState, err := getVoiceState(s, i.GuildID, userID)
 	if err != nil || voiceState == nil {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -171,7 +182,7 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 		return
 	}
 
-	coll, err := h.database.GetCollectionByName(i.Member.User.ID, name)
+	coll, err := h.database.GetCollectionByName(userID, name)
 	if err != nil || coll == nil {
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -217,7 +228,7 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 			Duration:      item.Duration,
 			Thumbnail:     item.Thumbnail,
 			Author:        item.Author,
-			RequestedBy:   i.Member.User.ID,
+			RequestedBy:   userID,
 			ChannelID:     voiceState.ChannelID,
 			TextChannelID: i.ChannelID,
 		})
@@ -244,7 +255,7 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 
 func (h *Handler) HandlePlaylistListTracks(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
 	lang := h.GetGuildLang(i.GuildID)
-	userID := i.Member.User.ID
+	userID := getUserID(i)
 
 	coll, err := h.database.GetCollectionByName(userID, name)
 	if err != nil || coll == nil {
@@ -297,7 +308,7 @@ func (h *Handler) HandlePlaylistListTracks(s *discordgo.Session, i *discordgo.In
 
 func (h *Handler) HandlePlaylistDelete(s *discordgo.Session, i *discordgo.InteractionCreate, name string) {
 	lang := h.GetGuildLang(i.GuildID)
-	userID := i.Member.User.ID
+	userID := getUserID(i)
 
 	err := h.database.DeleteCollection(userID, name)
 	if err != nil {
