@@ -93,18 +93,28 @@ function createApiRouter(context) {
                 players.set(guildId, player);
 
                 let streamPlaybackStartedAt = 0;
+                let playRequestedAt = Date.now();
+                let hasEnteredPlayingState = false;
 
                 player.on(AudioPlayerStatus.Playing, () => {
+                    hasEnteredPlayingState = true;
                     streamPlaybackStartedAt = Date.now();
                     console.log(`[INFO] [VoiceServer] AudioPlayer entered Playing state for guild ${guildId}`);
                 });
 
                 player.on(AudioPlayerStatus.Idle, () => {
                     if (playSessions.get(guildId) !== currentSessionId) return;
+
+                    // Ignore initial Idle state during network/FFmpeg buffering phase (0-15s window before Playing)
+                    if (!hasEnteredPlayingState && (Date.now() - playRequestedAt) < 15000) {
+                        console.log(`[DEBUG] [VoiceServer] Ignoring premature Idle state during buffering for guild ${guildId}`);
+                        return;
+                    }
+
                     const durationMs = streamPlaybackStartedAt > 0 ? (Date.now() - streamPlaybackStartedAt) : 0;
                     console.log(`[INFO] [VoiceServer] Track ended for guild ${guildId} (duration: ${durationMs}ms)`);
                     cleanupStreams(guildId);
-                    if (streamPlaybackStartedAt === 0 || durationMs < 1500) {
+                    if (!hasEnteredPlayingState || durationMs < 1500) {
                         notifyBotTrackEnd(guildId, 'playback_failed');
                     } else {
                         notifyBotTrackEnd(guildId, 'finished');
