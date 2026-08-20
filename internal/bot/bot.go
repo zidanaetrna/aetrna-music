@@ -938,7 +938,8 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 	default:
 		log.Printf("[WARN] [GoBot] Unhandled command or button interaction: %q", cmd)
-		return
+		content = "Interaction expired or unavailable. Please use `/play` to start a new session."
+		flags = discordgo.MessageFlagsEphemeral
 	}
 
 	if _, err := b.session.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
