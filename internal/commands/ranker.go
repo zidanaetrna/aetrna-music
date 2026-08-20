@@ -21,6 +21,7 @@ type ScoreBreakdown struct {
 	AuthorMatch        float64 `json:"authorMatch"`
 	Duration           float64 `json:"duration"`
 	BroadcasterPenalty float64 `json:"broadcasterPenalty"`
+	TopicBoost         float64 `json:"topicBoost"`
 	Live               float64 `json:"live"`
 	FullIntent         float64 `json:"fullIntent"`
 	Instrumental       float64 `json:"instrumental"`
@@ -101,13 +102,13 @@ func ScoreCandidateBreakdown(qTokens []string, intent QueryIntent, song music.So
 	titleWords := tokenizeWords(tLower)
 	authorWords := tokenizeWords(aLower)
 
-	// 2. Separate Title Match (Weight: 35) & Author Match (Weight: 15)
+	// 2. Separate Title Match (Weight: 35) & Author Match (Weight: 15) with Fuzzy/Prefix Matching
 	if len(qTokens) > 0 {
-		titleMatches := countExactMatches(qTokens, titleWords)
-		authorMatches := countExactMatches(qTokens, authorWords)
+		titleMatchScore := countFuzzyOrExactMatches(qTokens, titleWords)
+		authorMatchScore := countFuzzyOrExactMatches(qTokens, authorWords)
 
-		tRatio := float64(titleMatches) / float64(len(qTokens))
-		aRatio := float64(authorMatches) / float64(len(qTokens))
+		tRatio := titleMatchScore / float64(len(qTokens))
+		aRatio := authorMatchScore / float64(len(qTokens))
 
 		bd.TitleMatch = math.Round(tRatio*35.0*100) / 100
 		bd.AuthorMatch = math.Round(aRatio*15.0*100) / 100
@@ -126,8 +127,8 @@ func ScoreCandidateBreakdown(qTokens []string, intent QueryIntent, song music.So
 			// Normal/Default track selection (Smoother 150s - 450s range)
 			if dur >= 150 && dur <= 450 {
 				bd.Duration = +30.0 // Standard full track length (2:30 to 7:30)
-			} else if dur >= 60 && dur <= 110 {
-				bd.Duration = -35.0 // TV-size 1:30 penalty when full track expected
+			} else if dur >= 60 && dur <= 115 {
+				bd.Duration = -45.0 // Strong TV-size 1:30 penalty when full track expected
 			} else if dur < 45 {
 				bd.Duration = -40.0 // Extremely short / Shorts penalty
 			} else if dur > 900 {
@@ -138,10 +139,15 @@ func ScoreCandidateBreakdown(qTokens []string, intent QueryIntent, song music.So
 
 	// 4. Broadcaster TV Channel Combo Penalty (Specific anime distributors)
 	if isBroadcasterChannel(aLower) && dur > 0 && dur <= 120 && !intent.TVSize {
-		bd.BroadcasterPenalty = -30.0
+		bd.BroadcasterPenalty = -40.0
 	}
 
-	// 5. Token-Based Live Version Signal
+	// 5. Official Topic / Official Channel Boost
+	if strings.Contains(aLower, "- topic") || strings.Contains(aLower, "official") || strings.Contains(aLower, "vevo") {
+		bd.TopicBoost = +15.0
+	}
+
+	// 6. Token-Based Live Version Signal
 	isCandidateLive := containsToken(titleWords, "live")
 	if intent.Live && isCandidateLive {
 		bd.Live = +30.0
@@ -149,12 +155,12 @@ func ScoreCandidateBreakdown(qTokens []string, intent QueryIntent, song music.So
 		bd.Live = -15.0
 	}
 
-	// 6. Token-Based Full Intent Signal
+	// 7. Token-Based Full Intent Signal
 	if intent.Full && (dur >= 150 || containsToken(titleWords, "full")) {
 		bd.FullIntent = +25.0
 	}
 
-	// 7. Token-Based Instrumental / Karaoke Intent Signal
+	// 8. Token-Based Instrumental / Karaoke Intent Signal
 	isCandidateInstrumental := containsToken(titleWords, "instrumental") || containsToken(titleWords, "karaoke") || containsToken(titleWords, "piano")
 	if intent.Instrumental && isCandidateInstrumental {
 		bd.Instrumental = +30.0
@@ -162,21 +168,78 @@ func ScoreCandidateBreakdown(qTokens []string, intent QueryIntent, song music.So
 		bd.Instrumental = -10.0
 	}
 
-	bd.Total = math.Round((bd.Base+bd.TitleMatch+bd.AuthorMatch+bd.Duration+bd.BroadcasterPenalty+bd.Live+bd.FullIntent+bd.Instrumental)*100) / 100
+	bd.Total = math.Round((bd.Base+bd.TitleMatch+bd.AuthorMatch+bd.Duration+bd.BroadcasterPenalty+bd.TopicBoost+bd.Live+bd.FullIntent+bd.Instrumental)*100) / 100
 	return bd
 }
 
-func countExactMatches(sourceTokens, targetTokens []string) int {
-	matched := 0
+func countFuzzyOrExactMatches(sourceTokens, targetTokens []string) float64 {
+	totalMatchScore := 0.0
 	for _, st := range sourceTokens {
+		bestMatch := 0.0
 		for _, tt := range targetTokens {
 			if st == tt {
-				matched++
+				bestMatch = 1.0
 				break
 			}
+			if len(st) >= 4 && len(tt) >= 4 {
+				if strings.HasPrefix(st, tt) || strings.HasPrefix(tt, st) {
+					if bestMatch < 0.85 {
+						bestMatch = 0.85
+					}
+				} else if levenshteinDistance(st, tt) <= 2 {
+					if bestMatch < 0.80 {
+						bestMatch = 0.80
+					}
+				}
+			}
+		}
+		totalMatchScore += bestMatch
+	}
+	return totalMatchScore
+}
+
+func levenshteinDistance(s, t string) int {
+	r1, r2 := []rune(s), []rune(t)
+	n, m := len(r1), len(r2)
+	if n == 0 {
+		return m
+	}
+	if m == 0 {
+		return n
+	}
+
+	d := make([][]int, n+1)
+	for i := range d {
+		d[i] = make([]int, m+1)
+		d[i][0] = i
+	}
+	for j := 0; j <= m; j++ {
+		d[0][j] = j
+	}
+
+	for i := 1; i <= n; i++ {
+		for j := 1; j <= m; j++ {
+			cost := 0
+			if r1[i-1] != r2[j-1] {
+				cost = 1
+			}
+			d[i][j] = min3(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1]+cost)
 		}
 	}
-	return matched
+	return d[n][m]
+}
+
+func min3(a, b, c int) int {
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
+	return c
 }
 
 func containsToken(tokens []string, target string) bool {

@@ -16,7 +16,7 @@ function createApiRouter(context) {
     } = context;
 
     function notifyBotTrackEnd(guildId, reason) {
-        const data = JSON.stringify({ guild_id: guildId, reason: reason || 'finished' });
+        const data = JSON.stringify({ guildId: guildId, guild_id: guildId, reason: reason || 'finished' });
         const req = http.request(`http://127.0.0.1:${GO_IPC_PORT}/internal/track-end`, {
             method: 'POST',
             headers: {

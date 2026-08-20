@@ -200,16 +200,23 @@ func (b *Bot) startInternalWebhookServer() {
 	// Track-end event from voice-server
 	mux.HandleFunc("/internal/track-end", requireIPCToken(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			GuildID string `json:"guildId"`
+			GuildID string `json:"guild_id"`
+			GuildIDCamel string `json:"guildId"`
 			Reason  string `json:"reason"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.GuildID != "" {
-			log.Printf("[INFO] [GoBot] Track end event for guild %s (%s)", body.GuildID, body.Reason)
-			reason := body.Reason
-			if reason == "" {
-				reason = "finished"
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+			gid := body.GuildID
+			if gid == "" {
+				gid = body.GuildIDCamel
 			}
-			b.store.Get(body.GuildID).SignalTrackEndWithReason(reason)
+			if gid != "" {
+				log.Printf("[INFO] [GoBot] Track end event for guild %s (%s)", gid, body.Reason)
+				reason := body.Reason
+				if reason == "" {
+					reason = "finished"
+				}
+				b.store.Get(gid).SignalTrackEndWithReason(reason)
+			}
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
