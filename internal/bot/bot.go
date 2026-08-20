@@ -401,7 +401,7 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 			// Resolve first track synchronously for immediate playback
 			firstQuery := fmt.Sprintf("%s - %s", tracks[0].Artist, tracks[0].Name)
 			log.Printf("[INFO] [Bot] Searching YouTube for first Spotify track: %s", firstQuery)
-			firstSongs, err := commands.SearchYouTube(firstQuery, 1, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+			firstSongs, err := commands.SearchYouTube(firstQuery, 5, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 			if err == nil && len(firstSongs) > 0 {
 				songs = append(songs, firstSongs[0])
 			}
@@ -415,7 +415,7 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 			go func() {
 				for _, trk := range tracks[1:] {
 					tQuery := fmt.Sprintf("%s - %s", trk.Artist, trk.Name)
-					sSongs, err := commands.SearchYouTube(tQuery, 1, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+					sSongs, err := commands.SearchYouTube(tQuery, 5, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 					if err == nil && len(sSongs) > 0 {
 						sSong := sSongs[0]
 						sSong.RequestedBy = p.UserID
@@ -441,7 +441,7 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 
 	if len(songs) == 0 {
 		log.Printf("[INFO] [Bot] Searching YouTube: %s", query)
-		ytSongs, err := commands.SearchYouTube(query, 1, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+		ytSongs, err := commands.SearchYouTube(query, 5, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 		if err != nil || len(ytSongs) == 0 {
 			log.Printf("[WARN] [Bot] Search returned 0 results for '%s': %v", query, err)
 			followup(&discordgo.WebhookParams{Content: i18n.Globali18n.T(lang, "song_not_found")})
