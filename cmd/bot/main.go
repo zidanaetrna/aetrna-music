@@ -15,7 +15,7 @@ import (
 
 func main() {
 	bot.InitLogCapture()
-	log.Printf("[INFO] Starting aetrna-music %s (Golang Modular Engine v2.0)...", version.AppVersion)
+	log.Printf("[INFO] Starting aetrna-music %s (Golang Modular Engine)...", version.AppVersion)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

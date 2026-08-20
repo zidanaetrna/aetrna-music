@@ -15,7 +15,7 @@ const askQuestion = (query) => new Promise((resolve) => rl.question(query, resol
 function renderBanner() {
     console.log('\x1b[36m%s\x1b[0m', `
 ====================================================================
-               AETRNA'S MUSIC — SETUP WIZARD v2.0
+               AETRNA'S MUSIC — SETUP WIZARD v2.1.7
 ====================================================================
 `);
     console.log('Welcome! Let\'s set up your self-hosted Discord Music Platform.\n');

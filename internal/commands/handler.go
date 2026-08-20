@@ -12,6 +12,7 @@ import (
 	"aetrna-music/internal/lyrics"
 	"aetrna-music/internal/music"
 	"aetrna-music/internal/spotify"
+	"aetrna-music/internal/version"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -97,7 +98,7 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue, lang strin
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("aetrna-music v2.0 • Queue: %d tracks", len(queue.Songs)),
+			Text: fmt.Sprintf("aetrna-music %s • Queue: %d tracks", version.AppVersion, len(queue.Songs)),
 		},
 	}
 
@@ -385,7 +386,7 @@ func CreateAddedToQueueEmbed(song *music.Song, queue *music.GuildQueue, lang str
 			},
 		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("aetrna-music v2.0 • Total Queue: %d tracks", len(queue.Songs)),
+			Text: fmt.Sprintf("aetrna-music %s • Total Queue: %d tracks", version.AppVersion, len(queue.Songs)),
 		},
 	}
 	if song.Thumbnail != "" {
