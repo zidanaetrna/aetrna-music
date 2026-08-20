@@ -74,7 +74,6 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 	// Use --flat-playlist to fetch search metadata instantly without triggering n-sig format deciphering
 	args := []string{
 		"-4",
-		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"--flat-playlist",
 		"--dump-single-json",
 		"--no-warnings",
@@ -85,6 +84,8 @@ func SearchYouTube(query string, limit int, cookiesPath string, ytdlpClients str
 	if fi, err := os.Stat(cookiesPath); err == nil && fi.Size() > 100 {
 		log.Printf("[INFO] [SearchYouTube] Found cookies file at: %s (size: %d bytes)", cookiesPath, fi.Size())
 		args = append([]string{"--cookies", cookiesPath}, args...)
+	} else {
+		args = append(args, "--extractor-args", "youtube:player_client=ios,android")
 	}
 
 	args = append(args, targetQuery)
@@ -175,7 +176,6 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 
 	args := []string{
 		"-4",
-		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"--default-search", "ytsearch",
 		"--flat-playlist",
 		"--dump-json",
@@ -186,6 +186,8 @@ func searchYouTubeFallback(query string, limit int, cookiesPath string, ytdlpCli
 	if fi, err := os.Stat(cookiesPath); err == nil && fi.Size() > 100 {
 		log.Printf("[INFO] [SearchYouTubeFallback] Found cookies file at: %s (size: %d bytes)", cookiesPath, fi.Size())
 		args = append([]string{"--cookies", cookiesPath}, args...)
+	} else {
+		args = append(args, "--extractor-args", "youtube:player_client=ios,android")
 	}
 
 	args = append(args, targetQuery)
@@ -376,49 +378,40 @@ func getVoiceState(s *discordgo.Session, guildID, userID string) (*discordgo.Voi
 
 func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string, error) {
 	query = sanitizeQuery(query)
-
 	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-	if ytdlpClients == "" {
-		ytdlpClients = "ios,android"
-	} else {
-		// Filter out web/mweb to prevent PoToken 403 Forbidden on official music label videos
-		parts := strings.Split(ytdlpClients, ",")
-		var filtered []string
-		for _, p := range parts {
-			p = strings.TrimSpace(p)
-			if p != "web" && p != "mweb" && p != "" {
-				filtered = append(filtered, p)
-			}
-		}
-		if len(filtered) > 0 {
-			ytdlpClients = strings.Join(filtered, ",")
-		} else {
-			ytdlpClients = "ios,android"
-		}
-	}
+
 	target := query
 	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") && !strings.HasPrefix(target, "ytsearch:") {
 		target = "ytsearch1:" + target
+	}
+
+	cookiesValid := false
+	if fi, err := os.Stat(cookiesPath); err == nil && fi.Size() > 100 {
+		cookiesValid = true
 	}
 
 	args := []string{
 		"-4",
 		"--no-cache-dir",
 		"--js-runtimes", "node",
-		"--extractor-args", fmt.Sprintf("youtube:player_client=%s", ytdlpClients),
 		"-f", "bestaudio/best",
 		"--no-playlist",
 		"--geo-bypass",
 		"--no-check-certificates",
 		"--no-warnings",
 		"--user-agent", userAgent,
-		"-g",
-		target,
 	}
 
-	if fi, err := os.Stat(cookiesPath); err == nil && fi.Size() > 100 {
+	if cookiesValid {
+		log.Printf("[INFO] [GetStreamURL] Valid cookies found — using default extractor with cookies session")
 		args = append([]string{"--cookies", cookiesPath}, args...)
+	} else {
+		// When running without cookies, use ios,android to bypass login checks
+		log.Printf("[INFO] [GetStreamURL] No cookies found — using player_client=ios,android bypass")
+		args = append(args, "--extractor-args", "youtube:player_client=ios,android")
 	}
+
+	args = append(args, "-g", target)
 
 	start := time.Now()
 	cmd := prepareYtdlpCmd(args...)
@@ -428,9 +421,38 @@ func GetStreamURL(query string, cookiesPath string, ytdlpClients string) (string
 	elapsed := time.Since(start)
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			log.Printf("[ERROR] [GetStreamURL] yt-dlp failed after %v: %v | Stderr: %s", elapsed, err, string(exitErr.Stderr))
+			log.Printf("[ERROR] [GetStreamURL] Primary yt-dlp failed after %v: %v | Stderr: %s", elapsed, err, string(exitErr.Stderr))
+		} else {
+			log.Printf("[ERROR] [GetStreamURL] Primary yt-dlp failed after %v: %v", elapsed, err)
 		}
-		return "", err
+
+		// Fallback Retry Machine: Retry with safe player_client pools ("ios,android", then "android")
+		fallbacks := []string{"ios,android", "android"}
+		for _, fbClient := range fallbacks {
+			if fbClient == ytdlpClients {
+				continue
+			}
+			log.Printf("[INFO] [GetStreamURL] Retrying yt-dlp stream extraction with fallback player_client=%s", fbClient)
+			fbArgs := make([]string, len(args))
+			copy(fbArgs, args)
+			for idx, arg := range fbArgs {
+				if strings.HasPrefix(arg, "--extractor-args") && idx+1 < len(fbArgs) {
+					fbArgs[idx+1] = fmt.Sprintf("youtube:player_client=%s", fbClient)
+				}
+			}
+			fbCmd := prepareYtdlpCmd(fbArgs...)
+			fbOut, fbErr := execYtdlpCmd(fbCmd)
+			if fbErr == nil && len(fbOut) > 0 {
+				out = fbOut
+				err = nil
+				log.Printf("[INFO] [GetStreamURL] Fallback player_client=%s succeeded!", fbClient)
+				break
+			}
+		}
+
+		if err != nil {
+			return "", err
+		}
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")

@@ -176,7 +176,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {t('btn_logout')}
                 </button>
                 <div className="sidebar-label" style={{ fontSize: '0.72rem', color: 'var(--cf-text-muted)', textAlign: 'center' }}>
-                    Aetrna's Music v2.1.6
+                    Aetrna's Music v2.1.7
                 </div>
             </div>
         </aside>

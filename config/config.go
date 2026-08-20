@@ -41,7 +41,7 @@ func Load() *Config {
 		DBPath:              getEnv("DB_PATH", "./data/aetrna.db"),
 		CacheDir:            getEnv("CACHE_DIR", "./data/cache"),
 		MaxCacheSizeMB:      int64(getEnvAsInt("MAX_CACHE_SIZE_MB", 5120)), // Default 5GB
-		YtdlpClients:        getEnv("YTDLP_CLIENTS", "ios,web,android,tv"),
+		YtdlpClients:        getEnv("YTDLP_CLIENTS", "ios,android"),
 		CookiesPath:         getEnv("COOKIES_PATH", "./cookies.txt"),
 		InternalIPCToken:    getEnv("INTERNAL_IPC_TOKEN", "aetrna-internal-ipc-token-dev-2026"),
 	}

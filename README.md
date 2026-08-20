@@ -12,7 +12,7 @@
 [![NodeJS](https://img.shields.io/badge/Node.js-22+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![NPM Package](https://img.shields.io/npm/v/aetrna-music?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/aetrna-music)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Web Dashboard](https://img.shields.io/badge/Web_Dashboard-v2.1.6_React_TS-10B981?style=for-the-badge&logo=react&logoColor=white)](#web-control-panel--dashboard)
+[![Web Dashboard](https://img.shields.io/badge/Web_Dashboard-v2.1.7_React_TS-10B981?style=for-the-badge&logo=react&logoColor=white)](#web-control-panel--dashboard)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg?style=for-the-badge)](CONTRIBUTING.md)
 
