@@ -138,13 +138,22 @@ func ScoreCandidateBreakdown(qTokens []string, intent QueryIntent, song music.So
 	}
 
 	// 4. Broadcaster TV Channel Combo Penalty (Specific anime distributors)
-	if isBroadcasterChannel(aLower) && dur > 0 && dur <= 120 && !intent.TVSize {
-		bd.BroadcasterPenalty = -40.0
+	if isBroadcasterChannel(aLower) && !intent.TVSize {
+		if dur == 0 || (dur > 0 && dur <= 135) {
+			bd.BroadcasterPenalty = -50.0 // Heavy penalty for broadcaster channel clips when user didn't ask for tv size
+		}
+	}
+
+	// 4b. Anime OP / TV Clip Title Penalty (When user didn't ask for tv size)
+	if !intent.TVSize && containsAnyPhrase(tLower, []string{"opening", " op ", " op1", " op2", " op3", " op4", " op5", " op6", " op7", " op8", " op9", "tv size", "tv-size"}) {
+		if isBroadcasterChannel(aLower) || dur == 0 || dur <= 135 {
+			bd.BroadcasterPenalty -= 25.0
+		}
 	}
 
 	// 5. Official Topic / Official Channel Boost
 	if strings.Contains(aLower, "- topic") || strings.Contains(aLower, "official") || strings.Contains(aLower, "vevo") {
-		bd.TopicBoost = +15.0
+		bd.TopicBoost = +25.0
 	}
 
 	// 6. Token-Based Live Version Signal
