@@ -120,16 +120,6 @@ client.on('interactionCreate', async (interaction) => {
         const member = interaction.member;
         const voiceChannel = member?.voice?.channel;
         const voiceChannelMembers = voiceChannel ? voiceChannel.members.filter(m => !m.user.bot).size : 0;
-        const optionsObj = {};
-        if (interaction.isChatInputCommand()) {
-            for (const opt of interaction.options.data) {
-                if (opt.options) {
-                    optionsObj[opt.name] = opt.options.reduce((acc, sub) => ({ ...acc, [sub.name]: sub.value }), {});
-                } else {
-                    optionsObj[opt.name] = opt.value;
-                }
-            }
-        }
         const proxied = {
             id: interaction.id,
             token: interaction.token,
@@ -142,7 +132,7 @@ client.on('interactionCreate', async (interaction) => {
             member_voice_channel_id: voiceChannel?.id || '',
             voice_channel_members: voiceChannelMembers,
             command_name: interaction.commandName || '',
-            options: optionsObj,
+            options: interaction.options?.data || [],
             custom_id: interaction.customId || '',
             message_id: interaction.message?.id || '',
             values: interaction.values || [],
