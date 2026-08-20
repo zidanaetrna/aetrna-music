@@ -128,9 +128,13 @@ func ScoreCandidateBreakdown(qTokens []string, intent QueryIntent, song music.So
 			if dur >= 150 && dur <= 450 {
 				bd.Duration = +30.0 // Standard full track length (2:30 to 7:30)
 			} else if dur >= 60 && dur <= 115 {
-				bd.Duration = -45.0 // Strong TV-size 1:30 penalty when full track expected
+				if bd.TitleMatch < 20.0 {
+					bd.Duration = -35.0 // TV-size penalty only when title match is weak
+				}
 			} else if dur < 45 {
-				bd.Duration = -40.0 // Extremely short / Shorts penalty
+				if bd.TitleMatch < 20.0 {
+					bd.Duration = -40.0 // Shorts penalty only when title match is weak
+				}
 			} else if dur > 900 {
 				bd.Duration = -50.0 // 15+ min compilation penalty
 			}
@@ -144,8 +148,8 @@ func ScoreCandidateBreakdown(qTokens []string, intent QueryIntent, song music.So
 		}
 	}
 
-	// 4b. Anime OP / TV Clip Title Penalty (When user didn't ask for tv size)
-	if !intent.TVSize && containsAnyPhrase(tLower, []string{"opening", " op ", " op1", " op2", " op3", " op4", " op5", " op6", " op7", " op8", " op9", "tv size", "tv-size"}) {
+	// 4b. Anime OP / TV Clip Title Penalty (When user didn't ask for tv size and title match is weak)
+	if !intent.TVSize && bd.TitleMatch < 25.0 && containsAnyPhrase(tLower, []string{"opening", " op ", " op1", " op2", " op3", " op4", " op5", " op6", " op7", " op8", " op9", "tv size", "tv-size"}) {
 		if isBroadcasterChannel(aLower) || dur == 0 || dur <= 135 {
 			bd.BroadcasterPenalty -= 25.0
 		}
