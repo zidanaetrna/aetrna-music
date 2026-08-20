@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const { execSync } = require('child_process');
 const https = require('https');
 
-const CLI_VERSION = 'v2.1.7';
+const CLI_VERSION = 'v2.1.8';
 const GITHUB_REPO = 'zidanaetrna/aetrna-music';
 const GITHUB_RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 

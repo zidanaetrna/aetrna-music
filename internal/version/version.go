@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const AppVersion = "v2.1.7"
+const AppVersion = "v2.1.8"
 
 const GitHubRepo = "zidanaetrna/aetrna-music"
 const GitHubReleasesURL = "https://api.github.com/repos/" + GitHubRepo + "/releases/latest"

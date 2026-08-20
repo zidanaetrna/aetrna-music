@@ -31,7 +31,7 @@ try {
     }
 })();
 
-let VOICE_SERVER_VERSION = 'v2.1.7';
+let VOICE_SERVER_VERSION = 'v2.1.8';
 try {
     const pkg = require('./package.json');
     if (pkg && pkg.version) VOICE_SERVER_VERSION = `v${pkg.version}`;
