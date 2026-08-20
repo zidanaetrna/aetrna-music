@@ -137,9 +137,12 @@ func (q *GuildQueue) AddSong(song Song) {
 		fmt.Printf("[INFO] [GuildQueue %s] Cancelled idle disconnect timer (new song added)\n", q.GuildID)
 	}
 	q.Songs = append(q.Songs, song)
+	isPlaying := q.IsPlaying
 	q.mu.Unlock()
 
-	q.PreFetchNext()
+	if isPlaying {
+		q.PreFetchNext()
+	}
 }
 
 func (q *GuildQueue) InsertNext(song Song) {
@@ -150,9 +153,12 @@ func (q *GuildQueue) InsertNext(song Song) {
 		fmt.Printf("[INFO] [GuildQueue %s] Cancelled idle disconnect timer (song inserted next)\n", q.GuildID)
 	}
 	q.Songs = append([]Song{song}, q.Songs...)
+	isPlaying := q.IsPlaying
 	q.mu.Unlock()
 
-	q.PreFetchNext()
+	if isPlaying {
+		q.PreFetchNext()
+	}
 }
 
 func (q *GuildQueue) SetLyricsCancel(cancel func()) {
