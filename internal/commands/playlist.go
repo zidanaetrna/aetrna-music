@@ -96,14 +96,14 @@ func (h *Handler) HandlePlaylistList(s *discordgo.Session, i *discordgo.Interact
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("**🎵 %s**\n\n", i18n.Globali18n.T(lang, "saved_playlists")))
+	sb.WriteString(fmt.Sprintf("**%s**\n\n", i18n.Globali18n.T(lang, "saved_playlists")))
 
 	for idx, c := range colls {
 		items, _ := h.database.GetCollectionItems(c.ID)
-		sb.WriteString(fmt.Sprintf("**%d. %s** — `%d tracks`\n", idx+1, c.Name, len(items)))
+		sb.WriteString(fmt.Sprintf("%d. **%s** (%d tracks)\n", idx+1, c.Name, len(items)))
 	}
 
-	sb.WriteString("\n*Use `/playlist play <name>` to start playback or `/playlist list-tracks <name>` to view tracks.*")
+	sb.WriteString("\n-# `/playlist play <name>` to play one, `/playlist list-tracks <name>` to see what's in it")
 
 	sendPlaylistResponse(s, i, sb.String(), false)
 }
@@ -151,7 +151,7 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 	if strings.Contains(query, "spotify.com/playlist/") && h.spotifyCl != nil && h.spotifyCl.IsEnabled() {
 		tracks, err := h.spotifyCl.GetPlaylistTracks(query, 100)
 		if err != nil || len(tracks) == 0 {
-			sendPlaylistResponse(s, i, fmt.Sprintf("❌ Could not fetch Spotify playlist: %v", err), true)
+			sendPlaylistResponse(s, i, fmt.Sprintf("Couldn't load the Spotify playlist: %v", err), true)
 			return
 		}
 
@@ -165,11 +165,11 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 
 		allItems, _ := h.database.GetCollectionItems(coll.ID)
 		embed := &discordgo.MessageEmbed{
-			Title:       fmt.Sprintf("🟢 Imported Spotify Playlist → '%s'", coll.Name),
-			Description: fmt.Sprintf("Successfully added **%d tracks** from Spotify playlist into saved playlist **'%s'**!", added, coll.Name),
+			Title:       fmt.Sprintf("Imported into %s", coll.Name),
+			Description: fmt.Sprintf("Added %d tracks from the Spotify playlist.", added),
 			Color:       0x1DB954,
 			Footer: &discordgo.MessageEmbedFooter{
-				Text: fmt.Sprintf("Playlist '%s' now contains %d total tracks", coll.Name, len(allItems)),
+				Text: fmt.Sprintf("%s now has %d tracks", coll.Name, len(allItems)),
 			},
 		}
 
@@ -187,11 +187,11 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 
 			allItems, _ := h.database.GetCollectionItems(coll.ID)
 			embed := &discordgo.MessageEmbed{
-				Title:       fmt.Sprintf("🟢 Added Track to Playlist '%s'", coll.Name),
-				Description: fmt.Sprintf("**[%s](%s)**\n\n👤 **Artist:** `%s`", title, query, track.Artist),
+				Title:       fmt.Sprintf("Added to %s", coll.Name),
+				Description: fmt.Sprintf("**[%s](%s)**\n%s", title, query, track.Artist),
 				Color:       0x1DB954,
 				Footer: &discordgo.MessageEmbedFooter{
-					Text: fmt.Sprintf("Playlist '%s' now contains %d total tracks", coll.Name, len(allItems)),
+					Text: fmt.Sprintf("%s now has %d tracks", coll.Name, len(allItems)),
 				},
 			}
 
@@ -203,7 +203,7 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 	// Case 3: YouTube Track or Manual Search Query (e.g. FLOW Sign, FLOW Colors)
 	res, err := SearchYouTube(query, 5, h.cfg.CookiesPath, h.cfg.YtdlpClients)
 	if err != nil || len(res) == 0 {
-		sendPlaylistResponse(s, i, fmt.Sprintf("❌ Could not find track for query: `%s`", query), true)
+		sendPlaylistResponse(s, i, fmt.Sprintf("Couldn't find anything for `%s`.", query), true)
 		return
 	}
 
@@ -217,12 +217,12 @@ func (h *Handler) HandlePlaylistAddTrack(s *discordgo.Session, i *discordgo.Inte
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("🔴 Added Track to Playlist '%s'", coll.Name),
-		Description: fmt.Sprintf("**[%s](%s)**\n\n👤 **Channel:** `%s`  •  ⏱️ **Duration:** `%dm %ds`", best.Title, best.URL, author, best.Duration/60, best.Duration%60),
+		Title:       fmt.Sprintf("Added to %s", coll.Name),
+		Description: fmt.Sprintf("**[%s](%s)**\n%s · %s", best.Title, best.URL, author, music.FormatDuration(best.Duration)),
 		Color:       0xFF0000,
 		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: best.Thumbnail},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("Playlist '%s' now contains %d total tracks", coll.Name, len(allItems)),
+			Text: fmt.Sprintf("%s now has %d tracks", coll.Name, len(allItems)),
 		},
 	}
 
@@ -288,9 +288,9 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 	queue.VoiceChannelID = voiceChannelID
 	queue.EnsurePlaying()
 
-	// Build Rich Hybrid Embed Preview
+	// Build the track list preview
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Successfully loaded **%d tracks** into voice channel queue.\n\n**📜 Track List Preview:**\n", validCount))
+	sb.WriteString(fmt.Sprintf("Queued %d tracks.\n\n", validCount))
 
 	maxPreview := 10
 	if len(items) < maxPreview {
@@ -300,17 +300,13 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 	hasSpotify := false
 	for idx := 0; idx < maxPreview; idx++ {
 		item := items[idx]
-		icon := "🎵"
 		if strings.Contains(item.URL, "spotify.com") || item.Source == "spotify" {
-			icon = "🟢"
 			hasSpotify = true
-		} else if strings.Contains(item.URL, "youtube.com") || strings.Contains(item.URL, "youtu.be") || item.Source == "youtube" {
-			icon = "🔴"
 		}
 
 		durStr := ""
 		if item.Duration > 0 {
-			durStr = fmt.Sprintf(" (`%dm %ds`)", item.Duration/60, item.Duration%60)
+			durStr = " · " + music.FormatDuration(item.Duration)
 		}
 
 		// Number = queue track number, so it can be passed straight to /exclude
@@ -319,16 +315,16 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 			num = fmt.Sprintf("%d", positions[idx])
 		}
 		if item.URL != "" && strings.HasPrefix(item.URL, "http") {
-			sb.WriteString(fmt.Sprintf("`%s.` %s **[%s](%s)**%s\n", num, icon, item.Title, item.URL, durStr))
+			sb.WriteString(fmt.Sprintf("`%s.` [%s](%s)%s\n", num, item.Title, item.URL, durStr))
 		} else {
-			sb.WriteString(fmt.Sprintf("`%s.` %s **%s**%s\n", num, icon, item.Title, durStr))
+			sb.WriteString(fmt.Sprintf("`%s.` %s%s\n", num, item.Title, durStr))
 		}
 	}
 
 	if len(items) > maxPreview {
-		sb.WriteString(fmt.Sprintf("\n*...and %d more track(s) in queue.*", len(items)-maxPreview))
+		sb.WriteString(fmt.Sprintf("…and %d more\n", len(items)-maxPreview))
 	}
-	sb.WriteString("\n-# Skip a track with `/exclude track:<number>` · repeat all with `/loop track`")
+	sb.WriteString("\n-# Skip a track with `/exclude track:<number>`, repeat the playlist with `/loop track`")
 
 	embedColor := 0xFF0000 // YouTube Red default
 	if hasSpotify {
@@ -336,16 +332,11 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("🎵 Saved Playlist Enqueued: '%s'", coll.Name),
+		Title:       coll.Name,
 		Description: sb.String(),
 		Color:       embedColor,
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "📊 Enqueued", Value: fmt.Sprintf("`%d Tracks`", validCount), Inline: true},
-			{Name: "⏱️ Total Duration", Value: fmt.Sprintf("`%dm %ds`", totalSecs/60, totalSecs%60), Inline: true},
-			{Name: "👤 Requested By", Value: fmt.Sprintf("<@%s>", userID), Inline: true},
-		},
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: "Use control buttons below to pause, skip, or shuffle playback",
+			Text: fmt.Sprintf("%s total", music.FormatDuration(totalSecs)),
 		},
 	}
 
@@ -374,7 +365,7 @@ func (h *Handler) HandlePlaylistListTracks(s *discordgo.Session, i *discordgo.In
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("**📜 Tracks in Playlist '%s' (%d total):**\n\n", coll.Name, len(items)))
+	sb.WriteString(fmt.Sprintf("**%s** (%d tracks)\n\n", coll.Name, len(items)))
 
 	maxDisplay := 15
 	if len(items) < maxDisplay {
@@ -383,11 +374,11 @@ func (h *Handler) HandlePlaylistListTracks(s *discordgo.Session, i *discordgo.In
 
 	for idx := 0; idx < maxDisplay; idx++ {
 		item := items[idx]
-		sb.WriteString(fmt.Sprintf("`%d.` **[%s](%s)** (`%ds`) — *%s*\n", item.Position, item.Title, item.URL, item.Duration, item.Source))
+		sb.WriteString(fmt.Sprintf("`%d.` [%s](%s) · %s\n", item.Position, item.Title, item.URL, music.FormatDuration(item.Duration)))
 	}
 
 	if len(items) > 15 {
-		sb.WriteString(fmt.Sprintf("\n*...and %d more tracks.*", len(items)-15))
+		sb.WriteString(fmt.Sprintf("…and %d more", len(items)-15))
 	}
 
 	sendPlaylistResponse(s, i, sb.String(), false)
@@ -399,7 +390,7 @@ func (h *Handler) HandlePlaylistDelete(s *discordgo.Session, i *discordgo.Intera
 
 	err := h.database.DeleteCollection(userID, name)
 	if err != nil {
-		sendPlaylistResponse(s, i, fmt.Sprintf("❌ Could not delete playlist '%s': %v", name, err), true)
+		sendPlaylistResponse(s, i, fmt.Sprintf("Couldn't delete playlist '%s': %v", name, err), true)
 		return
 	}
 

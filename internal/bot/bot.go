@@ -702,7 +702,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 					log.Printf("[INFO] [Bot] Guild %s language changed from %s to %s by user %s", p.GuildID, currentLang, selectedLang, p.UserID)
 					content = i18n.Globali18n.T(selectedLang, "language_changed")
 					if strings.TrimSpace(content) == "" {
-						content = fmt.Sprintf("🌐 Server language changed to **%s**!", langDisplayName[selectedLang])
+						content = fmt.Sprintf("Server language set to %s.", langDisplayName[selectedLang])
 					}
 				}
 			}
@@ -774,9 +774,9 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			}
 			q.Volume = volFloat
 			_ = b.voice.SetVolume(p.GuildID, q.Volume)
-			content = fmt.Sprintf("🔊 Volume set to **%d%%**", int(q.Volume*100))
+			content = i18n.Globali18n.T(lang, "volume_set", int(q.Volume*100))
 		} else {
-			content = fmt.Sprintf("🔊 Current volume: **%d%%**", int(q.Volume*100))
+			content = i18n.Globali18n.T(lang, "volume_set", int(q.Volume*100))
 			flags = discordgo.MessageFlagsEphemeral
 		}
 
@@ -801,7 +801,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		} else {
 			mode = q.CycleLoop()
 		}
-		content = loopModeMessage(mode)
+		content = loopModeMessage(mode, lang)
 
 	case "top":
 		var opts []*discordgo.ApplicationCommandInteractionDataOption
@@ -929,9 +929,9 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			content = i18n.Globali18n.T(lang, "no_song_playing")
 			flags = discordgo.MessageFlagsEphemeral
 		} else if ok := q.PlayPrev(); ok {
-			content = "⏮️ Playing previous track!"
+			content = i18n.Globali18n.T(lang, "previous_playing")
 		} else {
-			content = "⏮️ No previous track in history!"
+			content = i18n.Globali18n.T(lang, "previous_none")
 			flags = discordgo.MessageFlagsEphemeral
 		}
 		if cmd == "btn_prev" {
@@ -940,7 +940,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 	case "btn_loop":
 		q := b.store.Get(p.GuildID)
-		content = loopModeMessage(q.CycleLoop())
+		content = loopModeMessage(q.CycleLoop(), lang)
 		flags = discordgo.MessageFlagsEphemeral
 
 	case "btn_shuffle":
@@ -961,7 +961,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		}
 		_ = b.voice.SetVolume(p.GuildID, q.Volume)
 		volPct := int(q.Volume * 100)
-		content = fmt.Sprintf("🔉 Volume decreased to **%d%%**", volPct)
+		content = i18n.Globali18n.T(lang, "volume_set", volPct)
 		flags = discordgo.MessageFlagsEphemeral
 
 	case "btn_vol_up":
@@ -972,12 +972,12 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 		}
 		_ = b.voice.SetVolume(p.GuildID, q.Volume)
 		volPct := int(q.Volume * 100)
-		content = fmt.Sprintf("🔊 Volume increased to **%d%%**", volPct)
+		content = i18n.Globali18n.T(lang, "volume_set", volPct)
 		flags = discordgo.MessageFlagsEphemeral
 
 	default:
 		log.Printf("[WARN] [GoBot] Unhandled command or button interaction: %q", cmd)
-		content = "Interaction expired or unavailable. Please use `/play` to start a new session."
+		content = i18n.Globali18n.T(lang, "interaction_expired")
 		flags = discordgo.MessageFlagsEphemeral
 	}
 
@@ -1084,14 +1084,14 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 	}(msg.ID, song.URL)
 }
 
-func loopModeMessage(mode music.LoopMode) string {
+func loopModeMessage(mode music.LoopMode, lang string) string {
 	switch mode {
 	case music.LoopSong:
-		return "🔂 Loop mode set to: **Song**"
+		return i18n.Globali18n.T(lang, "loop_song")
 	case music.LoopTrack:
-		return "🔁 Loop mode set to: **Track** (the whole queue repeats)"
+		return i18n.Globali18n.T(lang, "loop_track")
 	default:
-		return "➡️ Loop mode set to: **Off**"
+		return i18n.Globali18n.T(lang, "loop_off")
 	}
 }
 
@@ -1132,7 +1132,7 @@ func (b *Bot) includeByURL(q *music.GuildQueue, rawURL string, p ProxiedInteract
 		// Non-YouTube link (e.g. Spotify): resolve first so it can match the queue
 		song, err := b.resolveTrackURL(rawURL)
 		if err != nil {
-			return fmt.Sprintf("❌ %v", err), discordgo.MessageFlagsEphemeral
+			return fmt.Sprintf("Couldn't add that song: %v.", err), discordgo.MessageFlagsEphemeral
 		}
 		resolved = &song
 		target = song.URL
@@ -1146,10 +1146,10 @@ func (b *Bot) includeByURL(q *music.GuildQueue, rawURL string, p ProxiedInteract
 			}
 		}
 		if len(excluded) == 0 {
-			return fmt.Sprintf("ℹ️ That song is already in the queue as track **%s** and isn't excluded.", joinInts(positions)), discordgo.MessageFlagsEphemeral
+			return fmt.Sprintf("That song is already queued as track %s and isn't excluded.", joinInts(positions)), discordgo.MessageFlagsEphemeral
 		}
 		q.Include(excluded)
-		return fmt.Sprintf("✅ Track **%s** will play again.", joinInts(excluded)), 0
+		return fmt.Sprintf("Track %s is back in the queue.", joinInts(excluded)), 0
 	}
 
 	// Not in the queue anymore: add it back
@@ -1159,7 +1159,7 @@ func (b *Bot) includeByURL(q *music.GuildQueue, rawURL string, p ProxiedInteract
 	if resolved == nil {
 		song, err := b.resolveTrackURL(rawURL)
 		if err != nil {
-			return fmt.Sprintf("❌ %v", err), discordgo.MessageFlagsEphemeral
+			return fmt.Sprintf("Couldn't add that song: %v.", err), discordgo.MessageFlagsEphemeral
 		}
 		resolved = &song
 	}
@@ -1170,9 +1170,9 @@ func (b *Bot) includeByURL(q *music.GuildQueue, rawURL string, p ProxiedInteract
 	q.VoiceChannelID = p.MemberVoiceChannelID
 	pos := q.AddSong(song)
 	if q.EnsurePlaying() {
-		return fmt.Sprintf("▶️ **%s** wasn't in the queue anymore, so it's playing now as track **%d**.", song.Title, pos), 0
+		return fmt.Sprintf("**%s** wasn't in the queue anymore. Playing it now as track %d.", song.Title, pos), 0
 	}
-	return fmt.Sprintf("➕ **%s** wasn't in the queue anymore, so it was added back as track **%d**.", song.Title, pos), 0
+	return fmt.Sprintf("**%s** wasn't in the queue anymore. Added it back as track %d.", song.Title, pos), 0
 }
 
 func isURL(s string) bool {
@@ -1188,12 +1188,12 @@ func (b *Bot) handleExcludeInclude(q *music.GuildQueue, cmd, input string, p Pro
 		}
 		positions := q.PositionsByURL(input)
 		if len(positions) == 0 {
-			return "❌ That song isn't in the queue. Use `/queue` to see what's queued.", discordgo.MessageFlagsEphemeral
+			return "That song isn't in the queue. Check `/queue`.", discordgo.MessageFlagsEphemeral
 		}
 		skipped := q.Exclude(positions)
-		msg := fmt.Sprintf("🚫 Track **%s** will be skipped, including on every loop cycle. Use `/include` with the same link to bring it back.", joinInts(positions))
+		msg := fmt.Sprintf("Track %s will be skipped, every time the queue loops too. `/include` with the same link brings it back.", joinInts(positions))
 		if skipped {
-			msg += "\n⏭️ Skipped the current track."
+			msg += " Skipped it now."
 		}
 		return msg, 0
 	}
@@ -1201,24 +1201,24 @@ func (b *Bot) handleExcludeInclude(q *music.GuildQueue, cmd, input string, p Pro
 	if input == "" {
 		excluded := q.ExcludedPositions()
 		if len(excluded) == 0 {
-			return "No tracks are excluded. Use `/exclude track:7` (or `3,7,9`, `2-5`) to skip tracks.", discordgo.MessageFlagsEphemeral
+			return "Nothing is excluded. Skip tracks with `/exclude track:7` (also `3,7,9` or `2-5`).", discordgo.MessageFlagsEphemeral
 		}
-		return fmt.Sprintf("🚫 Excluded tracks: **%s**", joinInts(excluded)), discordgo.MessageFlagsEphemeral
+		return fmt.Sprintf("Excluded: %s", joinInts(excluded)), discordgo.MessageFlagsEphemeral
 	}
 
 	if cmd == "include" && strings.EqualFold(input, "all") {
 		q.Include(nil)
-		return "✅ All excluded tracks are back in rotation.", 0
+		return "All excluded tracks are back.", 0
 	}
 
 	nums, err := music.ParseTrackNumbers(input)
 	if err != nil {
-		return fmt.Sprintf("❌ %v. Use a number like `7`, a list like `3,7,9`, a range like `2-5`, or a song link.", err), discordgo.MessageFlagsEphemeral
+		return fmt.Sprintf("%v. Use a number (`7`), a list (`3,7,9`), a range (`2-5`) or a song link.", strings.ToUpper(err.Error()[:1])+err.Error()[1:]), discordgo.MessageFlagsEphemeral
 	}
 
 	if cmd == "include" {
 		q.Include(nums)
-		return fmt.Sprintf("✅ Track(s) **%s** will play again.", joinInts(nums)), 0
+		return fmt.Sprintf("Track %s is back in the queue.", joinInts(nums)), 0
 	}
 
 	known := q.KnownPositions()
@@ -1230,12 +1230,12 @@ func (b *Bot) handleExcludeInclude(q *music.GuildQueue, cmd, input string, p Pro
 	}
 
 	skipped := q.Exclude(nums)
-	msg := fmt.Sprintf("🚫 Track(s) **%s** will be skipped, including on every loop cycle. Use `/include` to bring them back.", joinInts(nums))
+	msg := fmt.Sprintf("Track %s will be skipped, every time the queue loops too. `/include` brings it back.", joinInts(nums))
 	if skipped {
-		msg += "\n⏭️ Skipped the current track."
+		msg += " Skipped it now."
 	}
 	if len(missing) > 0 {
-		msg += fmt.Sprintf("\n⚠️ Not in the queue right now: %s", joinInts(missing))
+		msg += fmt.Sprintf(" (%s isn't in the queue right now.)", joinInts(missing))
 	}
 	return msg, 0
 }

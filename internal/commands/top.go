@@ -10,8 +10,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var topMedals = []string{"🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"}
-
 func truncateRunes(s string, max int) string {
 	r := []rune(s)
 	if len(r) <= max {
@@ -36,12 +34,20 @@ func CreateTopTracksEmbed(tracks []db.TopTrack, totalPlays int, period, lang str
 	var sb strings.Builder
 	var options []discordgo.SelectMenuOption
 	for idx, t := range tracks {
-		medal := topMedals[idx%len(topMedals)]
+		rank := fmt.Sprintf("%d.", idx+1)
 		author := t.Author
 		if author == "" {
 			author = "—"
 		}
-		sb.WriteString(i18n.Globali18n.T(lang, "top_line", medal, truncateRunes(t.Title, 60), t.URL, truncateRunes(author, 40), t.Plays, t.Listeners))
+		plays := i18n.Globali18n.T(lang, "top_plays_many", t.Plays)
+		if t.Plays == 1 {
+			plays = i18n.Globali18n.T(lang, "top_plays_one")
+		}
+		listeners := i18n.Globali18n.T(lang, "top_listeners_many", t.Listeners)
+		if t.Listeners == 1 {
+			listeners = i18n.Globali18n.T(lang, "top_listeners_one")
+		}
+		sb.WriteString(i18n.Globali18n.T(lang, "top_line", rank, truncateRunes(t.Title, 60), t.URL, truncateRunes(author, 40), plays, listeners))
 
 		// Select values are capped at 100 chars by Discord; skip odd long URLs
 		if len(t.URL) <= 100 {
@@ -49,7 +55,6 @@ func CreateTopTracksEmbed(tracks []db.TopTrack, totalPlays int, period, lang str
 				Label:       truncateRunes(fmt.Sprintf("%d. %s", idx+1, t.Title), 100),
 				Value:       t.URL,
 				Description: truncateRunes(author, 100),
-				Emoji:       &discordgo.ComponentEmoji{Name: medal},
 			})
 		}
 	}

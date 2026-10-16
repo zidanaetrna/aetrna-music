@@ -12,7 +12,6 @@ import (
 	"aetrna-music/internal/lyrics"
 	"aetrna-music/internal/music"
 	"aetrna-music/internal/spotify"
-	"aetrna-music/internal/version"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -64,42 +63,37 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue, lang strin
 	embed := &discordgo.MessageEmbed{
 		Title:       i18n.Globali18n.T(lang, "now_playing"),
 		Description: fmt.Sprintf("**[%s](%s)**", song.Title, songURL),
-		Color:       0x5865F2, // Discord Blurple / Aesthetic HSL
+		Color:       0x5865F2,
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   i18n.Globali18n.T(lang, "requested_by"),
 				Value:  fmt.Sprintf("<@%s>", song.RequestedBy),
 				Inline: true,
 			},
-			{
-				Name:   i18n.Globali18n.T(lang, "artist_channel"),
-				Value:  song.Author,
-				Inline: true,
-			},
-			{
-				Name:   i18n.Globali18n.T(lang, "volume"),
-				Value:  fmt.Sprintf("%d%%", volPct),
-				Inline: true,
-			},
-			{
-				Name:   i18n.Globali18n.T(lang, "loop"),
-				Value:  string(queue.Loop),
-				Inline: true,
-			},
-			{
-				Name:   i18n.Globali18n.T(lang, "shuffle"),
-				Value:  fmt.Sprintf("%t", len(queue.Songs) > 1),
-				Inline: true,
-			},
-			{
-				Name:   i18n.Globali18n.T(lang, "filter"),
-				Value:  queue.Filter,
-				Inline: true,
-			},
 		},
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("aetrna-music %s • Queue: %d tracks", version.AppVersion, len(queue.Songs)),
-		},
+	}
+	if song.Author != "" {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name: i18n.Globali18n.T(lang, "artist_channel"), Value: song.Author, Inline: true,
+		})
+	}
+
+	// Only show settings that differ from the defaults
+	var status []string
+	if volPct != 100 {
+		status = append(status, fmt.Sprintf("%s %d%%", i18n.Globali18n.T(lang, "volume"), volPct))
+	}
+	if queue.Loop != music.LoopOff {
+		status = append(status, fmt.Sprintf("%s: %s", i18n.Globali18n.T(lang, "loop"), queue.Loop))
+	}
+	if queue.Filter != "" && queue.Filter != "none" {
+		status = append(status, fmt.Sprintf("%s: %s", i18n.Globali18n.T(lang, "filter"), queue.Filter))
+	}
+	if upcoming := len(queue.Upcoming()); upcoming > 0 {
+		status = append(status, i18n.Globali18n.T(lang, "in_queue", upcoming))
+	}
+	if len(status) > 0 {
+		embed.Footer = &discordgo.MessageEmbedFooter{Text: strings.Join(status, " · ")}
 	}
 
 	// Add progress bar based on current playback elapsed position
@@ -122,7 +116,7 @@ func CreateNowPlayingEmbed(song *music.Song, queue *music.GuildQueue, lang strin
 
 	progressValue := progressBar
 	if hasLyrics {
-		progressValue = fmt.Sprintf("%s\n```\n%s\n```", progressBar, i18n.Globali18n.T(lang, "lyrics_hint"))
+		progressValue = fmt.Sprintf("%s\n-# %s", progressBar, i18n.Globali18n.T(lang, "lyrics_hint"))
 	}
 
 	embed.Fields = append([]*discordgo.MessageEmbedField{
@@ -335,7 +329,7 @@ func CreateLyricsEmbed(song *music.Song, res interface{}, currentDur time.Durati
 
 	currentSec := int(currentDur.Seconds())
 	progressBar := music.BuildProgressBar(currentSec, song.Duration, 16)
-	sb.WriteString(fmt.Sprintf("⏱️ %s", progressBar))
+	sb.WriteString(progressBar)
 
 	embed.Description = sb.String()
 	embed.Footer = &discordgo.MessageEmbedFooter{
@@ -384,9 +378,6 @@ func CreateAddedToQueueEmbed(song *music.Song, queue *music.GuildQueue, lang str
 				Value:  fmt.Sprintf("#%d", len(queue.Songs)),
 				Inline: true,
 			},
-		},
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: fmt.Sprintf("aetrna-music %s • Total Queue: %d tracks", version.AppVersion, len(queue.Songs)),
 		},
 	}
 	if song.Thumbnail != "" {
@@ -543,7 +534,7 @@ func CreateQueueEmbed(queue *music.GuildQueue, page, itemsPerPage int, lang stri
 		for i, n := range excluded {
 			parts[i] = fmt.Sprintf("%d", n)
 		}
-		newDesc.WriteString(fmt.Sprintf("\n🚫 Excluded: **%s** — `/include` to restore", strings.Join(parts, ", ")))
+		newDesc.WriteString(fmt.Sprintf("\nExcluded: %s. Bring them back with `/include`.", strings.Join(parts, ", ")))
 	}
 
 	embed.Description = newDesc.String()

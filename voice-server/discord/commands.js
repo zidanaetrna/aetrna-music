@@ -10,18 +10,18 @@ const commands = [
         .setDescription('Search for a song on YouTube')
         .addStringOption(opt => opt.setName('query').setDescription('Song name').setRequired(true)),
     new SlashCommandBuilder().setName('skip').setDescription('Skip the current song'),
-    new SlashCommandBuilder().setName('previous').setDescription('Play previous song from history'),
+    new SlashCommandBuilder().setName('previous').setDescription('Play the previous song'),
     new SlashCommandBuilder().setName('stop').setDescription('Stop playback and clear queue'),
     new SlashCommandBuilder().setName('pause').setDescription('Pause playback'),
     new SlashCommandBuilder().setName('resume').setDescription('Resume playback'),
-    new SlashCommandBuilder().setName('queue').setDescription('Show upcoming queue'),
-    new SlashCommandBuilder().setName('nowplaying').setDescription('Show interactive Now Playing card'),
-    new SlashCommandBuilder().setName('lyrics').setDescription('Show synced or plain text lyrics for current song'),
-    new SlashCommandBuilder().setName('shuffle').setDescription('Shuffle the current song queue'),
+    new SlashCommandBuilder().setName('queue').setDescription('Show the queue'),
+    new SlashCommandBuilder().setName('nowplaying').setDescription('Show the current song'),
+    new SlashCommandBuilder().setName('lyrics').setDescription('Show lyrics for the current song'),
+    new SlashCommandBuilder().setName('shuffle').setDescription('Shuffle the queue'),
     new SlashCommandBuilder()
         .setName('loop')
         .setDescription('Set loop mode')
-        .addSubcommand(sub => sub.setName('track').setDescription('Loop every track in the queue/playlist (repeats forever)'))
+        .addSubcommand(sub => sub.setName('track').setDescription('Repeat the whole queue'))
         .addSubcommand(sub => sub.setName('song').setDescription('Repeat the current song'))
         .addSubcommand(sub => sub.setName('off').setDescription('Turn looping off')),
     new SlashCommandBuilder()
@@ -46,32 +46,32 @@ const commands = [
         .addStringOption(opt => opt.setName('track').setDescription('Song link (YouTube/Spotify), track number(s) like 7 or 3,7,9, or "all"').setRequired(true)),
     new SlashCommandBuilder()
         .setName('volume')
-        .setDescription('Set playback volume level (0 - 200%)')
-        .addIntegerOption(opt => opt.setName('level').setDescription('Volume level percentage (0 - 200)').setMinValue(0).setMaxValue(200).setRequired(true)),
+        .setDescription('Set the volume (0-200%)')
+        .addIntegerOption(opt => opt.setName('level').setDescription('Volume in percent').setMinValue(0).setMaxValue(200).setRequired(true)),
     new SlashCommandBuilder().setName('favorite').setDescription('Add current song to favorites'),
     new SlashCommandBuilder().setName('favorites').setDescription('List your favorite songs'),
     new SlashCommandBuilder()
         .setName('filter')
         .setDescription('Apply an audio filter')
         .addStringOption(opt => opt.setName('name').setDescription('Filter name (bassboost, nightcore, etc.)').setRequired(true)),
-    new SlashCommandBuilder().setName('help').setDescription('Show help and command guide'),
-    new SlashCommandBuilder().setName('stats').setDescription('Show bot system statistics'),
+    new SlashCommandBuilder().setName('help').setDescription('List the commands'),
+    new SlashCommandBuilder().setName('stats').setDescription('Bot stats (owner only)'),
     new SlashCommandBuilder().setName('ping').setDescription('Check bot latency'),
     new SlashCommandBuilder()
         .setName('playlist')
-        .setDescription('Manage your custom saved playlists')
+        .setDescription('Manage your saved playlists')
         .addSubcommand(sub =>
             sub.setName('list')
                .setDescription('List all your saved playlists')
         )
         .addSubcommand(sub =>
             sub.setName('play')
-               .setDescription('Play a saved playlist into your voice channel')
+               .setDescription('Play a saved playlist')
                .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true))
         )
         .addSubcommand(sub =>
             sub.setName('create')
-               .setDescription('Create a new custom saved playlist')
+               .setDescription('Create a playlist')
                .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true))
         )
         .addSubcommand(sub =>
