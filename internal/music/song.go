@@ -19,6 +19,8 @@ type Song struct {
 	TextChannelID    string      `json:"text_channel_id"`
 	IsAutoTransition bool        `json:"is_auto_transition"`
 	VideoID          string      `json:"video_id"`
+	// Position is the song's stable track number in the queue (1-based), used by /exclude.
+	Position         int         `json:"position"`
 	Lyrics      interface{} `json:"-"`
 }
 

@@ -122,9 +122,7 @@ func (h *Handler) HandleCollectionLoad(s *discordgo.Session, i *discordgo.Intera
 	}
 
 	queue.VoiceChannelID = voiceState.ChannelID
-	if !queue.IsPlaying {
-		go queue.PlayNext()
-	}
+	queue.EnsurePlaying()
 
 	_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,

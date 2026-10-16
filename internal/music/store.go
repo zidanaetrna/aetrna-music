@@ -32,11 +32,13 @@ func (s *QueueStore) startGARoutine() {
 		s.mu.Lock()
 		for guildID, q := range s.queues {
 			q.mu.RLock()
-			isPlaying := q.IsPlaying
-			hasSongs := len(q.Songs) > 0
+			// Keep queues touched recently: a /play may still be searching
+			// before it adds its song, and would otherwise land in an orphan.
+			idle := !q.isLooping && len(q.Songs) == 0 && q.idleTimer == nil &&
+				time.Since(q.lastAccess) > 10*time.Minute
 			q.mu.RUnlock()
 
-			if !isPlaying && !hasSongs {
+			if idle {
 				delete(s.queues, guildID)
 			}
 		}
@@ -53,6 +55,7 @@ func (s *QueueStore) Get(guildID string) *GuildQueue {
 		queue = NewGuildQueue(guildID, s.playCb, s.stopCb, s.preFetchCb)
 		s.queues[guildID] = queue
 	}
+	queue.Touch()
 	return queue
 }
 

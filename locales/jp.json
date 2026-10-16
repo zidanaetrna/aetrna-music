@@ -55,7 +55,7 @@
   "help_section_playback": "再生コマンド",
   "help_section_playback_value": "`/play <クエリ>` - YouTube/Spotifyから曲を再生/キュー追加\n`/pause` - 一時停止\n`/resume` - 再開\n`/skip` - 次の曲へスキップ\n`/previous` - 履歴から前の曲を再生\n`/stop` - 停止 & キュー消去",
   "help_section_queue": "キュー & プレイリスト",
-  "help_section_queue_value": "`/queue` - ページ表示キュー一覧\n`/nowplaying` (`/np`) - 現在の曲を表示\n`/shuffle` - キューをシャッフル\n`/playlist create <名前>` - キューをプレイリストに保存\n`/playlist play <名前>` - プレイリストをキューに読み込む",
+  "help_section_queue_value": "`/loop track|song|off` - キュー全体 / 現在の曲をループ / オフ\n`/exclude track:<n>` - n番の曲をスキップ (例 3,7,9) · `/include` で戻す\n`/queue` - ページ表示キュー一覧\n`/nowplaying` (`/np`) - 現在の曲を表示\n`/shuffle` - キューをシャッフル\n`/playlist create <名前>` - キューをプレイリストに保存\n`/playlist play <名前>` - プレイリストをキューに読み込む",
   "help_section_filters": "オーディオDSPフィルター",
   "help_section_filters_value": "`/filter <bassboost/nightcore/vaporwave/8d/pop/off>` - 動的FFmpegイコライザー",
   "help_section_info": "お気に入り & 情報",

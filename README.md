@@ -159,7 +159,9 @@ npx aetrna-music init
 | `/nowplaying` | Queue | View Now Playing card with interactive control buttons |
 | `/lyrics` | Playback | Fetch synced line-by-line LRC lyrics for current track with live time-offset adjustment |
 | `/shuffle` | Queue | Shuffle current track queue |
-| `/loop` | Queue | Toggle loop mode (Off / Song / Queue) |
+| `/loop track\|song\|off` | Queue | Loop every track in the queue/playlist, repeat the current song, or turn looping off |
+| `/exclude track:<n>` | Queue | Skip tracks by their queue number (`7`, `3,7,9`, `2-5`), including on every loop cycle; empty lists exclusions |
+| `/include track:<n>` | Queue | Bring excluded tracks back (`7`, `3,7,9` or `all`) |
 | `/volume <level>` | Playback | Set playback volume level (0 – 200%) |
 | `/favorite` | Favorites | Save current song to your personal SQLite favorites |
 | `/favorites` | Favorites | View and play your saved favorite songs |

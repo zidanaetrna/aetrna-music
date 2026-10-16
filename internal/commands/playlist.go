@@ -263,14 +263,15 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 	skippedCount := 0
 	totalSecs := 0
 
-	for _, item := range items {
+	positions := make([]int, len(items)) // track number per item, 0 = not queued
+	for idx, item := range items {
 		targetURL := item.URL
 		if targetURL == "" {
 			skippedCount++
 			continue
 		}
 
-		queue.AddSong(music.Song{
+		positions[idx] = queue.AddSong(music.Song{
 			Title:         item.Title,
 			URL:           targetURL,
 			Duration:      item.Duration,
@@ -285,9 +286,7 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 	}
 
 	queue.VoiceChannelID = voiceChannelID
-	if !queue.IsPlaying {
-		go queue.PlayNext()
-	}
+	queue.EnsurePlaying()
 
 	// Build Rich Hybrid Embed Preview
 	var sb strings.Builder
@@ -314,16 +313,22 @@ func (h *Handler) HandlePlaylistPlay(s *discordgo.Session, i *discordgo.Interact
 			durStr = fmt.Sprintf(" (`%dm %ds`)", item.Duration/60, item.Duration%60)
 		}
 
+		// Number = queue track number, so it can be passed straight to /exclude
+		num := "–"
+		if positions[idx] > 0 {
+			num = fmt.Sprintf("%d", positions[idx])
+		}
 		if item.URL != "" && strings.HasPrefix(item.URL, "http") {
-			sb.WriteString(fmt.Sprintf("`%d.` %s **[%s](%s)**%s\n", idx+1, icon, item.Title, item.URL, durStr))
+			sb.WriteString(fmt.Sprintf("`%s.` %s **[%s](%s)**%s\n", num, icon, item.Title, item.URL, durStr))
 		} else {
-			sb.WriteString(fmt.Sprintf("`%d.` %s **%s**%s\n", idx+1, icon, item.Title, durStr))
+			sb.WriteString(fmt.Sprintf("`%s.` %s **%s**%s\n", num, icon, item.Title, durStr))
 		}
 	}
 
 	if len(items) > maxPreview {
 		sb.WriteString(fmt.Sprintf("\n*...and %d more track(s) in queue.*", len(items)-maxPreview))
 	}
+	sb.WriteString("\n-# Skip a track with `/exclude track:<number>` · repeat all with `/loop track`")
 
 	embedColor := 0xFF0000 // YouTube Red default
 	if hasSpotify {

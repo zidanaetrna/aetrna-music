@@ -72,9 +72,15 @@ function createApiRouter(context) {
                             ]);
                         } catch (e) {
                             console.warn(`[WARN] [VoiceServer] Connection lost in guild ${guildId}, cleaning up`);
+                            // Invalidate the session so the dying player's Idle event is ignored,
+                            // then tell Go explicitly — otherwise it stays stuck in "playing".
+                            playSessions.set(guildId, (playSessions.get(guildId) || 0) + 1);
                             cleanupStreams(guildId);
+                            const lostPlayer = players.get(guildId);
+                            if (lostPlayer) { lostPlayer.removeAllListeners(); try { lostPlayer.stop(); } catch (_) {} players.delete(guildId); }
                             try { connection.destroy(); } catch (_) {}
-                            connections.delete(guildId);
+                            if (connections.get(guildId) === connection) connections.delete(guildId);
+                            notifyBotTrackEnd(guildId, 'disconnected');
                         }
                     });
 
@@ -95,19 +101,35 @@ function createApiRouter(context) {
                 let streamPlaybackStartedAt = 0;
                 let playRequestedAt = Date.now();
                 let hasEnteredPlayingState = false;
+                let bufferingIdleTimer = null;
 
                 player.on(AudioPlayerStatus.Playing, () => {
                     hasEnteredPlayingState = true;
                     streamPlaybackStartedAt = Date.now();
+                    if (bufferingIdleTimer) { clearTimeout(bufferingIdleTimer); bufferingIdleTimer = null; }
                     console.log(`[INFO] [VoiceServer] AudioPlayer entered Playing state for guild ${guildId}`);
                 });
 
                 player.on(AudioPlayerStatus.Idle, () => {
                     if (playSessions.get(guildId) !== currentSessionId) return;
 
-                    // Ignore initial Idle state during network/FFmpeg buffering phase (0-15s window before Playing)
-                    if (!hasEnteredPlayingState && (Date.now() - playRequestedAt) < 15000) {
-                        console.log(`[DEBUG] [VoiceServer] Ignoring premature Idle state during buffering for guild ${guildId}`);
+                    // Idle during the initial network/FFmpeg buffering window (0-15s before Playing)
+                    // may be transient. Don't drop it outright: if the player still hasn't reached
+                    // Playing when the window closes, no further Idle will ever arrive, so report
+                    // the failure then — otherwise the Go side waits forever in "playing".
+                    const sinceRequest = Date.now() - playRequestedAt;
+                    if (!hasEnteredPlayingState && sinceRequest < 15000) {
+                        console.log(`[DEBUG] [VoiceServer] Premature Idle during buffering for guild ${guildId}, waiting for Playing...`);
+                        if (!bufferingIdleTimer) {
+                            bufferingIdleTimer = setTimeout(() => {
+                                bufferingIdleTimer = null;
+                                if (playSessions.get(guildId) !== currentSessionId || hasEnteredPlayingState) return;
+                                if (player.state.status !== AudioPlayerStatus.Idle) return;
+                                console.warn(`[WARN] [VoiceServer] Stream never started for guild ${guildId}, reporting playback_failed`);
+                                cleanupStreams(guildId);
+                                notifyBotTrackEnd(guildId, 'playback_failed');
+                            }, 15000 - sinceRequest);
+                        }
                         return;
                     }
 
@@ -168,6 +190,12 @@ function createApiRouter(context) {
                 if (playSessions.get(guildId) !== currentSessionId) return;
                 console.error(`[ERROR] [VoiceServer] Async voice connection/playback failed for guild ${guildId}:`, asyncErr.message);
                 cleanupStreams(guildId);
+                // Don't reuse a connection that never became Ready on the next play
+                const failedConn = connections.get(guildId);
+                if (failedConn && failedConn.state.status !== VoiceConnectionStatus.Ready) {
+                    try { failedConn.destroy(); } catch (_) {}
+                    connections.delete(guildId);
+                }
                 notifyBotTrackEnd(guildId, 'connection_failed');
             }
         })();
@@ -175,9 +203,12 @@ function createApiRouter(context) {
 
     router.post('/stop', (req, res) => {
         const { guildId } = req.body;
+        // New session id: the stopped player's Idle event must not reach Go as a
+        // track-end, or it could skip a song started right after /stop.
+        playSessions.set(guildId, (playSessions.get(guildId) || 0) + 1);
         cleanupStreams(guildId);
         const player = players.get(guildId);
-        if (player) { player.stop(); players.delete(guildId); }
+        if (player) { player.removeAllListeners(); player.stop(); players.delete(guildId); }
         const connection = connections.get(guildId);
         if (connection) { try { connection.destroy(); } catch (e) {} connections.delete(guildId); }
         res.json({ status: 'stopped', guildId });

@@ -18,7 +18,20 @@ const commands = [
     new SlashCommandBuilder().setName('nowplaying').setDescription('Show interactive Now Playing card'),
     new SlashCommandBuilder().setName('lyrics').setDescription('Show synced or plain text lyrics for current song'),
     new SlashCommandBuilder().setName('shuffle').setDescription('Shuffle the current song queue'),
-    new SlashCommandBuilder().setName('loop').setDescription('Toggle loop mode (Off / Song / Queue)'),
+    new SlashCommandBuilder()
+        .setName('loop')
+        .setDescription('Set loop mode')
+        .addSubcommand(sub => sub.setName('track').setDescription('Loop every track in the queue/playlist (repeats forever)'))
+        .addSubcommand(sub => sub.setName('song').setDescription('Repeat the current song'))
+        .addSubcommand(sub => sub.setName('off').setDescription('Turn looping off')),
+    new SlashCommandBuilder()
+        .setName('exclude')
+        .setDescription('Skip tracks by their queue number (also on every loop cycle)')
+        .addStringOption(opt => opt.setName('track').setDescription('Track number(s), e.g. 7 or 3,7,9 or 2-5. Leave empty to list').setRequired(false)),
+    new SlashCommandBuilder()
+        .setName('include')
+        .setDescription('Bring excluded tracks back into rotation')
+        .addStringOption(opt => opt.setName('track').setDescription('Track number(s), e.g. 7 or 3,7,9, or "all"').setRequired(true)),
     new SlashCommandBuilder()
         .setName('volume')
         .setDescription('Set playback volume level (0 - 200%)')

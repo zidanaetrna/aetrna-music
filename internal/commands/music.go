@@ -291,9 +291,7 @@ func (h *Handler) HandlePlay(s *discordgo.Session, i *discordgo.InteractionCreat
 	queue.AddSong(song)
 	queue.VoiceChannelID = voiceState.ChannelID
 
-	if !queue.IsPlaying {
-		go queue.PlayNext()
-	}
+	queue.EnsurePlaying()
 
 	embed := CreateNowPlayingEmbed(&song, queue, lang)
 	components := CreateControlButtons(queue.IsPaused, lang)

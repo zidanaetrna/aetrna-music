@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -455,16 +456,12 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 	song.ChannelID = p.MemberVoiceChannelID
 	song.TextChannelID = p.ChannelID
 
-	isAlreadyPlaying := queue.IsPlaying && queue.NowPlaying != nil
-
-	queue.AddSong(song)
 	queue.VoiceChannelID = p.MemberVoiceChannelID
+	song.Position = queue.AddSong(song)
 
-	if !queue.IsPlaying {
-		go queue.PlayNext()
-	}
-
-	if isAlreadyPlaying {
+	// EnsurePlaying checks the real loop state, so an idle queue whose
+	// IsPlaying flag went stale still starts playback instead of just queueing.
+	if !queue.EnsurePlaying() {
 		followup(&discordgo.WebhookParams{
 			Embeds: []*discordgo.MessageEmbed{commands.CreateAddedToQueueEmbed(&song, queue, lang)},
 		})
@@ -781,16 +778,31 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 	case "loop":
 		q := b.store.Get(p.GuildID)
-		if q.Loop == music.LoopOff {
-			q.Loop = music.LoopSong
-			content = "🔁 Loop mode set to: **Song**"
-		} else if q.Loop == music.LoopSong {
-			q.Loop = music.LoopQueue
-			content = "🔁 Loop mode set to: **Queue**"
-		} else {
-			q.Loop = music.LoopOff
-			content = "🔁 Loop mode set to: **Off**"
+		var opts []*discordgo.ApplicationCommandInteractionDataOption
+		if len(p.Options) > 0 {
+			_ = json.Unmarshal(p.Options, &opts)
 		}
+		var mode music.LoopMode
+		if len(opts) > 0 && q.SetLoop(opts[0].Name) == nil {
+			mode = q.Loop
+		} else {
+			mode = q.CycleLoop()
+		}
+		content = loopModeMessage(mode)
+
+	case "exclude", "include":
+		q := b.store.Get(p.GuildID)
+		var opts []*discordgo.ApplicationCommandInteractionDataOption
+		if len(p.Options) > 0 {
+			_ = json.Unmarshal(p.Options, &opts)
+		}
+		input := ""
+		for _, opt := range opts {
+			if opt.Name == "track" {
+				input = strings.TrimSpace(fmt.Sprintf("%v", opt.Value))
+			}
+		}
+		content, flags = b.handleExcludeInclude(q, cmd, input)
 
 	case "help":
 		embeds = []*discordgo.MessageEmbed{{
@@ -892,16 +904,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 	case "btn_loop":
 		q := b.store.Get(p.GuildID)
-		if q.Loop == music.LoopOff {
-			q.Loop = music.LoopSong
-			content = "🔁 Loop mode set to: **Song**"
-		} else if q.Loop == music.LoopSong {
-			q.Loop = music.LoopQueue
-			content = "🔁 Loop mode set to: **Queue**"
-		} else {
-			q.Loop = music.LoopOff
-			content = "🔁 Loop mode set to: **Off**"
-		}
+		content = loopModeMessage(q.CycleLoop())
 		flags = discordgo.MessageFlagsEphemeral
 
 	case "btn_shuffle":
@@ -1040,4 +1043,68 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 			}
 		}
 	}(msg.ID, song.URL)
+}
+
+func loopModeMessage(mode music.LoopMode) string {
+	switch mode {
+	case music.LoopSong:
+		return "🔂 Loop mode set to: **Song**"
+	case music.LoopTrack:
+		return "🔁 Loop mode set to: **Track** (the whole queue repeats)"
+	default:
+		return "➡️ Loop mode set to: **Off**"
+	}
+}
+
+func joinInts(nums []int) string {
+	parts := make([]string, len(nums))
+	for i, n := range nums {
+		parts[i] = strconv.Itoa(n)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// handleExcludeInclude serves /exclude and /include. Track numbers are the
+// numbers shown in /queue and /playlist play.
+func (b *Bot) handleExcludeInclude(q *music.GuildQueue, cmd, input string) (string, discordgo.MessageFlags) {
+	if input == "" {
+		excluded := q.ExcludedPositions()
+		if len(excluded) == 0 {
+			return "No tracks are excluded. Use `/exclude track:7` (or `3,7,9`, `2-5`) to skip tracks.", discordgo.MessageFlagsEphemeral
+		}
+		return fmt.Sprintf("🚫 Excluded tracks: **%s**", joinInts(excluded)), discordgo.MessageFlagsEphemeral
+	}
+
+	if cmd == "include" && strings.EqualFold(input, "all") {
+		q.Include(nil)
+		return "✅ All excluded tracks are back in rotation.", 0
+	}
+
+	nums, err := music.ParseTrackNumbers(input)
+	if err != nil {
+		return fmt.Sprintf("❌ %v. Use a number like `7`, a list like `3,7,9` or a range like `2-5`.", err), discordgo.MessageFlagsEphemeral
+	}
+
+	if cmd == "include" {
+		q.Include(nums)
+		return fmt.Sprintf("✅ Track(s) **%s** will play again.", joinInts(nums)), 0
+	}
+
+	known := q.KnownPositions()
+	var missing []int
+	for _, n := range nums {
+		if !known[n] {
+			missing = append(missing, n)
+		}
+	}
+
+	skipped := q.Exclude(nums)
+	msg := fmt.Sprintf("🚫 Track(s) **%s** will be skipped, including on every loop cycle. Use `/include` to bring them back.", joinInts(nums))
+	if skipped {
+		msg += "\n⏭️ Skipped the current track."
+	}
+	if len(missing) > 0 {
+		msg += fmt.Sprintf("\n⚠️ Not in the queue right now: %s", joinInts(missing))
+	}
+	return msg, 0
 }

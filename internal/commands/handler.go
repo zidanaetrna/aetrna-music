@@ -519,15 +519,30 @@ func CreateQueueEmbed(queue *music.GuildQueue, page, itemsPerPage int, lang stri
 	newDesc.WriteString("```\n")
 	newDesc.WriteString(headerColumns)
 	newDesc.WriteString("\n")
+	excluded := queue.ExcludedPositions()
 	for i, song := range queue.Songs[startIndex:endIndex] {
-		trackNum := startIndex + i + 1
+		// Show the stable track number used by /exclude; fall back to the row index
+		trackNum := song.Position
+		if trackNum == 0 {
+			trackNum = startIndex + i + 1
+		}
 		title := song.Title
+		if queue.IsExcluded(song.Position) {
+			title = "[skip] " + title
+		}
 		if len(title) > 40 {
 			title = title[:37] + "..."
 		}
 		newDesc.WriteString(fmt.Sprintf(headerTemplate+"\n", fmt.Sprintf("%-3d", trackNum)[:3], fmt.Sprintf("%-42s", title)[:42], fmt.Sprintf("%-8s", music.FormatDuration(song.Duration))[:8]))
 	}
 	newDesc.WriteString("```")
+	if len(excluded) > 0 {
+		parts := make([]string, len(excluded))
+		for i, n := range excluded {
+			parts[i] = fmt.Sprintf("%d", n)
+		}
+		newDesc.WriteString(fmt.Sprintf("\n🚫 Excluded: **%s** — `/include` to restore", strings.Join(parts, ", ")))
+	}
 
 	embed.Description = newDesc.String()
 	embed.Footer = &discordgo.MessageEmbedFooter{

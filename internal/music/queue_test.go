@@ -61,11 +61,5 @@ func TestGuildQueue_IdleTimerRaceCondition(t *testing.T) {
 	}
 
 	// Clean up queue
-	q.mu.Lock()
-	q.IsPlaying = false
-	select {
-	case q.TrackEndCh <- struct{}{}:
-	default:
-	}
-	q.mu.Unlock()
+	q.Stop()
 }

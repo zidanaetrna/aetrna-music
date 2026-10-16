@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -12,10 +14,24 @@ import (
 type LoopMode string
 
 const (
-	LoopOff   LoopMode = "off"
-	LoopSong  LoopMode = "song"
-	LoopQueue LoopMode = "queue"
+	LoopOff  LoopMode = "off"
+	LoopSong LoopMode = "song"
+	// LoopTrack re-appends every finished track to the back of the queue, so the
+	// whole queue/playlist repeats forever (no History cap).
+	LoopTrack LoopMode = "track"
+	// LoopQueue is the legacy name of LoopTrack.
+	LoopQueue = LoopTrack
 )
+
+// isFailureReason reports track-end reasons meaning the track never played
+// properly. Failed tracks are not replayed by LoopSong nor re-queued by LoopTrack.
+func isFailureReason(reason string) bool {
+	switch reason {
+	case "playback_failed", "error", "connection_failed":
+		return true
+	}
+	return false
+}
 
 // PlayCallback is called by PlayNext to start actual audio playback via Voice Engine.
 // Returns an error if playback could not be started.
@@ -50,11 +66,13 @@ type GuildQueue struct {
 	StopCb     StopCallback
 	PreFetchCb PreFetchCallback
 
-	// TrackEndCh is signalled by the bot when track finishes.
-	TrackEndCh chan struct{}
+	// TrackEndCh carries the track-end reason to the running playback loop.
+	// Stop() swaps in a fresh channel so a stopped loop can never steal signals
+	// meant for a loop started afterwards.
+	TrackEndCh chan string
 
-	// TrackFailReason holds the failure reason from the last track-end signal.
-	TrackFailReason string
+	// Excluded holds track numbers (Song.Position) that playback skips over.
+	Excluded map[int]bool
 
 	Dirty      bool
 	Generation uint64
@@ -64,6 +82,8 @@ type GuildQueue struct {
 	SkipVotes    map[string]bool
 	LyricsOffset time.Duration
 	isLooping    bool
+	nextPosition int
+	lastAccess   time.Time
 
 	mu sync.RWMutex
 }
@@ -76,7 +96,9 @@ func NewGuildQueue(guildID string, playCb PlayCallback, stopCb StopCallback, pre
 		Filter:     "none",
 		Songs:      make([]Song, 0),
 		History:    make([]Song, 0),
-		TrackEndCh: make(chan struct{}, 1),
+		TrackEndCh: make(chan string, 1),
+		Excluded:   make(map[int]bool),
+		lastAccess: time.Now(),
 		PlayCb:     playCb,
 		StopCb:     stopCb,
 		PreFetchCb: preFetchCb,
@@ -129,13 +151,24 @@ func (q *GuildQueue) PreFetchNext() {
 	}()
 }
 
-func (q *GuildQueue) AddSong(song Song) {
+// assignPositionLocked gives a song its stable track number (1, 2, 3, ...) the
+// first time it enters the queue. Caller must hold q.mu.
+func (q *GuildQueue) assignPositionLocked(song *Song) {
+	if song.Position == 0 {
+		q.nextPosition++
+		song.Position = q.nextPosition
+	}
+}
+
+// AddSong appends a song and returns its track number.
+func (q *GuildQueue) AddSong(song Song) int {
 	q.mu.Lock()
 	if q.idleTimer != nil {
 		q.idleTimer.Stop()
 		q.idleTimer = nil
 		fmt.Printf("[INFO] [GuildQueue %s] Cancelled idle disconnect timer (new song added)\n", q.GuildID)
 	}
+	q.assignPositionLocked(&song)
 	q.Songs = append(q.Songs, song)
 	isPlaying := q.IsPlaying
 	q.mu.Unlock()
@@ -143,6 +176,7 @@ func (q *GuildQueue) AddSong(song Song) {
 	if isPlaying {
 		q.PreFetchNext()
 	}
+	return song.Position
 }
 
 func (q *GuildQueue) InsertNext(song Song) {
@@ -152,6 +186,7 @@ func (q *GuildQueue) InsertNext(song Song) {
 		q.idleTimer = nil
 		fmt.Printf("[INFO] [GuildQueue %s] Cancelled idle disconnect timer (song inserted next)\n", q.GuildID)
 	}
+	q.assignPositionLocked(&song)
 	q.Songs = append([]Song{song}, q.Songs...)
 	isPlaying := q.IsPlaying
 	q.mu.Unlock()
@@ -256,6 +291,16 @@ func (q *GuildQueue) PlayPrev() bool {
 	}
 	prev := q.History[len(q.History)-1]
 	q.History = q.History[:len(q.History)-1]
+	if q.Loop == LoopTrack {
+		// The finished track was re-queued at the back; drop that copy so it
+		// isn't played twice per cycle.
+		for i := len(q.Songs) - 1; i >= 0; i-- {
+			if q.Songs[i].Position == prev.Position && q.Songs[i].URL == prev.URL {
+				q.Songs = append(q.Songs[:i], q.Songs[i+1:]...)
+				break
+			}
+		}
+	}
 	// Put current song back at front of queue so it plays after prev
 	if q.NowPlaying != nil {
 		q.Songs = append([]Song{*q.NowPlaying}, q.Songs...)
@@ -263,7 +308,7 @@ func (q *GuildQueue) PlayPrev() bool {
 	// Put prev song at front
 	q.Songs = append([]Song{prev}, q.Songs...)
 	q.mu.Unlock()
-	q.SignalTrackEndWithReason("skip")
+	q.SignalTrackEndWithReason("prev")
 	return true
 }
 
@@ -271,24 +316,47 @@ func (q *GuildQueue) SignalTrackEnd() {
 	q.SignalTrackEndWithReason("finished")
 }
 
+// SignalTrackEndWithReason hands a track-end reason to the running playback loop.
+// Signals that arrive while no loop is running are stale (e.g. the Idle event
+// fired by /stop) and are dropped, so they can't skip a track started later.
 func (q *GuildQueue) SignalTrackEndWithReason(reason string) {
 	q.mu.Lock()
-	isLooping := q.isLooping
-	q.TrackFailReason = reason
+	if !q.isLooping {
+		q.mu.Unlock()
+		log.Printf("[DEBUG] [GuildQueue %s] Ignoring track-end (%s): no playback loop running", q.GuildID, reason)
+		return
+	}
+	ch := q.TrackEndCh
 	q.mu.Unlock()
 
-	if isLooping {
-		select {
-		case q.TrackEndCh <- struct{}{}:
-		default:
-		}
-	} else {
-		go q.PlayNext()
+	select {
+	case ch <- reason:
+	default:
 	}
 }
 
 func (q *GuildQueue) Stop() {
 	q.mu.Lock()
+	q.resetLocked()
+	gid := q.GuildID
+	stopCb := q.StopCb
+	oldCh := q.TrackEndCh
+	q.TrackEndCh = make(chan string, 1)
+	q.mu.Unlock()
+
+	if stopCb != nil {
+		_ = stopCb(gid)
+	}
+
+	// Wake the old loop; it sees its channel was retired and exits.
+	select {
+	case oldCh <- "stopped":
+	default:
+	}
+}
+
+// resetLocked clears playback state and the queue. Caller must hold q.mu.
+func (q *GuildQueue) resetLocked() {
 	if q.idleTimer != nil {
 		q.idleTimer.Stop()
 		q.idleTimer = nil
@@ -302,19 +370,115 @@ func (q *GuildQueue) Stop() {
 	q.IsPlaying = false
 	q.IsPaused = false
 	q.isLooping = false
-	gid := q.GuildID
-	stopCb := q.StopCb
+	q.nextPosition = 0
+	q.Excluded = make(map[int]bool)
+}
+
+// Touch marks the queue as recently used so the store's GC keeps it.
+func (q *GuildQueue) Touch() {
+	q.mu.Lock()
+	q.lastAccess = time.Now()
+	q.mu.Unlock()
+}
+
+// Exclude marks track numbers to be skipped, now and on every later loop cycle.
+// If the current track is excluded it is skipped right away.
+func (q *GuildQueue) Exclude(positions []int) (skippedCurrent bool) {
+	q.mu.Lock()
+	if q.Excluded == nil {
+		q.Excluded = make(map[int]bool)
+	}
+	for _, p := range positions {
+		q.Excluded[p] = true
+	}
+	skippedCurrent = q.isLooping && q.NowPlaying != nil && q.Excluded[q.NowPlaying.Position]
 	q.mu.Unlock()
 
-	if stopCb != nil {
-		_ = stopCb(gid)
+	if skippedCurrent {
+		q.Skip()
 	}
+	return skippedCurrent
+}
 
-	// Signal any waiting PlayNext goroutine to exit
-	select {
-	case q.TrackEndCh <- struct{}{}:
-	default:
+// Include removes track numbers from the exclusion list; nil clears it.
+func (q *GuildQueue) Include(positions []int) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if positions == nil {
+		q.Excluded = make(map[int]bool)
+		return
 	}
+	for _, p := range positions {
+		delete(q.Excluded, p)
+	}
+}
+
+// KnownPositions returns the track numbers currently playing or queued.
+func (q *GuildQueue) KnownPositions() map[int]bool {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	known := make(map[int]bool, len(q.Songs)+1)
+	if q.NowPlaying != nil {
+		known[q.NowPlaying.Position] = true
+	}
+	for _, s := range q.Songs {
+		known[s.Position] = true
+	}
+	return known
+}
+
+func (q *GuildQueue) IsExcluded(position int) bool {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	return q.Excluded[position]
+}
+
+// ExcludedPositions returns the excluded track numbers in ascending order.
+func (q *GuildQueue) ExcludedPositions() []int {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	out := make([]int, 0, len(q.Excluded))
+	for p := range q.Excluded {
+		out = append(out, p)
+	}
+	sort.Ints(out)
+	return out
+}
+
+// ParseTrackNumbers parses "7", "3,7,9" or "2-5, 8" into sorted track numbers.
+func ParseTrackNumbers(input string) ([]int, error) {
+	const maxSpan = 500
+	seen := make(map[int]bool)
+	var out []int
+	add := func(n int) {
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	for _, part := range strings.FieldsFunc(input, func(r rune) bool { return r == ',' || r == ' ' }) {
+		if lo, hi, isRange := strings.Cut(part, "-"); isRange {
+			a, errA := strconv.Atoi(lo)
+			b, errB := strconv.Atoi(hi)
+			if errA != nil || errB != nil || a < 1 || b < a || b-a >= maxSpan {
+				return nil, fmt.Errorf("invalid range: %s", part)
+			}
+			for n := a; n <= b; n++ {
+				add(n)
+			}
+			continue
+		}
+		n, err := strconv.Atoi(part)
+		if err != nil || n < 1 {
+			return nil, fmt.Errorf("invalid track number: %s", part)
+		}
+		add(n)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no track numbers given")
+	}
+	sort.Ints(out)
+	return out, nil
 }
 
 func (q *GuildQueue) Shuffle() {
@@ -337,13 +501,31 @@ func (q *GuildQueue) SetVolume(vol int) {
 	q.Volume = float64(vol)
 }
 
+// CycleLoop advances off → song → track → off and returns the new mode.
+func (q *GuildQueue) CycleLoop() LoopMode {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	switch q.Loop {
+	case LoopOff:
+		q.Loop = LoopSong
+	case LoopSong:
+		q.Loop = LoopTrack
+	default:
+		q.Loop = LoopOff
+	}
+	return q.Loop
+}
+
 func (q *GuildQueue) SetLoop(mode string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	switch LoopMode(mode) {
-	case LoopOff, LoopSong, LoopQueue:
+	case LoopOff, LoopSong, LoopTrack:
 		q.Loop = LoopMode(mode)
+		return nil
+	case "queue":
+		q.Loop = LoopTrack
 		return nil
 	default:
 		return fmt.Errorf("invalid loop mode: %s", mode)
@@ -415,26 +597,70 @@ func (q *GuildQueue) EvaluateSkip(userID string, listenerCount int, isAdmin bool
 	return false, votes, required
 }
 
-// PlayNext plays the next song in the queue using the Voice Engine callback.
-// It blocks until a TrackEnd signal is received, then calls itself recursively.
+// PlayNext runs the playback loop for this guild until the queue runs dry or
+// Stop() is called. It returns immediately if a loop is already running.
 func (q *GuildQueue) PlayNext() {
 	q.mu.Lock()
-
 	if q.isLooping {
 		log.Printf("[DEBUG] [GuildQueue %s] PlayNext loop already active, skipping duplicate call", q.GuildID)
 		q.mu.Unlock()
 		return
 	}
 	q.isLooping = true
+	q.mu.Unlock()
+	q.run()
+}
 
-	// Drain any stale unconsumed signals in TrackEndCh
-	for len(q.TrackEndCh) > 0 {
-		<-q.TrackEndCh
+// EnsurePlaying starts the playback loop in the background if none is running.
+// Returns true if this call started playback.
+func (q *GuildQueue) EnsurePlaying() bool {
+	q.mu.Lock()
+	if q.isLooping {
+		q.mu.Unlock()
+		return false
+	}
+	q.isLooping = true
+	q.mu.Unlock()
+	go q.run()
+	return true
+}
+
+// run is the playback loop (one goroutine per playback session, no recursion).
+// The caller must have set isLooping.
+func (q *GuildQueue) run() {
+	q.mu.Lock()
+	endCh := q.TrackEndCh
+	q.mu.Unlock()
+
+	var prev *Song
+	reason := ""
+	for {
+		song, ok := q.advance(endCh, prev, reason)
+		if !ok {
+			return
+		}
+		var stopped bool
+		reason, stopped = q.playOne(endCh, song)
+		if stopped {
+			return
+		}
+		prev = &song
+	}
+}
+
+// advance decides what plays after prev ended with reason: it updates History,
+// loop re-queueing and NowPlaying. Returns false (and goes idle) when there is
+// nothing left to play or the loop was stopped.
+func (q *GuildQueue) advance(endCh chan string, prev *Song, reason string) (Song, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if q.TrackEndCh != endCh {
+		return Song{}, false // Stop() was called
 	}
 
 	q.SkipVotes = make(map[string]bool)
 	q.LyricsOffset = 0
-
 	if q.idleTimer != nil {
 		q.idleTimer.Stop()
 		q.idleTimer = nil
@@ -444,147 +670,146 @@ func (q *GuildQueue) PlayNext() {
 		q.lyricsCancel = nil
 	}
 
-	failReason := q.TrackFailReason
-	q.TrackFailReason = ""
-
-	isAutoTransition := (q.NowPlaying != nil)
-
-	if q.NowPlaying != nil && q.Loop != LoopSong {
-		q.History = append(q.History, *q.NowPlaying)
-		if len(q.History) > 50 {
-			q.History = q.History[1:]
-		}
+	if reason == "disconnected" {
+		// Voice connection is gone (kicked / channel deleted); nothing to resume.
+		log.Printf("[INFO] [GuildQueue %s] Voice connection lost, clearing queue", q.GuildID)
+		q.resetLocked()
+		q.VoiceChannelID = ""
+		return Song{}, false
 	}
 
-	if len(q.Songs) == 0 {
-		if q.Loop == LoopQueue && len(q.History) > 0 {
-			q.Songs = append([]Song{}, q.History...)
-			q.History = make([]Song, 0)
-		} else {
-			q.IsPlaying = false
-			q.NowPlaying = nil
-			q.isLooping = false
+	failed := isFailureReason(reason)
+	userSkipped := reason == "skip" || reason == "prev"
 
-			// Start 3-minute (180s) idle disconnect timer when queue finishes
-			gid := q.GuildID
-			stopCb := q.StopCb
-			log.Printf("[INFO] [GuildQueue %s] Queue empty. Starting 3-minute idle disconnect timer...", gid)
-			q.idleTimer = time.AfterFunc(3*time.Minute, func() {
-				q.mu.Lock()
-				defer q.mu.Unlock()
-				if !q.IsPlaying && len(q.Songs) == 0 && q.NowPlaying == nil {
-					log.Printf("[INFO] [GuildQueue %s] 3-minute idle timer expired. Auto-disconnecting...", gid)
-					if stopCb != nil {
-						_ = stopCb(gid)
-					}
-					q.VoiceChannelID = ""
-					q.idleTimer = nil
-				}
-			})
-
-			q.mu.Unlock()
-			return
-		}
-	}
-
-	var song Song
-	if q.Loop == LoopSong && q.NowPlaying != nil && failReason != "skip" {
-		song = *q.NowPlaying
-	} else {
-		song = q.Songs[0]
-		q.Songs = q.Songs[1:]
-		if isAutoTransition {
+	if prev != nil {
+		if q.Loop == LoopSong && !userSkipped && !failed && !q.Excluded[prev.Position] {
+			song := *prev
 			song.IsAutoTransition = true
+			q.startLocked(song)
+			return song, true
 		}
-		q.NowPlaying = &song
+		// "prev" already put the current track back at the front of the queue.
+		if reason != "prev" {
+			q.History = append(q.History, *prev)
+			if len(q.History) > 50 {
+				q.History = q.History[1:]
+			}
+			if q.Loop == LoopTrack && !failed {
+				q.Songs = append(q.Songs, *prev)
+			}
+		}
 	}
 
-	if q.idleTimer != nil {
-		q.idleTimer.Stop()
-		q.idleTimer = nil
+	idx := -1
+	for i := range q.Songs {
+		q.assignPositionLocked(&q.Songs[i]) // restored snapshots have no numbers yet
+		if !q.Excluded[q.Songs[i].Position] {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		q.goIdleLocked()
+		return Song{}, false
 	}
 
+	song := q.Songs[idx]
+	q.Songs = append(q.Songs[:idx:idx], q.Songs[idx+1:]...)
+	song.IsAutoTransition = prev != nil
+	q.startLocked(song)
+	return song, true
+}
+
+func (q *GuildQueue) startLocked(song Song) {
+	q.NowPlaying = &song
 	q.IsPlaying = true
 	q.IsPaused = false
 	q.StartedAt = time.Now()
-	gid := q.GuildID
-	playCb := q.PlayCb
-	q.mu.Unlock()
+}
 
+// goIdleLocked ends playback and arms the 3-minute auto-disconnect timer.
+// Caller must hold q.mu.
+func (q *GuildQueue) goIdleLocked() {
+	q.Songs = make([]Song, 0) // anything left was excluded
+	q.NowPlaying = nil
+	q.IsPlaying = false
+	q.IsPaused = false
+	q.isLooping = false
+	q.nextPosition = 0
+	q.Excluded = make(map[int]bool)
+
+	gid := q.GuildID
+	stopCb := q.StopCb
+	log.Printf("[INFO] [GuildQueue %s] Queue empty. Starting 3-minute idle disconnect timer...", gid)
+	q.idleTimer = time.AfterFunc(3*time.Minute, func() {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+		if !q.isLooping && len(q.Songs) == 0 && q.NowPlaying == nil {
+			log.Printf("[INFO] [GuildQueue %s] 3-minute idle timer expired. Auto-disconnecting...", gid)
+			if stopCb != nil {
+				_ = stopCb(gid)
+			}
+			q.VoiceChannelID = ""
+			q.idleTimer = nil
+		}
+	})
+}
+
+// playOne plays one track, retrying CDN failures, and blocks until it ends.
+// stopped is true when Stop() retired endCh, meaning the loop must exit.
+func (q *GuildQueue) playOne(endCh chan string, song Song) (reason string, stopped bool) {
 	const maxPlaybackRetries = 2
 
-	if playCb != nil {
-		if err := playCb(gid, song); err != nil {
-			log.Printf("[ERROR] [PlayNext] Playback error for %s: %v", song.Title, err)
-			q.mu.Lock()
-			q.NowPlaying = nil
-			q.isLooping = false
-			q.mu.Unlock()
-			q.PlayNext()
-			return
+	q.mu.RLock()
+	gid := q.GuildID
+	playCb := q.PlayCb
+	q.mu.RUnlock()
+
+	for attempt := 0; ; attempt++ {
+		// Drop stale signals left over from the previous track (e.g. skip + finished).
+		for len(endCh) > 0 {
+			<-endCh
 		}
-	}
 
-	// Trigger background pre-fetch for the next song in queue while current song plays
-	q.PreFetchNext()
-
-	// Wait for TrackEnd event (signalled by bot from Voice Engine WS event)
-	<-q.TrackEndCh
-
-	q.mu.Lock()
-	isPlaying := q.IsPlaying
-	failReason = q.TrackFailReason
-	q.TrackFailReason = ""
-	q.isLooping = false
-	q.mu.Unlock()
-
-	if !isPlaying {
-		return // Stop() was called
-	}
-
-	// Auto-retry on playback_failed: clear stream URL cache and re-call playCb
-	// YouTube CDN may reject requests that arrive immediately after a stream closes.
-	// Re-resolving via yt-dlp often picks a different CDN edge server, bypassing the rejection.
-	if failReason == "playback_failed" && playCb != nil {
-		for attempt := 1; attempt <= maxPlaybackRetries; attempt++ {
-			log.Printf("[INFO] [PlayNext] playback_failed for '%s' — clearing stream cache and retrying (attempt %d/%d)", song.Title, attempt, maxPlaybackRetries)
-			GlobalStreamCache.Delete(song.URL)
-			song.StreamURL = ""
-
-			q.mu.Lock()
-			q.NowPlaying = &song
-			q.isLooping = true
-			for len(q.TrackEndCh) > 0 {
-				<-q.TrackEndCh
-			}
-			q.mu.Unlock()
-
+		if playCb != nil {
 			if err := playCb(gid, song); err != nil {
-				log.Printf("[ERROR] [PlayNext] Retry playCb error for '%s': %v", song.Title, err)
-				break
-			}
-
-			<-q.TrackEndCh
-
-			q.mu.Lock()
-			isPlaying = q.IsPlaying
-			failReason = q.TrackFailReason
-			q.TrackFailReason = ""
-			q.isLooping = false
-			q.mu.Unlock()
-
-			if !isPlaying {
-				return
-			}
-			if failReason != "playback_failed" {
-				// Retry succeeded — carry on to next song
-				log.Printf("[INFO] [PlayNext] Retry succeeded for '%s' on attempt %d", song.Title, attempt)
-				q.PlayNext()
-				return
+				log.Printf("[ERROR] [PlayNext] Playback error for %s: %v", song.Title, err)
+				return "error", q.isStale(endCh)
 			}
 		}
-		log.Printf("[WARN] [PlayNext] All retries exhausted for '%s', skipping to next song", song.Title)
-	}
+		if attempt == 0 {
+			// Trigger background pre-fetch for the next song while this one plays
+			q.PreFetchNext()
+		}
 
-	q.PlayNext()
+		// Wait for TrackEnd event (signalled by bot from Voice Engine)
+		reason = <-endCh
+		if q.isStale(endCh) {
+			return reason, true
+		}
+
+		if reason != "playback_failed" || playCb == nil {
+			return reason, false
+		}
+		if attempt >= maxPlaybackRetries {
+			log.Printf("[WARN] [PlayNext] All retries exhausted for '%s', skipping to next song", song.Title)
+			return reason, false
+		}
+
+		// YouTube CDN may reject requests that arrive immediately after a stream closes.
+		// Re-resolving via yt-dlp often picks a different CDN edge server, bypassing the rejection.
+		log.Printf("[INFO] [PlayNext] playback_failed for '%s' — clearing stream cache and retrying (attempt %d/%d)", song.Title, attempt+1, maxPlaybackRetries)
+		GlobalStreamCache.Delete(song.URL)
+		song.StreamURL = ""
+		q.mu.Lock()
+		q.StartedAt = time.Now()
+		q.mu.Unlock()
+	}
+}
+
+// isStale reports whether Stop() has retired endCh (i.e. this loop was stopped).
+func (q *GuildQueue) isStale(endCh chan string) bool {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	return q.TrackEndCh != endCh
 }
