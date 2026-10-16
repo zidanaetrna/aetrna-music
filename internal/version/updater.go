@@ -130,24 +130,28 @@ func (s *Supervisor) FlushDirtyQueues() {
 	}
 	guildIDs := s.store.GetAllGuildIDs()
 	for _, id := range guildIDs {
-		q := s.store.Get(id)
-		if q == nil || (!q.Dirty && q.NowPlaying == nil) {
+		q := s.store.Lookup(id)
+		if q == nil {
+			continue
+		}
+		current := q.Current()
+		if !q.Dirty && current == nil {
 			continue
 		}
 
-		songsJSON, _ := json.Marshal(q.Songs)
+		songsJSON, _ := json.Marshal(q.Upcoming())
 		nowTitle, nowURL, nowAuthor, nowThumb := "", "", "", ""
 		nowDur := 0
 		var posMs int64 = 0
 
-		if q.NowPlaying != nil {
-			nowTitle = q.NowPlaying.Title
-			nowURL = q.NowPlaying.URL
-			nowAuthor = q.NowPlaying.Author
-			nowThumb = q.NowPlaying.Thumbnail
-			nowDur = q.NowPlaying.Duration
-			if q.IsPlaying && !q.StartedAt.IsZero() {
-				posMs = time.Since(q.StartedAt).Milliseconds()
+		if current != nil {
+			nowTitle = current.Title
+			nowURL = current.URL
+			nowAuthor = current.Author
+			nowThumb = current.Thumbnail
+			nowDur = current.Duration
+			if pos := q.CurrentDuration(); pos > 0 {
+				posMs = pos.Milliseconds()
 			}
 		}
 

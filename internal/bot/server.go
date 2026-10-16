@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"aetrna-music/internal/commands"
 	"aetrna-music/internal/music"
 	"aetrna-music/internal/version"
 	"aetrna-music/web"
@@ -211,35 +210,23 @@ func (b *Bot) StartDashboardServer(port string) {
 		var queueItems []map[string]string
 
 		if targetGuildID != "" {
-			q := b.store.Get(targetGuildID)
+			q := b.store.Lookup(targetGuildID)
 			if q != nil {
-				if q.NowPlaying != nil {
-					reqUser := q.NowPlaying.RequestedBy
-					if b.session != nil && reqUser != "" {
-						if u, err := b.session.User(reqUser); err == nil && u != nil {
-							reqUser = u.Username
-						}
-					}
+				if current := q.Current(); current != nil {
 					nowPlaying = map[string]interface{}{
-						"title":     q.NowPlaying.Title,
-						"author":    q.NowPlaying.Author,
-						"duration":  music.FormatDuration(q.NowPlaying.Duration),
-						"thumbnail": q.NowPlaying.Thumbnail,
-						"requested": reqUser,
+						"title":     current.Title,
+						"author":    current.Author,
+						"duration":  music.FormatDuration(current.Duration),
+						"thumbnail": current.Thumbnail,
+						"requested": b.username(current.RequestedBy),
 					}
 				}
-				for _, song := range q.Songs {
-					reqUser := song.RequestedBy
-					if b.session != nil && reqUser != "" {
-						if u, err := b.session.User(reqUser); err == nil && u != nil {
-							reqUser = u.Username
-						}
-					}
+				for _, song := range q.Upcoming() {
 					queueItems = append(queueItems, map[string]string{
 						"title":     song.Title,
 						"author":    song.Author,
 						"duration":  music.FormatDuration(song.Duration),
-						"requested": reqUser,
+						"requested": b.username(song.RequestedBy),
 					})
 				}
 			}
@@ -283,7 +270,7 @@ func (b *Bot) StartDashboardServer(port string) {
 		var guilds []guildInfo
 		guildIDs := b.store.GetAllGuildIDs()
 		for _, id := range guildIDs {
-			q := b.store.Get(id)
+			q := b.store.Lookup(id)
 			status := "idle"
 			if q != nil && q.IsPlaying {
 				status = "playing"
@@ -541,13 +528,8 @@ func (b *Bot) StartDashboardServer(port string) {
 				q.Shuffle()
 			case "set_filter":
 				q.SetFilter(body.Value)
-				if b.voice != nil && q.IsPlaying && q.NowPlaying != nil {
-					go func(guildID string, q *music.GuildQueue) {
-						streamURL, err := commands.GetStreamURL(q.NowPlaying.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
-						if err == nil {
-							_ = b.voice.PlayStream(guildID, q.VoiceChannelID, streamURL, q.NowPlaying.URL, "", q.Filter, q.Volume)
-						}
-					}(body.GuildID, q)
+				if current := q.Current(); b.voice != nil && current != nil {
+					go b.restartWithFilter(body.GuildID, q, *current)
 				}
 			case "volume", "set_volume":
 				if body.Volume >= 0 {

@@ -373,3 +373,37 @@ func TestIncludeByURLFindsExcludedTrack(t *testing.T) {
 		t.Fatalf("unknown URL matched %v", got)
 	}
 }
+
+func TestCurrentIsSafeCopyAfterLastSongSkipped(t *testing.T) {
+	q, played := newTestQueue(t)
+	addTitles(q, "only")
+	q.EnsurePlaying()
+	expectPlayed(t, played, "only")
+
+	current := q.Current()
+	q.Skip() // last song: the loop clears NowPlaying
+	expectIdle(t, q)
+	if current == nil || current.Title != "only" {
+		t.Fatalf("captured song changed: %+v", current)
+	}
+	if q.Current() != nil {
+		t.Fatal("Current should be nil once the queue is idle")
+	}
+}
+
+func TestDisconnectClearsQueueAndBumpsStopCount(t *testing.T) {
+	q, played := newTestQueue(t)
+	addTitles(q, "a", "b")
+	before := q.StopCount()
+	q.EnsurePlaying()
+	expectPlayed(t, played, "a")
+
+	q.SignalTrackEndWithReason("disconnected")
+	expectIdle(t, q)
+	if len(q.Upcoming()) != 0 {
+		t.Fatal("queue should be cleared after the voice connection is lost")
+	}
+	if q.StopCount() == before {
+		t.Fatal("background loaders must be able to see the disconnect")
+	}
+}

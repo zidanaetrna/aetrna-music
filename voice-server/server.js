@@ -150,10 +150,42 @@ const apiRouter = createApiRouter({
     client, version: VOICE_SERVER_VERSION, GO_IPC_PORT, INTERNAL_IPC_TOKEN, cleanupStreams
 });
 
+// Leave the voice channel once nobody but bots has been in it for a minute.
+const ALONE_TIMEOUT_MS = 60_000;
+const aloneTimers = new Map();
+
+function humansInBotChannel(guild) {
+    const channel = guild.members.me?.voice?.channel;
+    if (!channel) return null;
+    return channel.members.filter(m => !m.user.bot).size;
+}
+
+client.on('voiceStateUpdate', (oldState, newState) => {
+    const guild = newState.guild || oldState.guild;
+    if (!guild || !connections.has(guild.id)) return;
+
+    const humans = humansInBotChannel(guild);
+    if (humans === null || humans > 0) {
+        clearTimeout(aloneTimers.get(guild.id));
+        aloneTimers.delete(guild.id);
+        return;
+    }
+    if (aloneTimers.has(guild.id)) return;
+
+    aloneTimers.set(guild.id, setTimeout(() => {
+        aloneTimers.delete(guild.id);
+        if (connections.has(guild.id) && humansInBotChannel(guild) === 0) {
+            console.log(`[INFO] [VoiceServer] Alone in voice channel for guild ${guild.id}, leaving`);
+            apiRouter.leaveGuild(guild.id);
+        }
+    }, ALONE_TIMEOUT_MS));
+});
+
 app.use('/', apiRouter);
 
 client.login(process.env.DISCORD_TOKEN).then(() => {
-    app.listen(VOICE_PORT, '0.0.0.0', () => {
+    // IPC is only for the local Go process; never expose it on the network
+    app.listen(VOICE_PORT, '127.0.0.1', () => {
         console.log(`[INFO] [VoiceServer] HTTP Server listening on port ${VOICE_PORT}`);
     });
 }).catch((err) => {

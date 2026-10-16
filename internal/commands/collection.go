@@ -34,11 +34,11 @@ func (h *Handler) HandleCollectionSave(s *discordgo.Session, i *discordgo.Intera
 	}
 
 	count := 0
-	if queue.NowPlaying != nil {
-		_ = h.database.AddToCollection(coll.ID, queue.NowPlaying.Title, queue.NowPlaying.URL, queue.NowPlaying.Duration, queue.NowPlaying.Thumbnail, queue.NowPlaying.Author)
+	if current := queue.Current(); current != nil {
+		_ = h.database.AddToCollection(coll.ID, current.Title, current.URL, current.Duration, current.Thumbnail, current.Author)
 		count++
 	}
-	for _, song := range queue.Songs {
+	for _, song := range queue.Upcoming() {
 		_ = h.database.AddToCollection(coll.ID, song.Title, song.URL, song.Duration, song.Thumbnail, song.Author)
 		count++
 	}

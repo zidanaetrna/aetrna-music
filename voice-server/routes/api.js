@@ -35,6 +35,20 @@ function createApiRouter(context) {
         req.end();
     }
 
+    // leaveGuild tears down playback and the voice connection, then tells Go the
+    // connection is gone so it clears the queue instead of staying "playing".
+    function leaveGuild(guildId) {
+        // New session id so the dying player's Idle event is ignored
+        playSessions.set(guildId, (playSessions.get(guildId) || 0) + 1);
+        cleanupStreams(guildId);
+        const player = players.get(guildId);
+        if (player) { player.removeAllListeners(); try { player.stop(); } catch (_) {} players.delete(guildId); }
+        const connection = connections.get(guildId);
+        if (connection) { try { connection.destroy(); } catch (_) {} connections.delete(guildId); }
+        notifyBotTrackEnd(guildId, 'disconnected');
+    }
+    router.leaveGuild = leaveGuild;
+
     router.get('/health', (req, res) => {
         res.json({ status: 'ok', version, activeConnections: connections.size });
     });
@@ -72,15 +86,7 @@ function createApiRouter(context) {
                             ]);
                         } catch (e) {
                             console.warn(`[WARN] [VoiceServer] Connection lost in guild ${guildId}, cleaning up`);
-                            // Invalidate the session so the dying player's Idle event is ignored,
-                            // then tell Go explicitly — otherwise it stays stuck in "playing".
-                            playSessions.set(guildId, (playSessions.get(guildId) || 0) + 1);
-                            cleanupStreams(guildId);
-                            const lostPlayer = players.get(guildId);
-                            if (lostPlayer) { lostPlayer.removeAllListeners(); try { lostPlayer.stop(); } catch (_) {} players.delete(guildId); }
-                            try { connection.destroy(); } catch (_) {}
-                            if (connections.get(guildId) === connection) connections.delete(guildId);
-                            notifyBotTrackEnd(guildId, 'disconnected');
+                            leaveGuild(guildId);
                         }
                     });
 

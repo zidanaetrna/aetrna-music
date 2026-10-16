@@ -73,6 +73,15 @@ func (s *QueueStore) Get(guildID string) *GuildQueue {
 	return queue
 }
 
+// Lookup returns an existing queue (or nil) without creating one or marking it
+// as used. Use it for background readers like the dashboard and snapshotter so
+// they don't keep idle queues alive.
+func (s *QueueStore) Lookup(guildID string) *GuildQueue {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.queues[guildID]
+}
+
 func (s *QueueStore) Remove(guildID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

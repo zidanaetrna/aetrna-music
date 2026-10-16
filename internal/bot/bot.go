@@ -421,15 +421,23 @@ func (b *Bot) handleProxiedPlay(i *discordgo.InteractionCreate, p ProxiedInterac
 			}
 
 			// Queue remaining tracks asynchronously in background
+			stopCount := queue.StopCount()
 			go func() {
 				for _, trk := range tracks[1:] {
 					tQuery := fmt.Sprintf("%s - %s", trk.Artist, trk.Name)
 					sSongs, err := commands.SearchYouTube(tQuery, 5, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+					if queue.StopCount() != stopCount {
+						log.Printf("[INFO] [Bot] Playback stopped, abandoning Spotify playlist load for guild %s", p.GuildID)
+						return
+					}
 					if err == nil && len(sSongs) > 0 {
 						sSong := sSongs[0]
 						sSong.RequestedBy = p.UserID
 						sSong.ChannelID = p.MemberVoiceChannelID
+						sSong.TextChannelID = p.ChannelID
 						queue.AddSong(sSong)
+						// The queue may have run dry while this track was resolving
+						queue.EnsurePlaying()
 					}
 				}
 				log.Printf("[INFO] [Bot] Spotify playlist loaded (%d tracks) for guild %s", len(tracks), p.GuildID)
@@ -498,7 +506,9 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 	// ── Slash Commands & Buttons ────────────────────────────────────────
 	case "skip", "btn_skip":
 		q := b.store.Get(p.GuildID)
-		if q.NowPlaying == nil {
+		// Capture the song first: skipping the last track clears NowPlaying
+		current := q.Current()
+		if current == nil {
 			content = i18n.Globali18n.T(lang, "no_song_playing")
 			flags = discordgo.MessageFlagsEphemeral
 		} else {
@@ -510,7 +520,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 			skipped, votes, required := q.EvaluateSkip(p.UserID, listenerCount, isAdmin)
 			if skipped {
-				content = i18n.Globali18n.T(lang, "skipped", q.NowPlaying.Title)
+				content = i18n.Globali18n.T(lang, "skipped", current.Title)
 			} else {
 				content = i18n.Globali18n.T(lang, "vote_skip", p.UserID, votes, required)
 			}
@@ -543,11 +553,11 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 	case "nowplaying":
 		q := b.store.Get(p.GuildID)
-		if q.NowPlaying == nil {
+		if current := q.Current(); current == nil {
 			content = i18n.Globali18n.T(lang, "no_song_playing")
 			flags = discordgo.MessageFlagsEphemeral
 		} else {
-			embeds = []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(q.NowPlaying, q, lang)}
+			embeds = []*discordgo.MessageEmbed{commands.CreateNowPlayingEmbed(current, q, lang)}
 			comps = commands.CreateControlButtons(q.IsPaused, lang)
 		}
 
@@ -557,13 +567,13 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 	case "btn_full_lyrics":
 		q := b.store.Get(p.GuildID)
-		if q.NowPlaying != nil && q.NowPlaying.Lyrics != nil {
-			if lRes, ok := q.NowPlaying.Lyrics.(*lyrics.LyricsResult); ok && lRes.Plain != "" {
+		if current := q.Current(); current != nil && current.Lyrics != nil {
+			if lRes, ok := current.Lyrics.(*lyrics.LyricsResult); ok && lRes.Plain != "" {
 				text := lRes.Plain
 				if len(text) > 1900 {
 					text = text[:1900] + "..."
 				}
-				content = i18n.Globali18n.T(lang, "full_lyrics_title", q.NowPlaying.Title, text)
+				content = i18n.Globali18n.T(lang, "full_lyrics_title", current.Title, text)
 			} else {
 				content = i18n.Globali18n.T(lang, "full_lyrics_not_available")
 			}
@@ -587,10 +597,10 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			q.LyricsOffset = 0
 		}
 
-		if p.MessageID != "" && q.NowPlaying != nil && q.NowPlaying.Lyrics != nil {
-			if lRes, ok := q.NowPlaying.Lyrics.(*lyrics.LyricsResult); ok {
+		if current := q.Current(); p.MessageID != "" && current != nil && current.Lyrics != nil {
+			if lRes, ok := current.Lyrics.(*lyrics.LyricsResult); ok {
 				dur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
-				updEmbed := commands.CreateLyricsEmbed(q.NowPlaying, lRes, dur, lang)
+				updEmbed := commands.CreateLyricsEmbed(current, lRes, dur, lang)
 				comps := commands.CreateLyricsButtons(lRes.IsSynced, lang)
 				_, _ = b.session.FollowupMessageEdit(i.Interaction, p.MessageID, &discordgo.WebhookEdit{
 					Embeds:     &[]*discordgo.MessageEmbed{updEmbed},
@@ -730,13 +740,8 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			} else {
 				q.SetFilter(filterName)
 			}
-			if q.IsPlaying && q.NowPlaying != nil {
-				go func(guildID string, q *music.GuildQueue) {
-					streamURL, err := commands.GetStreamURL(q.NowPlaying.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
-					if err == nil {
-						_ = b.voice.PlayStream(guildID, q.VoiceChannelID, streamURL, q.NowPlaying.URL, "", q.Filter, q.Volume)
-					}
-				}(p.GuildID, q)
+			if current := q.Current(); current != nil {
+				go b.restartWithFilter(p.GuildID, q, *current)
 			}
 			content = i18n.Globali18n.T(lang, "filter_changed", filterName)
 		}
@@ -1038,7 +1043,10 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 			if !q.IsPlayingAndMatching(targetSongURL) {
 				return
 			}
-			np := q.NowPlaying
+			np := q.Current()
+			if np == nil {
+				return
+			}
 			// Compensate -5.0s FFmpeg audio buffering & streaming startup latency + user LyricsOffset
 			dur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
 
@@ -1230,4 +1238,39 @@ func (b *Bot) handleExcludeInclude(q *music.GuildQueue, cmd, input string, p Pro
 		msg += fmt.Sprintf("\n⚠️ Not in the queue right now: %s", joinInts(missing))
 	}
 	return msg, 0
+}
+
+// restartWithFilter restarts the current track's stream so a new filter takes
+// effect. The stream starts over from 0:00, so the playback clock is reset too.
+func (b *Bot) restartWithFilter(guildID string, q *music.GuildQueue, song music.Song) {
+	streamURL, err := commands.GetStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+	if err != nil {
+		log.Printf("[WARN] [Bot] Could not restart '%s' with new filter: %v", song.Title, err)
+		return
+	}
+	if !q.IsPlayingAndMatching(song.URL) {
+		return // track changed while resolving
+	}
+	if err := b.voice.PlayStream(guildID, q.VoiceChannelID, streamURL, song.URL, "", q.Filter, q.Volume); err == nil {
+		q.RestartedStream()
+	}
+}
+
+var usernameCache sync.Map // user ID -> username
+
+// username resolves a Discord user ID to a name for the dashboard, caching
+// results so polling doesn't hit the API once per queued song.
+func (b *Bot) username(userID string) string {
+	if userID == "" || b.session == nil {
+		return userID
+	}
+	if name, ok := usernameCache.Load(userID); ok {
+		return name.(string)
+	}
+	name := userID
+	if u, err := b.session.User(userID); err == nil && u != nil {
+		name = u.Username
+	}
+	usernameCache.Store(userID, name)
+	return name
 }

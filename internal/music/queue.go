@@ -89,6 +89,7 @@ type GuildQueue struct {
 	isLooping    bool
 	nextPosition int
 	lastAccess   time.Time
+	stopCount    uint64
 
 	mu sync.RWMutex
 }
@@ -340,6 +341,14 @@ func (q *GuildQueue) SignalTrackEndWithReason(reason string) {
 	}
 }
 
+// StopCount increases on every Stop() or lost voice connection. Background loaders compare it before
+// and after to notice that the user stopped playback in the meantime.
+func (q *GuildQueue) StopCount() uint64 {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	return q.stopCount
+}
+
 func (q *GuildQueue) Stop() {
 	q.mu.Lock()
 	q.resetLocked()
@@ -362,6 +371,7 @@ func (q *GuildQueue) Stop() {
 
 // resetLocked clears playback state and the queue. Caller must hold q.mu.
 func (q *GuildQueue) resetLocked() {
+	q.stopCount++
 	if q.idleTimer != nil {
 		q.idleTimer.Stop()
 		q.idleTimer = nil
@@ -416,6 +426,36 @@ func (q *GuildQueue) Include(positions []int) {
 	for _, p := range positions {
 		delete(q.Excluded, p)
 	}
+}
+
+// Current returns a copy of the playing song, or nil. Use it instead of
+// checking q.NowPlaying and then dereferencing it: the playback loop can
+// clear NowPlaying in between (e.g. right after skipping the last song).
+func (q *GuildQueue) Current() *Song {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if q.NowPlaying == nil {
+		return nil
+	}
+	s := *q.NowPlaying
+	return &s
+}
+
+// Upcoming returns a copy of the queued songs.
+func (q *GuildQueue) Upcoming() []Song {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	return append([]Song(nil), q.Songs...)
+}
+
+// RestartedStream resets the playback clock after the current track's stream
+// was restarted from the beginning (e.g. to apply a new filter).
+func (q *GuildQueue) RestartedStream() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.StartedAt = time.Now()
+	q.PausedAt = time.Time{}
+	q.IsPaused = false
 }
 
 // KnownPositions returns the track numbers currently playing or queued.

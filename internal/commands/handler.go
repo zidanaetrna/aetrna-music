@@ -477,21 +477,23 @@ func CreateQueueEmbed(queue *music.GuildQueue, page, itemsPerPage int, lang stri
 		Title: i18n.Globali18n.T(lang, "queue_title"),
 		Color: 0x2F3136,
 	}
+	nowPlaying := queue.Current()
+	songs := queue.Upcoming()
 
-	if len(queue.Songs) == 0 && queue.NowPlaying == nil {
+	if len(songs) == 0 && nowPlaying == nil {
 		embed.Description = i18n.Globali18n.T(lang, "queue_empty_help")
 		return embed
 	}
 
 	var totalDuration int
-	for _, s := range queue.Songs {
+	for _, s := range songs {
 		totalDuration += s.Duration
 	}
-	if queue.NowPlaying != nil {
-		totalDuration += queue.NowPlaying.Duration
+	if nowPlaying != nil {
+		totalDuration += nowPlaying.Duration
 	}
 
-	totalPages := (len(queue.Songs) + itemsPerPage - 1) / itemsPerPage
+	totalPages := (len(songs) + itemsPerPage - 1) / itemsPerPage
 	if totalPages == 0 {
 		totalPages = 1
 	}
@@ -504,23 +506,23 @@ func CreateQueueEmbed(queue *music.GuildQueue, page, itemsPerPage int, lang stri
 
 	startIndex := (page - 1) * itemsPerPage
 	endIndex := startIndex + itemsPerPage
-	if endIndex > len(queue.Songs) {
-		endIndex = len(queue.Songs)
+	if endIndex > len(songs) {
+		endIndex = len(songs)
 	}
 
 	headerTemplate := i18n.Globali18n.T(lang, "queue_header_line")
 	headerColumns := i18n.Globali18n.T(lang, "queue_header_columns")
 
 	var newDesc strings.Builder
-	if queue.NowPlaying != nil {
+	if nowPlaying != nil {
 		newDesc.WriteString(i18n.Globali18n.T(lang, "queue_now_playing_line",
-			queue.NowPlaying.Title, queue.NowPlaying.URL, music.FormatDuration(queue.NowPlaying.Duration), queue.NowPlaying.RequestedBy))
+			nowPlaying.Title, nowPlaying.URL, music.FormatDuration(nowPlaying.Duration), nowPlaying.RequestedBy))
 	}
 	newDesc.WriteString("```\n")
 	newDesc.WriteString(headerColumns)
 	newDesc.WriteString("\n")
 	excluded := queue.ExcludedPositions()
-	for i, song := range queue.Songs[startIndex:endIndex] {
+	for i, song := range songs[startIndex:endIndex] {
 		// Show the stable track number used by /exclude; fall back to the row index
 		trackNum := song.Position
 		if trackNum == 0 {
