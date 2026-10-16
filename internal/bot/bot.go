@@ -833,7 +833,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 				input = strings.TrimSpace(fmt.Sprintf("%v", opt.Value))
 			}
 		}
-		content, flags = b.handleExcludeInclude(q, cmd, input)
+		content, flags = b.handleExcludeInclude(q, cmd, input, p, lang)
 
 	case "help":
 		embeds = []*discordgo.MessageEmbed{{
@@ -1095,9 +1095,101 @@ func joinInts(nums []int) string {
 	return strings.Join(parts, ", ")
 }
 
-// handleExcludeInclude serves /exclude and /include. Track numbers are the
-// numbers shown in /queue and /playlist play.
-func (b *Bot) handleExcludeInclude(q *music.GuildQueue, cmd, input string) (string, discordgo.MessageFlags) {
+// resolveTrackURL turns a YouTube or Spotify track URL into a playable song.
+func (b *Bot) resolveTrackURL(rawURL string) (music.Song, error) {
+	query := rawURL
+	if strings.Contains(rawURL, "spotify.com/track/") {
+		if b.spotify == nil || !b.spotify.IsEnabled() {
+			return music.Song{}, fmt.Errorf("Spotify is not configured")
+		}
+		track, err := b.spotify.GetTrack(rawURL)
+		if err != nil || track == nil {
+			return music.Song{}, fmt.Errorf("could not resolve Spotify track: %v", err)
+		}
+		query = fmt.Sprintf("%s - %s", track.Artist, track.Name)
+	}
+	songs, err := commands.SearchYouTube(query, 5, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+	if err != nil || len(songs) == 0 {
+		return music.Song{}, fmt.Errorf("song not found")
+	}
+	return songs[0], nil
+}
+
+// includeByURL brings a track back by URL: if it is still in the queue but
+// excluded it is un-excluded, otherwise it is added back to the queue.
+func (b *Bot) includeByURL(q *music.GuildQueue, rawURL string, p ProxiedInteraction, lang string) (string, discordgo.MessageFlags) {
+	target := rawURL
+	var resolved *music.Song
+	if music.YouTubeVideoID(rawURL) == "" {
+		// Non-YouTube link (e.g. Spotify): resolve first so it can match the queue
+		song, err := b.resolveTrackURL(rawURL)
+		if err != nil {
+			return fmt.Sprintf("❌ %v", err), discordgo.MessageFlagsEphemeral
+		}
+		resolved = &song
+		target = song.URL
+	}
+
+	if positions := q.PositionsByURL(target); len(positions) > 0 {
+		var excluded []int
+		for _, pos := range positions {
+			if q.IsExcluded(pos) {
+				excluded = append(excluded, pos)
+			}
+		}
+		if len(excluded) == 0 {
+			return fmt.Sprintf("ℹ️ That song is already in the queue as track **%s** and isn't excluded.", joinInts(positions)), discordgo.MessageFlagsEphemeral
+		}
+		q.Include(excluded)
+		return fmt.Sprintf("✅ Track **%s** will play again.", joinInts(excluded)), 0
+	}
+
+	// Not in the queue anymore: add it back
+	if p.MemberVoiceChannelID == "" {
+		return i18n.Globali18n.T(lang, "must_join_voice"), discordgo.MessageFlagsEphemeral
+	}
+	if resolved == nil {
+		song, err := b.resolveTrackURL(rawURL)
+		if err != nil {
+			return fmt.Sprintf("❌ %v", err), discordgo.MessageFlagsEphemeral
+		}
+		resolved = &song
+	}
+	song := *resolved
+	song.RequestedBy = p.UserID
+	song.ChannelID = p.MemberVoiceChannelID
+	song.TextChannelID = p.ChannelID
+	q.VoiceChannelID = p.MemberVoiceChannelID
+	pos := q.AddSong(song)
+	if q.EnsurePlaying() {
+		return fmt.Sprintf("▶️ **%s** wasn't in the queue anymore, so it's playing now as track **%d**.", song.Title, pos), 0
+	}
+	return fmt.Sprintf("➕ **%s** wasn't in the queue anymore, so it was added back as track **%d**.", song.Title, pos), 0
+}
+
+func isURL(s string) bool {
+	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
+}
+
+// handleExcludeInclude serves /exclude and /include. Tracks are picked by the
+// numbers shown in /queue and /playlist play, or by URL.
+func (b *Bot) handleExcludeInclude(q *music.GuildQueue, cmd, input string, p ProxiedInteraction, lang string) (string, discordgo.MessageFlags) {
+	if isURL(input) {
+		if cmd == "include" {
+			return b.includeByURL(q, input, p, lang)
+		}
+		positions := q.PositionsByURL(input)
+		if len(positions) == 0 {
+			return "❌ That song isn't in the queue. Use `/queue` to see what's queued.", discordgo.MessageFlagsEphemeral
+		}
+		skipped := q.Exclude(positions)
+		msg := fmt.Sprintf("🚫 Track **%s** will be skipped, including on every loop cycle. Use `/include` with the same link to bring it back.", joinInts(positions))
+		if skipped {
+			msg += "\n⏭️ Skipped the current track."
+		}
+		return msg, 0
+	}
+
 	if input == "" {
 		excluded := q.ExcludedPositions()
 		if len(excluded) == 0 {
@@ -1113,7 +1205,7 @@ func (b *Bot) handleExcludeInclude(q *music.GuildQueue, cmd, input string) (stri
 
 	nums, err := music.ParseTrackNumbers(input)
 	if err != nil {
-		return fmt.Sprintf("❌ %v. Use a number like `7`, a list like `3,7,9` or a range like `2-5`.", err), discordgo.MessageFlagsEphemeral
+		return fmt.Sprintf("❌ %v. Use a number like `7`, a list like `3,7,9`, a range like `2-5`, or a song link.", err), discordgo.MessageFlagsEphemeral
 	}
 
 	if cmd == "include" {

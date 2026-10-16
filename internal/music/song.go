@@ -2,6 +2,7 @@ package music
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -62,4 +63,40 @@ func BuildProgressBar(currentSec, totalSec int, barWidth int) string {
 	}
 
 	return fmt.Sprintf("`%s %s %s`", FormatDuration(currentSec), sb.String(), FormatDuration(totalSec))
+}
+
+// YouTubeVideoID extracts the video ID from common YouTube URL shapes
+// (watch?v=, youtu.be/, shorts/, embed/, music.youtube.com). Returns "" otherwise.
+func YouTubeVideoID(rawURL string) string {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	host := strings.TrimPrefix(strings.ToLower(u.Host), "www.")
+	host = strings.TrimPrefix(host, "m.")
+	switch host {
+	case "youtu.be":
+		return strings.Trim(u.Path, "/")
+	case "youtube.com", "music.youtube.com":
+		if v := u.Query().Get("v"); v != "" {
+			return v
+		}
+		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if len(parts) == 2 && (parts[0] == "shorts" || parts[0] == "embed" || parts[0] == "live") {
+			return parts[1]
+		}
+	}
+	return ""
+}
+
+// SameTrack reports whether a song is the track behind rawURL, comparing
+// YouTube video IDs when possible so different URL shapes still match.
+func (s Song) SameTrack(rawURL string) bool {
+	if id := YouTubeVideoID(rawURL); id != "" {
+		if s.VideoID == id {
+			return true
+		}
+		return YouTubeVideoID(s.URL) == id
+	}
+	return strings.TrimSpace(rawURL) == s.URL
 }

@@ -432,6 +432,24 @@ func (q *GuildQueue) KnownPositions() map[int]bool {
 	return known
 }
 
+// PositionsByURL returns the track numbers of every playing/queued song that
+// is the track behind rawURL.
+func (q *GuildQueue) PositionsByURL(rawURL string) []int {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	var out []int
+	if q.NowPlaying != nil && q.NowPlaying.SameTrack(rawURL) {
+		out = append(out, q.NowPlaying.Position)
+	}
+	for _, s := range q.Songs {
+		if s.SameTrack(rawURL) {
+			out = append(out, s.Position)
+		}
+	}
+	sort.Ints(out)
+	return out
+}
+
 func (q *GuildQueue) IsExcluded(position int) bool {
 	q.mu.RLock()
 	defer q.mu.RUnlock()

@@ -332,3 +332,44 @@ func TestCountsAsPlay(t *testing.T) {
 		}
 	}
 }
+
+func TestYouTubeVideoID(t *testing.T) {
+	cases := map[string]string{
+		"https://www.youtube.com/watch?v=7lvDCMkjcsM":             "7lvDCMkjcsM",
+		"https://youtube.com/watch?v=7lvDCMkjcsM&list=RD123&t=30": "7lvDCMkjcsM",
+		"https://youtu.be/7lvDCMkjcsM?si=abc":                     "7lvDCMkjcsM",
+		"https://music.youtube.com/watch?v=7lvDCMkjcsM":           "7lvDCMkjcsM",
+		"https://m.youtube.com/watch?v=7lvDCMkjcsM":               "7lvDCMkjcsM",
+		"https://www.youtube.com/shorts/7lvDCMkjcsM":              "7lvDCMkjcsM",
+		"https://open.spotify.com/track/abc":                      "",
+		"not a url":                                               "",
+	}
+	for in, want := range cases {
+		if got := YouTubeVideoID(in); got != want {
+			t.Errorf("YouTubeVideoID(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestIncludeByURLFindsExcludedTrack(t *testing.T) {
+	q, played := newTestQueue(t)
+	q.AddSong(Song{Title: "a", URL: "https://www.youtube.com/watch?v=aaaaaaaaaaa"})
+	q.AddSong(Song{Title: "b", URL: "https://www.youtube.com/watch?v=bbbbbbbbbbb"})
+	q.AddSong(Song{Title: "c", URL: "https://www.youtube.com/watch?v=ccccccccccc"})
+	q.Exclude([]int{2})
+	q.EnsurePlaying()
+	expectPlayed(t, played, "a")
+
+	// A different URL shape for the same video still matches
+	positions := q.PositionsByURL("https://youtu.be/bbbbbbbbbbb?si=share")
+	if !reflect.DeepEqual(positions, []int{2}) {
+		t.Fatalf("PositionsByURL = %v, want [2]", positions)
+	}
+	q.Include(positions)
+	q.SignalTrackEnd()
+	expectPlayed(t, played, "b")
+
+	if got := q.PositionsByURL("https://www.youtube.com/watch?v=zzzzzzzzzzz"); len(got) != 0 {
+		t.Fatalf("unknown URL matched %v", got)
+	}
+}

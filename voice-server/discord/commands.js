@@ -38,12 +38,12 @@ const commands = [
         ),
     new SlashCommandBuilder()
         .setName('exclude')
-        .setDescription('Skip tracks by their queue number (also on every loop cycle)')
-        .addStringOption(opt => opt.setName('track').setDescription('Track number(s), e.g. 7 or 3,7,9 or 2-5. Leave empty to list').setRequired(false)),
+        .setDescription('Skip tracks by queue number or song link (also on every loop cycle)')
+        .addStringOption(opt => opt.setName('track').setDescription('Track number(s) like 7, 3,7,9 or 2-5, or a song link. Leave empty to list').setRequired(false)),
     new SlashCommandBuilder()
         .setName('include')
-        .setDescription('Bring excluded tracks back into rotation')
-        .addStringOption(opt => opt.setName('track').setDescription('Track number(s), e.g. 7 or 3,7,9, or "all"').setRequired(true)),
+        .setDescription('Bring excluded tracks back, or re-add a song by link if it left the queue')
+        .addStringOption(opt => opt.setName('track').setDescription('Song link (YouTube/Spotify), track number(s) like 7 or 3,7,9, or "all"').setRequired(true)),
     new SlashCommandBuilder()
         .setName('volume')
         .setDescription('Set playback volume level (0 - 200%)')

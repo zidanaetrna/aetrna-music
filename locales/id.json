@@ -55,7 +55,7 @@
   "help_section_playback": "Perintah Pemutaran",
   "help_section_playback_value": "`/play <kueri>` - Putar / masukkan lagu dari YouTube/Spotify\n`/pause` - Jeda lagu\n`/resume` - Lanjutkan lagu\n`/skip` - Lewati ke lagu berikutnya\n`/previous` - Putar lagu sebelumnya\n`/stop` - Berhenti & bersihkan antrean",
   "help_section_queue": "Antrean & Playlist",
-  "help_section_queue_value": "`/top [periode]` - Top 5 lagu paling sering diputar minggu / bulan ini\n`/loop track|song|off` - Ulangi semua antrean / lagu ini / matikan\n`/exclude track:<n>` - Lewati lagu nomor n (mis. 3,7,9) · `/include` untuk mengembalikan\n`/queue` - Lihat daftar antrean berhalaman\n`/nowplaying` (`/np`) - Lihat lagu yang sedang diputar\n`/shuffle` - Acak antrean\n`/playlist create <nama>` - Simpan antrean ke playlist\n`/playlist play <nama>` - Memuat playlist ke antrean",
+  "help_section_queue_value": "`/top [periode]` - Top 5 lagu paling sering diputar minggu / bulan ini\n`/loop track|song|off` - Ulangi semua antrean / lagu ini / matikan\n`/exclude track:<n>` - Lewati lagu nomor n (mis. 3,7,9) · `/include <link|n>` untuk mengembalikan atau menambah lagi\n`/queue` - Lihat daftar antrean berhalaman\n`/nowplaying` (`/np`) - Lihat lagu yang sedang diputar\n`/shuffle` - Acak antrean\n`/playlist create <nama>` - Simpan antrean ke playlist\n`/playlist play <nama>` - Memuat playlist ke antrean",
   "help_section_filters": "Filter Audio DSP",
   "help_section_filters_value": "`/filter <bassboost/nightcore/vaporwave/8d/pop/off>` - Ekualiser audio FFmpeg dinamis",
   "help_section_info": "Favorit & Info",
