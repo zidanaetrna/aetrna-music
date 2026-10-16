@@ -73,27 +73,36 @@ func FetchLyrics(trackName, artistName string, durationSec int) (*LyricsResult, 
 		err        error
 	}
 
-	ch := make(chan searchResult, 2)
-
-	// Fetch LRCLIB Top 5 Candidates
-	go func() {
-		searchQuery := cleanQuery(trackName)
-		cands, err := queryLRCLIBMultiCandidates(searchQuery)
-		ch <- searchResult{candidates: cands, err: err}
-	}()
-
-	// Fetch Netease Top 5 Candidates
-	go func() {
-		searchQuery := cleanQuery(trackName)
-		cands, err := queryNeteaseMultiCandidates(searchQuery)
-		ch <- searchResult{candidates: cands, err: err}
-	}()
+	// Search with several queries: raw video titles are often too noisy for the
+	// lyrics APIs to match, while the extracted title usually finds the song.
+	// The ranker still requires a title match, so broader queries stay safe.
+	queries := buildSearchQueries(trackName, title, artist)
+	ch := make(chan searchResult, 2*len(queries))
+	for _, q := range queries {
+		q := q
+		go func() {
+			cands, err := queryLRCLIBMultiCandidates(q)
+			ch <- searchResult{candidates: cands, err: err}
+		}()
+		go func() {
+			cands, err := queryNeteaseMultiCandidates(q)
+			ch <- searchResult{candidates: cands, err: err}
+		}()
+	}
 
 	var allCandidates []ranking.LyricsCandidate
-	for i := 0; i < 2; i++ {
+	seen := make(map[string]bool)
+	for i := 0; i < 2*len(queries); i++ {
 		res := <-ch
-		if res.err == nil && len(res.candidates) > 0 {
-			allCandidates = append(allCandidates, res.candidates...)
+		if res.err != nil {
+			continue
+		}
+		for _, c := range res.candidates {
+			key := fmt.Sprintf("%s|%s|%s|%.0f", c.Source, c.Title, c.Artist, c.Duration)
+			if !seen[key] {
+				seen[key] = true
+				allCandidates = append(allCandidates, c)
+			}
 		}
 	}
 
@@ -135,9 +144,20 @@ func queryLRCLIBMultiCandidates(query string) ([]ranking.LyricsCandidate, error)
 	}
 	req.Header.Set("User-Agent", "aetrna-music/2.1 (Discord Bot)")
 
-	res, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
+	// LRCLIB answers 503 "ServerOverloaded" under load; retry a couple of times
+	var res *http.Response
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 700 * time.Millisecond)
+		}
+		res, err = httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if res.StatusCode < 500 {
+			break
+		}
+		res.Body.Close()
 	}
 	defer res.Body.Close()
 
@@ -284,6 +304,39 @@ func queryNeteaseLyrics(title, artist string) (*lrclibResponse, error) {
 	}, nil
 }
 
+// buildSearchQueries returns the distinct queries to try: the cleaned raw
+// title, "title artist", and the title alone.
+func buildSearchQueries(rawTitle, title, artist string) []string {
+	var out []string
+	seen := make(map[string]bool)
+	add := func(q string) {
+		q = strings.Join(strings.Fields(q), " ")
+		if q != "" && !seen[strings.ToLower(q)] {
+			seen[strings.ToLower(q)] = true
+			out = append(out, q)
+		}
+	}
+	add(cleanQuery(rawTitle))
+	if artist != "" {
+		add(title + " " + artist)
+	}
+	if len([]rune(title)) >= 2 {
+		add(title)
+	}
+	return out
+}
+
+// cutAtInfoSeparator drops promo text that channels append after a separator,
+// e.g. "Artist「Title」｜10th anniversary concert announced!".
+func cutAtInfoSeparator(s string) string {
+	for _, sep := range []string{"｜", " | ", "|"} {
+		if i := strings.Index(s, sep); i >= 0 {
+			s = s[:i]
+		}
+	}
+	return strings.TrimSpace(s)
+}
+
 func extractTitleAndArtist(rawQuery string) (string, string) {
 	cleaned := cleanQuery(rawQuery)
 
@@ -297,7 +350,7 @@ func extractTitleAndArtist(rawQuery string) (string, string) {
 	matches := reQuotes.FindStringSubmatch(cleaned)
 	if len(matches) >= 3 {
 		titleCand := strings.TrimSpace(matches[2])
-		artistCand := strings.TrimSpace(matches[1] + " " + matches[3])
+		artistCand := strings.TrimSpace(matches[1] + " " + cutAtInfoSeparator(matches[3]))
 		artistCand = cleanStandaloneTags(artistCand)
 		artistCand = strings.Trim(artistCand, "-/| ")
 		if titleCand != "" {
