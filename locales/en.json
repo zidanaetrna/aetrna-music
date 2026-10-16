@@ -55,7 +55,7 @@
   "help_section_playback": "Playback Commands",
   "help_section_playback_value": "`/play <query>` - Play / queue song from YouTube/Spotify\n`/pause` - Pause song\n`/resume` - Resume song\n`/skip` - Skip to next song\n`/previous` - Play previous song\n`/stop` - Stop & clear queue",
   "help_section_queue": "Queue & Playlists",
-  "help_section_queue_value": "`/loop track|song|off` - Loop whole queue / current song / off\n`/exclude track:<n>` - Skip track #n (e.g. 3,7,9) · `/include` to restore\n`/queue` - View paginated queue list\n`/nowplaying` (`/np`) - View current song\n`/shuffle` - Shuffle queue\n`/playlist create <name>` - Save queue to playlist\n`/playlist play <name>` - Load playlist into queue",
+  "help_section_queue_value": "`/top [period]` - Top 5 most played songs this week / month\n`/loop track|song|off` - Loop whole queue / current song / off\n`/exclude track:<n>` - Skip track #n (e.g. 3,7,9) · `/include` to restore\n`/queue` - View paginated queue list\n`/nowplaying` (`/np`) - View current song\n`/shuffle` - Shuffle queue\n`/playlist create <name>` - Save queue to playlist\n`/playlist play <name>` - Load playlist into queue",
   "help_section_filters": "Audio DSP Filters",
   "help_section_filters_value": "`/filter <bassboost/nightcore/vaporwave/8d/pop/off>` - Dynamic FFmpeg audio equalizer",
   "help_section_info": "Favorites & Info",
@@ -124,5 +124,12 @@
   "playlist_track_added": "Added **'%s'** to playlist **'%s'**!",
   "playlist_spotify_added": "Added **%d tracks** from Spotify playlist to **'%s'**!",
   "playlist_deleted": "Deleted saved playlist **'%s'**.",
-  "playlist_already_exists": "Playlist **'%s'** already exists! Choose a different name or view it with `/playlist list-tracks name:%s`."
+  "playlist_already_exists": "Playlist **'%s'** already exists! Choose a different name or view it with `/playlist list-tracks name:%s`.",
+  "top_title_week": "🔥 Top %d This Week",
+  "top_title_month": "🔥 Top %d This Month",
+  "top_line": "%s **[%s](%s)**\n╰ %s · ▶️ **%d** · 👥 %d\n\n",
+  "top_footer_week": "Last 7 days · %d plays in this server · pick a track below to queue it",
+  "top_footer_month": "Last 30 days · %d plays in this server · pick a track below to queue it",
+  "top_empty": "No plays yet in this period — start the charts with `/play`!",
+  "top_select_placeholder": "▶️ Play a track from the chart"
 }

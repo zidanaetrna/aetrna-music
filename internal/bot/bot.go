@@ -108,6 +108,14 @@ func (b *Bot) Start() error {
 	spotifyCl := spotify.NewClient(b.cfg.SpotifyClientID, b.cfg.SpotifyClientSecret)
 	b.spotify = spotifyCl
 	b.store = music.NewQueueStore(playCb, stopCb, preFetchCb)
+	b.store.SetTrackDoneCallback(func(guildID string, song music.Song, reason string, listened time.Duration) {
+		if b.db == nil || song.URL == "" || !music.CountsAsPlay(reason, listened, song.Duration) {
+			return
+		}
+		if err := b.db.RecordPlay(guildID, song.RequestedBy, song.Title, song.URL, song.Author, song.Thumbnail, song.Duration, time.Now()); err != nil {
+			log.Printf("[WARN] [Bot] Failed to record play for '%s': %v", song.Title, err)
+		}
+	})
 	b.handler = commands.NewHandler(b.cfg, b.db, b.store, spotifyCl)
 
 	// Start HTTP server in a goroutine (non-blocking) so main.go signal handler works
@@ -789,6 +797,29 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 			mode = q.CycleLoop()
 		}
 		content = loopModeMessage(mode)
+
+	case "top":
+		var opts []*discordgo.ApplicationCommandInteractionDataOption
+		if len(p.Options) > 0 {
+			_ = json.Unmarshal(p.Options, &opts)
+		}
+		period := "week"
+		for _, opt := range opts {
+			if opt.Name == "period" && fmt.Sprintf("%v", opt.Value) == "month" {
+				period = "month"
+			}
+		}
+		days := 7
+		if period == "month" {
+			days = 30
+		}
+		tracks, total, err := b.db.GetTopTracks(p.GuildID, time.Now().AddDate(0, 0, -days), 5)
+		if err != nil {
+			log.Printf("[ERROR] [Bot] GetTopTracks failed for guild %s: %v", p.GuildID, err)
+		}
+		embed, topComps := commands.CreateTopTracksEmbed(tracks, total, period, lang)
+		embeds = []*discordgo.MessageEmbed{embed}
+		comps = topComps
 
 	case "exclude", "include":
 		q := b.store.Get(p.GuildID)

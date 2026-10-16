@@ -161,6 +161,7 @@ npx aetrna-music init
 | `/shuffle` | Queue | Shuffle current track queue |
 | `/loop track\|song\|off` | Queue | Loop every track in the queue/playlist, repeat the current song, or turn looping off |
 | `/exclude track:<n>` | Queue | Skip tracks by their queue number (`7`, `3,7,9`, `2-5`), including on every loop cycle; empty lists exclusions |
+| `/top [period]` | Queue | Top 5 most played songs in the server this week (or month), with a menu to queue one |
 | `/include track:<n>` | Queue | Bring excluded tracks back (`7`, `3,7,9` or `all`) |
 | `/volume <level>` | Playback | Set playback volume level (0 – 200%) |
 | `/favorite` | Favorites | Save current song to your personal SQLite favorites |

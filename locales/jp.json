@@ -55,7 +55,7 @@
   "help_section_playback": "再生コマンド",
   "help_section_playback_value": "`/play <クエリ>` - YouTube/Spotifyから曲を再生/キュー追加\n`/pause` - 一時停止\n`/resume` - 再開\n`/skip` - 次の曲へスキップ\n`/previous` - 履歴から前の曲を再生\n`/stop` - 停止 & キュー消去",
   "help_section_queue": "キュー & プレイリスト",
-  "help_section_queue_value": "`/loop track|song|off` - キュー全体 / 現在の曲をループ / オフ\n`/exclude track:<n>` - n番の曲をスキップ (例 3,7,9) · `/include` で戻す\n`/queue` - ページ表示キュー一覧\n`/nowplaying` (`/np`) - 現在の曲を表示\n`/shuffle` - キューをシャッフル\n`/playlist create <名前>` - キューをプレイリストに保存\n`/playlist play <名前>` - プレイリストをキューに読み込む",
+  "help_section_queue_value": "`/top [期間]` - 今週 / 今月の再生回数トップ5\n`/loop track|song|off` - キュー全体 / 現在の曲をループ / オフ\n`/exclude track:<n>` - n番の曲をスキップ (例 3,7,9) · `/include` で戻す\n`/queue` - ページ表示キュー一覧\n`/nowplaying` (`/np`) - 現在の曲を表示\n`/shuffle` - キューをシャッフル\n`/playlist create <名前>` - キューをプレイリストに保存\n`/playlist play <名前>` - プレイリストをキューに読み込む",
   "help_section_filters": "オーディオDSPフィルター",
   "help_section_filters_value": "`/filter <bassboost/nightcore/vaporwave/8d/pop/off>` - 動的FFmpegイコライザー",
   "help_section_info": "お気に入り & 情報",
@@ -124,5 +124,12 @@
   "playlist_track_added": "プレイリスト **'%s'** に **'%s'** を追加しました！",
   "playlist_spotify_added": "Spotifyプレイリストから **'%s'** に **%d曲** を追加しました！",
   "playlist_deleted": "プレイリスト **'%s'** を削除しました。",
-  "playlist_already_exists": "プレイリスト **'%s'** は既に存在します！別の名前を選択するか `/playlist list-tracks name:%s` で確認してください。"
+  "playlist_already_exists": "プレイリスト **'%s'** は既に存在します！別の名前を選択するか `/playlist list-tracks name:%s` で確認してください。",
+  "top_title_week": "🔥 今週のトップ%d",
+  "top_title_month": "🔥 今月のトップ%d",
+  "top_line": "%s **[%s](%s)**\n╰ %s · ▶️ **%d** · 👥 %d\n\n",
+  "top_footer_week": "過去7日間 · このサーバーで%d回再生 · 下から曲を選んで再生",
+  "top_footer_month": "過去30日間 · このサーバーで%d回再生 · 下から曲を選んで再生",
+  "top_empty": "この期間の再生はまだありません — `/play` でチャートを始めよう！",
+  "top_select_placeholder": "▶️ チャートから曲を再生"
 }

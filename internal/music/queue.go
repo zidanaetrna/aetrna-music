@@ -43,6 +43,10 @@ type StopCallback func(guildID string) error
 // PreFetchCallback is called in background to pre-resolve stream URLs before song starts.
 type PreFetchCallback func(guildID, songURL string) (string, error)
 
+// TrackDoneCallback is called (in its own goroutine) after each track leaves the
+// player, with the end reason and roughly how long it played.
+type TrackDoneCallback func(guildID string, song Song, reason string, listened time.Duration)
+
 type GuildQueue struct {
 	GuildID        string
 	VoiceChannelID string
@@ -65,6 +69,7 @@ type GuildQueue struct {
 	PlayCb     PlayCallback
 	StopCb     StopCallback
 	PreFetchCb PreFetchCallback
+	TrackDoneCb TrackDoneCallback
 
 	// TrackEndCh carries the track-end reason to the running playback loop.
 	// Stop() swaps in a fresh channel so a stopped loop can never steal signals
@@ -639,8 +644,10 @@ func (q *GuildQueue) run() {
 		if !ok {
 			return
 		}
+		startedAt := time.Now()
 		var stopped bool
 		reason, stopped = q.playOne(endCh, song)
+		q.reportTrackDone(song, reason, time.Since(startedAt))
 		if stopped {
 			return
 		}
@@ -807,9 +814,40 @@ func (q *GuildQueue) playOne(endCh chan string, song Song) (reason string, stopp
 	}
 }
 
+func (q *GuildQueue) reportTrackDone(song Song, reason string, listened time.Duration) {
+	q.mu.RLock()
+	cb := q.TrackDoneCb
+	gid := q.GuildID
+	q.mu.RUnlock()
+	if cb != nil {
+		go cb(gid, song, reason, listened)
+	}
+}
+
 // isStale reports whether Stop() has retired endCh (i.e. this loop was stopped).
 func (q *GuildQueue) isStale(endCh chan string) bool {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 	return q.TrackEndCh != endCh
+}
+
+// MinListenForPlay is how long a skipped/stopped track must have played to
+// count toward the /top charts.
+const MinListenForPlay = 30 * time.Second
+
+// CountsAsPlay reports whether a finished track should count as a "play" for
+// the charts: tracks that ended naturally count, failed ones never do, and
+// skipped/stopped ones count after MinListenForPlay (or half of a short song).
+func CountsAsPlay(reason string, listened time.Duration, durationSec int) bool {
+	if isFailureReason(reason) || reason == "disconnected" {
+		return false
+	}
+	if reason == "finished" {
+		return true
+	}
+	threshold := MinListenForPlay
+	if half := time.Duration(durationSec) * time.Second / 2; durationSec > 0 && half < threshold {
+		threshold = half
+	}
+	return listened >= threshold
 }

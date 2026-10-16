@@ -278,3 +278,57 @@ func TestParseTrackNumbers(t *testing.T) {
 		}
 	}
 }
+
+func TestTrackDoneCallbackReportsEachTrack(t *testing.T) {
+	q, played := newTestQueue(t)
+	type done struct{ title, reason string }
+	got := make(chan done, 8)
+	q.TrackDoneCb = func(_ string, s Song, reason string, _ time.Duration) {
+		got <- done{s.Title, reason}
+	}
+	addTitles(q, "a", "b")
+	q.EnsurePlaying()
+	expectPlayed(t, played, "a")
+	q.SignalTrackEnd()
+	expectPlayed(t, played, "b")
+	q.Skip()
+
+	// Callbacks run in their own goroutines, so order isn't guaranteed.
+	seen := map[done]bool{}
+	for len(seen) < 2 {
+		select {
+		case d := <-got:
+			seen[d] = true
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for track-done callbacks, got %v", seen)
+		}
+	}
+	for _, want := range []done{{"a", "finished"}, {"b", "skip"}} {
+		if !seen[want] {
+			t.Fatalf("missing track done %+v, got %v", want, seen)
+		}
+	}
+}
+
+func TestCountsAsPlay(t *testing.T) {
+	cases := []struct {
+		reason   string
+		listened time.Duration
+		duration int
+		want     bool
+	}{
+		{"finished", time.Second, 200, true},
+		{"skip", 10 * time.Second, 200, false},
+		{"skip", 31 * time.Second, 200, true},
+		{"stopped", 45 * time.Second, 200, true},
+		{"skip", 12 * time.Second, 20, true}, // short track: half is enough
+		{"playback_failed", time.Minute, 200, false},
+		{"error", time.Minute, 200, false},
+		{"disconnected", time.Minute, 200, false},
+	}
+	for _, c := range cases {
+		if got := CountsAsPlay(c.reason, c.listened, c.duration); got != c.want {
+			t.Errorf("CountsAsPlay(%q, %v, %d) = %v, want %v", c.reason, c.listened, c.duration, got, c.want)
+		}
+	}
+}

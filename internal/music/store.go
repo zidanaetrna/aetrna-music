@@ -10,7 +10,20 @@ type QueueStore struct {
 	playCb     PlayCallback
 	stopCb     StopCallback
 	preFetchCb PreFetchCallback
+	trackDoneCb TrackDoneCallback
 	mu         sync.RWMutex
+}
+
+// SetTrackDoneCallback sets the track-done callback on every current and future queue.
+func (s *QueueStore) SetTrackDoneCallback(cb TrackDoneCallback) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.trackDoneCb = cb
+	for _, q := range s.queues {
+		q.mu.Lock()
+		q.TrackDoneCb = cb
+		q.mu.Unlock()
+	}
 }
 
 func NewQueueStore(playCb PlayCallback, stopCb StopCallback, preFetchCb PreFetchCallback) *QueueStore {
@@ -53,6 +66,7 @@ func (s *QueueStore) Get(guildID string) *GuildQueue {
 	queue, exists := s.queues[guildID]
 	if !exists {
 		queue = NewGuildQueue(guildID, s.playCb, s.stopCb, s.preFetchCb)
+		queue.TrackDoneCb = s.trackDoneCb
 		s.queues[guildID] = queue
 	}
 	queue.Touch()

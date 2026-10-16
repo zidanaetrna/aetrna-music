@@ -25,6 +25,18 @@ const commands = [
         .addSubcommand(sub => sub.setName('song').setDescription('Repeat the current song'))
         .addSubcommand(sub => sub.setName('off').setDescription('Turn looping off')),
     new SlashCommandBuilder()
+        .setName('top')
+        .setDescription('Show the 5 most played songs in this server')
+        .addStringOption(opt =>
+            opt.setName('period')
+                .setDescription('Time range (default: this week)')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'This week (last 7 days)', value: 'week' },
+                    { name: 'This month (last 30 days)', value: 'month' }
+                )
+        ),
+    new SlashCommandBuilder()
         .setName('exclude')
         .setDescription('Skip tracks by their queue number (also on every loop cycle)')
         .addStringOption(opt => opt.setName('track').setDescription('Track number(s), e.g. 7 or 3,7,9 or 2-5. Leave empty to list').setRequired(false)),

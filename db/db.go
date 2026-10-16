@@ -74,6 +74,7 @@ func Init(dbPath string) (*DB, error) {
 	if err := database.migrate(); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
+	_ = database.PrunePlayHistory(time.Now().Add(-PlayHistoryRetention))
 
 	return database, nil
 }
@@ -141,6 +142,18 @@ func (db *DB) migrate() error {
 			token TEXT PRIMARY KEY,
 			expires_at TIMESTAMP NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS play_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			guild_id TEXT NOT NULL,
+			user_id TEXT DEFAULT '',
+			title TEXT NOT NULL,
+			url TEXT NOT NULL,
+			author TEXT DEFAULT '',
+			thumbnail TEXT DEFAULT '',
+			duration INTEGER DEFAULT 0,
+			played_at INTEGER NOT NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_play_history_guild_time ON play_history(guild_id, played_at);`,
 	}
 
 	for _, query := range queries {
@@ -548,5 +561,81 @@ func (db *DB) DeleteWebSession(token string) error {
 	defer db.mu.Unlock()
 
 	_, err := db.Exec(`DELETE FROM web_sessions WHERE token = ?`, token)
+	return err
+}
+
+// PlayHistoryRetention is how long play_history rows are kept.
+const PlayHistoryRetention = 60 * 24 * time.Hour
+
+type TopTrack struct {
+	Title     string `json:"title"`
+	URL       string `json:"url"`
+	Author    string `json:"author"`
+	Thumbnail string `json:"thumbnail"`
+	Duration  int    `json:"duration"`
+	Plays     int    `json:"plays"`
+	Listeners int    `json:"listeners"`
+}
+
+// RecordPlay logs one play of a track in a guild, used for /top charts.
+func (db *DB) RecordPlay(guildID, userID, title, url, author, thumbnail string, duration int, playedAt time.Time) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	_, err := db.Exec(
+		`INSERT INTO play_history (guild_id, user_id, title, url, author, thumbnail, duration, played_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		guildID, userID, title, url, author, thumbnail, duration, playedAt.Unix(),
+	)
+	return err
+}
+
+// GetTopTracks returns a guild's most played tracks since the given time.
+// Ties are broken by the most recent play.
+func (db *DB) GetTopTracks(guildID string, since time.Time, limit int) ([]TopTrack, int, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var total int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM play_history WHERE guild_id = ? AND played_at >= ?`,
+		guildID, since.Unix()).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	// With MAX() in the select list, SQLite takes the bare columns (title,
+	// author, ...) from the latest play, so renamed titles show their newest name.
+	rows, err := db.Query(
+		`SELECT title, url, author, thumbnail, duration, COUNT(*) AS plays,
+		        COUNT(DISTINCT NULLIF(user_id, '')) AS listeners, MAX(played_at) AS last_played
+		 FROM play_history
+		 WHERE guild_id = ? AND played_at >= ?
+		 GROUP BY url
+		 ORDER BY plays DESC, last_played DESC
+		 LIMIT ?`,
+		guildID, since.Unix(), limit,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var tracks []TopTrack
+	for rows.Next() {
+		var t TopTrack
+		var lastPlayed int64
+		if err := rows.Scan(&t.Title, &t.URL, &t.Author, &t.Thumbnail, &t.Duration, &t.Plays, &t.Listeners, &lastPlayed); err != nil {
+			return nil, 0, err
+		}
+		tracks = append(tracks, t)
+	}
+	return tracks, total, rows.Err()
+}
+
+// PrunePlayHistory deletes plays older than the given time.
+func (db *DB) PrunePlayHistory(before time.Time) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	_, err := db.Exec(`DELETE FROM play_history WHERE played_at < ?`, before.Unix())
 	return err
 }
