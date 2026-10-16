@@ -108,6 +108,7 @@ func (b *Bot) Start() error {
 	spotifyCl := spotify.NewClient(b.cfg.SpotifyClientID, b.cfg.SpotifyClientSecret)
 	b.spotify = spotifyCl
 	b.store = music.NewQueueStore(playCb, stopCb, preFetchCb)
+	b.store.SetHaltCallback(func(guildID string) error { return b.voice.Halt(guildID) })
 	b.store.SetTrackDoneCallback(func(guildID string, song music.Song, reason string, listened time.Duration) {
 		if b.db == nil || song.URL == "" || !music.CountsAsPlay(reason, listened, song.Duration) {
 			return

@@ -407,3 +407,59 @@ func TestDisconnectClearsQueueAndBumpsStopCount(t *testing.T) {
 		t.Fatal("background loaders must be able to see the disconnect")
 	}
 }
+
+func TestSkippingLastSongHaltsPlayer(t *testing.T) {
+	q, played := newTestQueue(t)
+	halted := make(chan struct{}, 4)
+	q.HaltCb = func(string) error { halted <- struct{}{}; return nil }
+
+	addTitles(q, "t1")
+	q.EnsurePlaying()
+	expectPlayed(t, played, "t1")
+
+	// Same as the report: /exclude on the track that's playing, which is the last one
+	q.Exclude([]int{1})
+	select {
+	case <-halted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("skipping the last song must stop the stream, not leave it playing")
+	}
+	expectIdle(t, q)
+}
+
+func TestFinishedLastSongDoesNotHalt(t *testing.T) {
+	q, played := newTestQueue(t)
+	halted := make(chan struct{}, 4)
+	q.HaltCb = func(string) error { halted <- struct{}{}; return nil }
+
+	addTitles(q, "t1")
+	q.EnsurePlaying()
+	expectPlayed(t, played, "t1")
+	q.SignalTrackEnd()
+	expectIdle(t, q)
+	select {
+	case <-halted:
+		t.Fatal("a track that ended on its own needs no halt")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestPlayDuringHaltKeepsPlaying(t *testing.T) {
+	q, played := newTestQueue(t)
+	release := make(chan struct{})
+	q.HaltCb = func(string) error { <-release; return nil }
+
+	addTitles(q, "t1")
+	q.EnsurePlaying()
+	expectPlayed(t, played, "t1")
+	q.Skip()
+
+	// /play arrives while the halt request is still in flight
+	time.Sleep(20 * time.Millisecond)
+	addTitles(q, "t2")
+	if q.EnsurePlaying() {
+		t.Fatal("the loop is still running during the halt; no second loop")
+	}
+	close(release)
+	expectPlayed(t, played, "t2")
+}

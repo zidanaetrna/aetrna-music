@@ -47,6 +47,9 @@ type PreFetchCallback func(guildID, songURL string) (string, error)
 // player, with the end reason and roughly how long it played.
 type TrackDoneCallback func(guildID string, song Song, reason string, listened time.Duration)
 
+// HaltCallback stops the current stream without leaving the voice channel.
+type HaltCallback func(guildID string) error
+
 type GuildQueue struct {
 	GuildID        string
 	VoiceChannelID string
@@ -70,6 +73,7 @@ type GuildQueue struct {
 	StopCb     StopCallback
 	PreFetchCb PreFetchCallback
 	TrackDoneCb TrackDoneCallback
+	HaltCb      HaltCallback
 
 	// TrackEndCh carries the track-end reason to the running playback loop.
 	// Stop() swaps in a fresh channel so a stopped loop can never steal signals
@@ -700,7 +704,12 @@ func (q *GuildQueue) run() {
 	for {
 		song, ok := q.advance(endCh, prev, reason)
 		if !ok {
-			return
+			if reason != "skip" || !q.haltThenIdle(endCh) {
+				return
+			}
+			// Songs were added while the player was halting: keep going
+			prev, reason = nil, ""
+			continue
 		}
 		startedAt := time.Now()
 		var stopped bool
@@ -774,6 +783,14 @@ func (q *GuildQueue) advance(endCh chan string, prev *Song, reason string) (Song
 		}
 	}
 	if idx < 0 {
+		if reason == "skip" {
+			// The skipped track is still streaming. Keep the loop claimed so
+			// run() can halt the player before going idle (see haltThenIdle).
+			q.NowPlaying = nil
+			q.IsPlaying = false
+			q.IsPaused = false
+			return Song{}, false
+		}
 		q.goIdleLocked()
 		return Song{}, false
 	}
@@ -790,6 +807,37 @@ func (q *GuildQueue) startLocked(song Song) {
 	q.IsPlaying = true
 	q.IsPaused = false
 	q.StartedAt = time.Now()
+}
+
+// haltThenIdle runs after the last track was skipped. Unlike a track that ended
+// on its own, a skipped one is still streaming, so the player is halted (the
+// bot stays in the channel) before going idle. The loop stays claimed during
+// the halt so a /play in the meantime can't start a stream the halt would kill.
+// Returns true if songs were queued meanwhile and the loop should continue.
+func (q *GuildQueue) haltThenIdle(endCh chan string) bool {
+	q.mu.RLock()
+	gid := q.GuildID
+	haltCb := q.HaltCb
+	q.mu.RUnlock()
+
+	if haltCb != nil {
+		if err := haltCb(gid); err != nil {
+			log.Printf("[WARN] [GuildQueue %s] Failed to halt player after skip: %v", gid, err)
+		}
+	}
+
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.TrackEndCh != endCh {
+		return false // Stop() was called meanwhile
+	}
+	for _, s := range q.Songs {
+		if !q.Excluded[s.Position] {
+			return true
+		}
+	}
+	q.goIdleLocked()
+	return false
 }
 
 // goIdleLocked ends playback and arms the 3-minute auto-disconnect timer.

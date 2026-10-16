@@ -11,6 +11,7 @@ type QueueStore struct {
 	stopCb     StopCallback
 	preFetchCb PreFetchCallback
 	trackDoneCb TrackDoneCallback
+	haltCb      HaltCallback
 	mu         sync.RWMutex
 }
 
@@ -67,10 +68,23 @@ func (s *QueueStore) Get(guildID string) *GuildQueue {
 	if !exists {
 		queue = NewGuildQueue(guildID, s.playCb, s.stopCb, s.preFetchCb)
 		queue.TrackDoneCb = s.trackDoneCb
+		queue.HaltCb = s.haltCb
 		s.queues[guildID] = queue
 	}
 	queue.Touch()
 	return queue
+}
+
+// SetHaltCallback sets the halt callback on every current and future queue.
+func (s *QueueStore) SetHaltCallback(cb HaltCallback) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.haltCb = cb
+	for _, q := range s.queues {
+		q.mu.Lock()
+		q.HaltCb = cb
+		q.mu.Unlock()
+	}
 }
 
 // Lookup returns an existing queue (or nil) without creating one or marking it

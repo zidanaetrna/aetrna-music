@@ -220,6 +220,17 @@ function createApiRouter(context) {
         res.json({ status: 'stopped', guildId });
     });
 
+    // Stop the current stream but stay in the voice channel (e.g. the last
+    // track was skipped and the bot waits for the idle timeout).
+    router.post('/halt', (req, res) => {
+        const { guildId } = req.body;
+        playSessions.set(guildId, (playSessions.get(guildId) || 0) + 1);
+        cleanupStreams(guildId);
+        const player = players.get(guildId);
+        if (player) { player.removeAllListeners(); try { player.stop(); } catch (e) {} players.delete(guildId); }
+        res.json({ status: 'halted', guildId });
+    });
+
     router.post('/pause', (req, res) => {
         const { guildId } = req.body;
         const player = players.get(guildId);

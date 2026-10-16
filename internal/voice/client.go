@@ -81,6 +81,14 @@ func (c *Client) Stop(guildID string) error {
 	return c.post("/stop", payload)
 }
 
+// Halt stops the current stream but stays in the voice channel.
+func (c *Client) Halt(guildID string) error {
+	payload := map[string]interface{}{
+		"guildId": guildID,
+	}
+	return c.post("/halt", payload)
+}
+
 func (c *Client) Pause(guildID string) error {
 	payload := map[string]interface{}{
 		"guildId": guildID,
