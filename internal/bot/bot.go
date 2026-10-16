@@ -73,15 +73,23 @@ func (b *Bot) Start() error {
 
 		streamURL := song.StreamURL
 		var err error
-		if streamURL == "" || time.Since(song.ResolvedAt) > 15*time.Minute {
+		if streamURL != "" && time.Since(song.ResolvedAt) <= 15*time.Minute {
+			if perr := commands.ProbeStreamURL(streamURL); perr != nil {
+				log.Printf("[WARN] [Bot] Pre-fetched stream URL for '%s' was rejected (%v), resolving a new one", song.Title, perr)
+				streamURL = ""
+			} else {
+				log.Printf("[INFO] [Bot] Using pre-fetched stream URL for '%s'", song.Title)
+			}
+		} else {
+			streamURL = ""
+		}
+		if streamURL == "" {
 			log.Printf("[INFO] [Bot] Extracting fresh stream URL for '%s'...", song.Title)
-			streamURL, err = commands.GetStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+			streamURL, err = commands.GetPlayableStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 			if err != nil {
 				return err
 			}
 			log.Printf("[INFO] [Bot] yt-dlp stream URL resolved for '%s'", song.Title)
-		} else {
-			log.Printf("[INFO] [Bot] Using pre-fetched stream URL for '%s' (0ms delay!)", song.Title)
 		}
 
 		nextSongURL := q.GetNextSongURL()
@@ -102,7 +110,7 @@ func (b *Bot) Start() error {
 	stopCb := func(guildID string) error { return b.voice.Stop(guildID) }
 	preFetchCb := func(guildID, songURL string) (string, error) {
 		log.Printf("[INFO] [Bot] Pre-fetching stream URL in background for '%s'", songURL)
-		return commands.GetStreamURL(songURL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+		return commands.GetPlayableStreamURL(songURL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 	}
 
 	spotifyCl := spotify.NewClient(b.cfg.SpotifyClientID, b.cfg.SpotifyClientSecret)
@@ -1244,7 +1252,7 @@ func (b *Bot) handleExcludeInclude(q *music.GuildQueue, cmd, input string, p Pro
 // restartWithFilter restarts the current track's stream so a new filter takes
 // effect. The stream starts over from 0:00, so the playback clock is reset too.
 func (b *Bot) restartWithFilter(guildID string, q *music.GuildQueue, song music.Song) {
-	streamURL, err := commands.GetStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
+	streamURL, err := commands.GetPlayableStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
 	if err != nil {
 		log.Printf("[WARN] [Bot] Could not restart '%s' with new filter: %v", song.Title, err)
 		return
