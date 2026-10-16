@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -124,6 +125,32 @@ func (c *Client) SetVolume(guildID string, volume float64) error {
 		"volume":  volume,
 	}
 	return c.post("/volume", payload)
+}
+
+// Position returns how much of the current track has been sent to Discord.
+// ok is false when nothing is playing or the voice server can't be reached.
+func (c *Client) Position(guildID string) (pos time.Duration, ok bool) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/position?guildId="+url.QueryEscape(guildID), nil)
+	if err != nil {
+		return 0, false
+	}
+	if c.ipcToken != "" {
+		req.Header.Set("X-Internal-IPC-Token", c.ipcToken)
+	}
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, false
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Active     bool    `json:"active"`
+		PositionMs float64 `json:"positionMs"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&body) != nil || !body.Active {
+		return 0, false
+	}
+	return time.Duration(body.PositionMs * float64(time.Millisecond)), true
 }
 
 func (c *Client) post(endpoint string, payload interface{}) error {

@@ -613,7 +613,7 @@ func (b *Bot) handleProxiedCommand(i *discordgo.InteractionCreate, p ProxiedInte
 
 		if current := q.Current(); p.MessageID != "" && current != nil && current.Lyrics != nil {
 			if lRes, ok := current.Lyrics.(*lyrics.LyricsResult); ok {
-				dur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
+				dur := b.lyricsPosition(p.GuildID, q)
 				updEmbed := commands.CreateLyricsEmbed(current, lRes, dur, lang)
 				comps := commands.CreateLyricsButtons(lRes.IsSynced, lang)
 				_, _ = b.session.FollowupMessageEdit(i.Interaction, p.MessageID, &discordgo.WebhookEdit{
@@ -1034,7 +1034,7 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 		}
 	}
 
-	currentDur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
+	currentDur := b.lyricsPosition(p.GuildID, q)
 	embed := commands.CreateLyricsEmbed(song, lResult, currentDur, lang)
 	isSynced := lResult != nil && lResult.IsSynced
 	comps := commands.CreateLyricsButtons(isSynced, lang)
@@ -1062,7 +1062,7 @@ func (b *Bot) handleLiveLyrics(i *discordgo.InteractionCreate, p ProxiedInteract
 				return
 			}
 			// Compensate -5.0s FFmpeg audio buffering & streaming startup latency + user LyricsOffset
-			dur := q.CurrentDuration() - 5000*time.Millisecond + q.LyricsOffset
+			dur := b.lyricsPosition(p.GuildID, q)
 
 			updEmbed := commands.CreateLyricsEmbed(np, lResult, dur, lang)
 			_, _ = b.session.FollowupMessageEdit(i.Interaction, targetMsgID, &discordgo.WebhookEdit{
@@ -1307,4 +1307,17 @@ func (b *Bot) cookiesPathForVoice() string {
 		return ""
 	}
 	return abs
+}
+
+// lyricsPosition is where the current song is for the lyrics display: the
+// audio actually sent to Discord (scaled by the filter's speed), plus the
+// user's sync offset. Falls back to the old wall-clock estimate, which assumes
+// ~5s of stream startup, if the voice server can't be asked.
+func (b *Bot) lyricsPosition(guildID string, q *music.GuildQueue) time.Duration {
+	if b.voice != nil {
+		if sent, ok := b.voice.Position(guildID); ok {
+			return time.Duration(float64(sent)*music.FilterSpeedMultiplier(q.Filter)) + q.LyricsOffset
+		}
+	}
+	return q.CurrentDuration() - 5*time.Second + q.LyricsOffset
 }

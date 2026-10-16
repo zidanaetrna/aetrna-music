@@ -256,6 +256,23 @@ function createApiRouter(context) {
         res.json({ status: 'halted', guildId });
     });
 
+    // How much audio has actually been sent to Discord for the current track.
+    // Pauses and slow stream starts are reflected, unlike a wall-clock estimate.
+    router.get('/position', (req, res) => {
+        const guildId = req.query.guildId;
+        const resource = audioResources.get(guildId);
+        const player = players.get(guildId);
+        if (!resource || !player) {
+            return res.json({ guildId, active: false, positionMs: 0 });
+        }
+        res.json({
+            guildId,
+            active: true,
+            playing: player.state.status === AudioPlayerStatus.Playing,
+            positionMs: resource.playbackDuration,
+        });
+    });
+
     router.post('/pause', (req, res) => {
         const { guildId } = req.body;
         const player = players.get(guildId);
