@@ -54,6 +54,21 @@ func (c *Client) PlayStream(guildID, channelID, streamURL, songURL, nextSongURL,
 	return c.post("/join-and-play", payload)
 }
 
+// PlayViaYtdlp has the voice server download the song with yt-dlp and pipe it
+// into ffmpeg, for videos whose direct stream URLs YouTube keeps rejecting.
+func (c *Client) PlayViaYtdlp(guildID, channelID, songURL, cookiesPath, filter string, volume float64) error {
+	payload := map[string]interface{}{
+		"guildId":     guildID,
+		"channelId":   channelID,
+		"songUrl":     songURL,
+		"useYtdlp":    true,
+		"cookiesPath": cookiesPath,
+		"filter":      filter,
+		"volume":      volume,
+	}
+	return c.post("/join-and-play", payload)
+}
+
 func (c *Client) Prefetch(guildID, nextSongURL string) error {
 	payload := map[string]interface{}{
 		"guildId":     guildID,

@@ -3,10 +3,12 @@ package bot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -86,14 +88,17 @@ func (b *Bot) Start() error {
 		if streamURL == "" {
 			log.Printf("[INFO] [Bot] Extracting fresh stream URL for '%s'...", song.Title)
 			streamURL, err = commands.GetPlayableStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
-			if err != nil {
+			if err != nil && !errors.Is(err, commands.ErrStreamRejected) {
 				return err
 			}
-			log.Printf("[INFO] [Bot] yt-dlp stream URL resolved for '%s'", song.Title)
 		}
 
-		nextSongURL := q.GetNextSongURL()
-		err = b.voice.PlayStream(guildID, song.ChannelID, streamURL, song.URL, nextSongURL, q.Filter, q.Volume)
+		if streamURL == "" {
+			log.Printf("[INFO] [Bot] Direct stream URLs rejected for '%s', streaming through yt-dlp instead", song.Title)
+			err = b.voice.PlayViaYtdlp(guildID, song.ChannelID, song.URL, b.cookiesPathForVoice(), q.Filter, q.Volume)
+		} else {
+			err = b.voice.PlayStream(guildID, song.ChannelID, streamURL, song.URL, q.GetNextSongURL(), q.Filter, q.Volume)
+		}
 		if err == nil && song.TextChannelID != "" && song.IsAutoTransition {
 			go func() {
 				lang := b.db.GetGuildLanguage(guildID)
@@ -1253,14 +1258,19 @@ func (b *Bot) handleExcludeInclude(q *music.GuildQueue, cmd, input string, p Pro
 // effect. The stream starts over from 0:00, so the playback clock is reset too.
 func (b *Bot) restartWithFilter(guildID string, q *music.GuildQueue, song music.Song) {
 	streamURL, err := commands.GetPlayableStreamURL(song.URL, b.cfg.CookiesPath, b.cfg.YtdlpClients)
-	if err != nil {
+	if err != nil && !errors.Is(err, commands.ErrStreamRejected) {
 		log.Printf("[WARN] [Bot] Could not restart '%s' with new filter: %v", song.Title, err)
 		return
 	}
 	if !q.IsPlayingAndMatching(song.URL) {
 		return // track changed while resolving
 	}
-	if err := b.voice.PlayStream(guildID, q.VoiceChannelID, streamURL, song.URL, "", q.Filter, q.Volume); err == nil {
+	if streamURL == "" {
+		err = b.voice.PlayViaYtdlp(guildID, q.VoiceChannelID, song.URL, b.cookiesPathForVoice(), q.Filter, q.Volume)
+	} else {
+		err = b.voice.PlayStream(guildID, q.VoiceChannelID, streamURL, song.URL, "", q.Filter, q.Volume)
+	}
+	if err == nil {
 		q.RestartedStream()
 	}
 }
@@ -1282,4 +1292,19 @@ func (b *Bot) username(userID string) string {
 	}
 	usernameCache.Store(userID, name)
 	return name
+}
+
+// cookiesPathForVoice returns the absolute cookies.txt path for the voice
+// server's yt-dlp (it runs from a different working directory), or "" if the
+// file is missing or empty.
+func (b *Bot) cookiesPathForVoice() string {
+	fi, err := os.Stat(b.cfg.CookiesPath)
+	if err != nil || fi.Size() <= 100 {
+		return ""
+	}
+	abs, err := filepath.Abs(b.cfg.CookiesPath)
+	if err != nil {
+		return ""
+	}
+	return abs
 }

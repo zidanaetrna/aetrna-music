@@ -54,9 +54,11 @@ function createApiRouter(context) {
     });
 
     router.post('/join-and-play', (req, res) => {
-        const { guildId, channelId, streamUrl, filter, volume = 1.0 } = req.body;
-        if (!guildId || !channelId || !streamUrl) {
-            return res.status(400).json({ error: 'Missing required parameters: guildId, channelId, streamUrl' });
+        const { guildId, channelId, streamUrl, songUrl, useYtdlp, cookiesPath, filter, volume = 1.0 } = req.body;
+        // useYtdlp: let yt-dlp download the song and pipe it into ffmpeg. Used when
+        // YouTube keeps rejecting direct stream URLs; yt-dlp's own downloader gets through.
+        if (!guildId || !channelId || !(useYtdlp ? songUrl : streamUrl)) {
+            return res.status(400).json({ error: 'Missing required parameters: guildId, channelId, streamUrl (or songUrl with useYtdlp)' });
         }
 
         const currentSessionId = (playSessions.get(guildId) || 0) + 1;
@@ -160,20 +162,43 @@ function createApiRouter(context) {
                 const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
                 const headerStr = `Referer: https://www.youtube.com/\r\n`;
 
-                console.log(`[INFO] [VoiceServer] Starting direct FFmpeg stream for guild ${guildId}...`);
+                let ytdlp = null;
+                let inputArgs;
+                if (useYtdlp) {
+                    console.log(`[INFO] [VoiceServer] Starting yt-dlp piped stream for guild ${guildId}...`);
+                    const ytdlpArgs = ['-4', '--no-cache-dir', '--no-playlist', '--no-warnings', '--quiet', '-f', 'bestaudio/best', '-o', '-'];
+                    if (cookiesPath) ytdlpArgs.push('--cookies', cookiesPath);
+                    ytdlpArgs.push(songUrl);
+                    ytdlp = spawn('yt-dlp', ytdlpArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+                    ytdlp.stderr.on('data', (d) => {
+                        const msg = d.toString().trim();
+                        if (msg) console.error(`[yt-dlp ${guildId}] ${msg}`);
+                    });
+                    ytdlp.on('error', (err) => console.error(`[ERROR] [VoiceServer] Could not start yt-dlp for guild ${guildId}:`, err.message));
+                    inputArgs = ['-i', 'pipe:0'];
+                } else {
+                    console.log(`[INFO] [VoiceServer] Starting direct FFmpeg stream for guild ${guildId}...`);
+                    inputArgs = [
+                        '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+                        '-user_agent', userAgent,
+                        '-headers', headerStr,
+                        '-i', streamUrl,
+                    ];
+                }
 
                 const ffmpeg = spawn('ffmpeg', [
-                    '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
-                    '-user_agent', userAgent,
-                    '-headers', headerStr,
-                    '-i', streamUrl,
+                    ...inputArgs,
                     '-loglevel', 'warning',
                     '-af', audioFilter,
                     '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1'
-                ], { stdio: ['ignore', 'pipe', 'pipe'] });
+                ], { stdio: [ytdlp ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
 
                 if (ffmpeg.stdin) ffmpeg.stdin.on('error', () => {});
-                activeStreams.set(guildId, { ffmpeg });
+                if (ytdlp) {
+                    ytdlp.stdout.on('error', () => {});
+                    ytdlp.stdout.pipe(ffmpeg.stdin);
+                }
+                activeStreams.set(guildId, { ffmpeg, ytdlp });
 
                 ffmpeg.stderr.on('data', (d) => {
                     const msg = d.toString().trim();

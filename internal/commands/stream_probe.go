@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -13,8 +14,13 @@ import (
 const streamUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 
 // maxStreamResolveAttempts bounds how many fresh URLs GetPlayableStreamURL asks
-// yt-dlp for. Some videos only hand out a working URL every few tries.
-const maxStreamResolveAttempts = 5
+// yt-dlp for before giving up, so the caller can fall back to letting yt-dlp
+// download the song itself (which gets through where direct URLs don't).
+const maxStreamResolveAttempts = 2
+
+// ErrStreamRejected means yt-dlp returned stream URLs but YouTube refused to
+// serve them.
+var ErrStreamRejected = errors.New("YouTube rejected the stream URL")
 
 // probeClient dials over IPv4 only: yt-dlp runs with -4, and googlevideo URLs
 // are bound to the IP that requested them.
@@ -66,5 +72,5 @@ func GetPlayableStreamURL(query, cookiesPath, ytdlpClients string) (string, erro
 		}
 		log.Printf("[WARN] [GetPlayableStreamURL] Attempt %d/%d for '%s': %v", attempt, maxStreamResolveAttempts, query, lastErr)
 	}
-	return "", fmt.Errorf("no working stream URL after %d attempts: %w", maxStreamResolveAttempts, lastErr)
+	return "", fmt.Errorf("%w after %d attempts: %v", ErrStreamRejected, maxStreamResolveAttempts, lastErr)
 }
