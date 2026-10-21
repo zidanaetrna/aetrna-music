@@ -103,7 +103,13 @@ function createApiRouter(context) {
                     try { player.stop(); } catch (e) {}
                 }
 
-                player = createAudioPlayer();
+                // The default maxMissedFrames is 5 (100ms): a single gap that long stops the
+                // player. FFmpeg output arrives in bursts (googlevideo throttles to ~2x realtime,
+                // loudnorm buffers 3s), so tracks went Idle ~300ms in and were reported as
+                // playback_failed. Ride out gaps of up to 5s instead.
+                player = createAudioPlayer({
+                    behaviors: { maxMissedFrames: Math.round(5000 / 20) },
+                });
                 players.set(guildId, player);
 
                 let streamPlaybackStartedAt = 0;
@@ -142,7 +148,10 @@ function createApiRouter(context) {
                     }
 
                     const durationMs = streamPlaybackStartedAt > 0 ? (Date.now() - streamPlaybackStartedAt) : 0;
-                    console.log(`[INFO] [VoiceServer] Track ended for guild ${guildId} (duration: ${durationMs}ms)`);
+                    // Still running means the player starved, not that the stream actually ended
+                    const ff = activeStreams.get(guildId)?.ffmpeg;
+                    const ffmpegRunning = !!ff && ff.exitCode === null && ff.signalCode === null;
+                    console.log(`[INFO] [VoiceServer] Track ended for guild ${guildId} (duration: ${durationMs}ms, ffmpeg still running: ${ffmpegRunning})`);
                     cleanupStreams(guildId);
                     if (!hasEnteredPlayingState || durationMs < 1500) {
                         notifyBotTrackEnd(guildId, 'playback_failed');
@@ -208,6 +217,8 @@ function createApiRouter(context) {
                 ffmpeg.on('exit', (code, signal) => {
                     if (code !== 0 && code !== null && signal !== 'SIGKILL') {
                         console.error(`[WARN] [VoiceServer] FFmpeg process exited with code ${code} (signal: ${signal}) for guild ${guildId}`);
+                    } else if (signal !== 'SIGKILL') {
+                        console.log(`[INFO] [VoiceServer] FFmpeg process exited with code ${code} for guild ${guildId}`);
                     }
                 });
 
